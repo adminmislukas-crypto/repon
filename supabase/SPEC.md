@@ -30,27 +30,63 @@ Creadas una sola vez en `supabase/migrations/20260803120000_00_extensions_enums.
 Orden sugerido de creación (respeta dependencias de foreign keys):
 
 1. `companies`
-2. `profiles` (FK opcional a `companies`)
-3. `admin_roles` (FK a `profiles`)
-4. `pets` (FK a `profiles`)
-5. `catalog_products`
-6. `provider_catalog` (FK a `companies`)
-7. `user_consumption` (FK a `profiles`, `pets`)
-8. `consumption_logs` (FK a `user_consumption`)
-9. `refill_requests` (FK a `profiles`)
-10. `refill_items` (FK a `refill_requests`)
-11. `offers` (FK a `refill_requests`, `companies`)
-12. `offer_items` (FK a `offers`, `refill_items`)
-13. `orders` (FK a `offers`)
-14. `order_items` (FK a `orders`)
-15. `payments` (FK a `orders`)
-16. `audit_log` (FK a `profiles`)
+2. `company_dispatch_zones` (FK a `companies`)
+3. `profiles` (FK a `auth.users`; FK opcional a `companies`)
+4. `admin_roles` (FK a `profiles`)
+5. `pets` (FK a `profiles`)
+6. `catalog_products`
+7. `provider_catalog` (FK a `companies`)
+8. `user_consumption` (FK a `profiles`, `pets`)
+9. `consumption_logs` (FK a `user_consumption`)
+10. `refill_requests` (FK a `profiles`)
+11. `refill_items` (FK a `refill_requests`)
+12. `offers` (FK a `refill_requests`, `companies`)
+13. `offer_items` (FK a `offers`, `refill_items`)
+14. `orders` (FK a `offers`)
+15. `order_items` (FK a `orders`)
+16. `payments` (FK a `orders`)
+17. `audit_log` (FK a `profiles`)
+
+## Columnas reales — lote `01a` (`identidad_core`)
+
+Migrado en `supabase/migrations/20260803120100_01a_identidad_core.sql`. `admin_roles` queda fuera (lote `01b`, Phase 3).
+
+### companies
+
+| Columna | Tipo | Constraint |
+|---|---|---|
+| id | uuid | PK default `gen_random_uuid()` |
+| razon_social | text | NOT NULL |
+| rut | text | NOT NULL, UNIQUE |
+| giro | text | NOT NULL |
+| status | company_status | NOT NULL DEFAULT `'pendiente'` |
+| created_at / updated_at | timestamptz | NOT NULL DEFAULT `now()` |
+
+`company_status`: `'pendiente' | 'activo' | 'suspendido'`. Sin columna `rating` (fuera de alcance, ver proposal).
+
+### company_dispatch_zones
+
+| Columna | Tipo | Constraint |
+|---|---|---|
+| id | uuid | PK default `gen_random_uuid()` |
+| company_id | uuid | NOT NULL REFERENCES `companies(id)` |
+| comuna | text | NOT NULL |
+| region | text | NOT NULL |
+| — | — | UNIQUE(`company_id`, `comuna`) |
+
+Sin `created_at`/`updated_at` (no aplica: fila inmutable, se reemplaza por completo si cambia la zona).
+
+### profiles (columnas físicas de este lote)
+
+`id` uuid PK REFERENCES `auth.users(id)` ON DELETE RESTRICT (design.md D-1); `company_id` uuid NULL REFERENCES `companies(id)` (solo cuando `role = 'provider'`, invariante enforceado en core-api, no vía CHECK); `created_at`/`updated_at` timestamptz NOT NULL DEFAULT `now()`. El resto de columnas (`role`, `status`, `nombre`, `email`, `telefono`) ya estaban fijadas por `packages/types/SPEC.md`.
 
 ## Row Level Security — reglas por tabla
 
 | Tabla | Regla |
 |---|---|
-| `profiles` | Cada usuario ve y edita solo su propia fila |
+| `companies` | (lote `01a`, migrado) `authenticated` ve `status = 'activo'` (directorio público), más su propia empresa en cualquier status vía `EXISTS` sobre `profiles.company_id` |
+| `company_dispatch_zones` | (lote `01a`, migrado) Hereda la visibilidad de su `companies` padre — mismo predicado activo-o-dueño, evaluado contra la fila padre |
+| `profiles` | (lote `01a`, migrado) **Conflicto con la prosa original de esta fila, no sobrescrita en silencio**: la regla real implementada es solo lectura de la propia fila (`id = auth.uid()`), **sin** política UPDATE. "...y edita..." queda superseded por design.md D-1 — mutaciones como `suspenderUsuario` van por core-api con service-role, nunca UPDATE directo del cliente. Ver `db-schema-identidad` Requirement "profiles has no client-side mutation policy" |
 | `pets`, `user_consumption`, `consumption_logs` | Visibles solo para el `userId` dueño |
 | `refill_requests`, `refill_items` | Visibles para el usuario dueño; visibles (solo lectura) para proveedores cuyo catálogo coincide y están en zona de despacho |
 | `provider_catalog` | Editable solo por `profiles` con `companyId` correspondiente |

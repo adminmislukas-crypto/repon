@@ -5,7 +5,8 @@ Referencia de las tablas principales en Postgres (Supabase). El detalle de colum
 ## Identidad
 
 - **profiles** — usuarios y proveedores comparten esta tabla, distinguidos por `role` (`user` | `provider` | `admin`). Referencia a `auth.users` de Supabase.
-- **companies** — datos de la empresa proveedora (razón social, RUT, giro, zonas de despacho, `status`: `pendiente` / `activo` / `suspendido`). Un `profile` con `role = provider` pertenece a una `company`.
+- **companies** — datos de la empresa proveedora (razón social, RUT, giro, `status`: `pendiente` / `activo` / `suspendido`). Un `profile` con `role = provider` pertenece a una `company`.
+- **company_dispatch_zones** — comunas/regiones donde una `company` despacha (`company_id`, `comuna`, `region`, UNIQUE por `company_id`+`comuna`). Hereda la visibilidad RLS de su `company` padre.
 - **admin_roles** — qué `profile` es `super_admin`, `soporte` o `finanzas`.
 
 ## Consumo (usuario)
@@ -44,7 +45,8 @@ profiles (role=user) ──┬── pets
                         ├── user_consumption ── consumption_logs
                         └── refill_requests ── refill_items
 
-profiles (role=provider) ── companies ── provider_catalog
+profiles (role=provider) ── companies ──┬── provider_catalog
+                                         └── company_dispatch_zones
 
 refill_requests ── offers ── offer_items
 offers (aceptada) ── orders ── order_items ── payments
