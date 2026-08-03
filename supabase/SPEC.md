@@ -100,6 +100,55 @@ Migrado en `supabase/migrations/20260803120110_01b_identidad_admin.sql`.
 
 Detecta filas `auth.users` sin `profiles` correspondiente, más viejas que 15 minutos. `service_role`-only (`revoke all ... grant select ... to service_role`) — superficie de detección para el flujo de compensación Auth↔profiles documentado en `services/core-api/domains/identidad/SPEC.md`. El job de reconciliación que la consume se entrega en el cambio de Edge Functions, no en este.
 
+## Columnas reales — lote `02` (`consumo`)
+
+Migrado en `supabase/migrations/20260803120200_02_consumo.sql`.
+
+### pets
+
+| Columna | Tipo | Constraint |
+|---|---|---|
+| id | uuid | PK default `gen_random_uuid()` |
+| user_id | uuid | NOT NULL REFERENCES `profiles(id)` (physical-only, no está en `Pet` de `packages/types/SPEC.md`) |
+| nombre | text | NOT NULL |
+| especie | text | NOT NULL |
+| raza | text | NULL |
+| peso_kg | numeric | NULL |
+| created_at / updated_at | timestamptz | NOT NULL DEFAULT `now()` |
+
+### user_consumption
+
+| Columna | Tipo | Constraint |
+|---|---|---|
+| id | uuid | PK default `gen_random_uuid()` |
+| user_id | uuid | NOT NULL REFERENCES `profiles(id)` (physical-only; dueño real incluso cuando `owner_type = 'pet'`) |
+| owner_type | owner_type | NOT NULL |
+| pet_id | uuid | NULL REFERENCES `pets(id)` (solo cuando `owner_type = 'pet'`, enforceado en core-api, no CHECK) |
+| kind | consumption_kind | NOT NULL |
+| nombre | text | NOT NULL |
+| dosis_por_toma | numeric | NOT NULL |
+| unidad | text | NULL |
+| frecuencia_dias | integer | NOT NULL |
+| horarios | text[] | NOT NULL |
+| stock_actual | numeric | NOT NULL |
+| auto_crear_refill | boolean | NOT NULL |
+| created_at / updated_at | timestamptz | NOT NULL DEFAULT `now()` |
+
+`owner_type`: `'self' \| 'pet'`. `consumption_kind`: `'medicamento' \| 'alimento' \| 'vacuna' \| 'suplemento'`.
+
+### consumption_logs
+
+| Columna | Tipo | Constraint |
+|---|---|---|
+| id | uuid | PK default `gen_random_uuid()` |
+| consumption_id | uuid | NOT NULL REFERENCES `user_consumption(id)` |
+| tomado_at | timestamptz | NOT NULL |
+| cantidad | numeric | NULL |
+| created_at | timestamptz | NOT NULL DEFAULT `now()` |
+| — | — | INDEX `(consumption_id, tomado_at DESC)` — adherencia (`adherenciaUltimos7Dias`, `calcularDiasRestantes`) |
+
+Owner-less by design (Q8, `db-schema-consumo`): sin columna de dueño propia. SELECT vía `EXISTS` contra `user_consumption.user_id` — mismo patrón único que `refill_items`/`offer_items`/`order_items` (`db-access-control`, "Owner-less child table read policy").
+
 ## Bootstrap de administrador
 
 Runbook completo en `openspec/changes/backend-supabase-migrations/design.md` D-5 (no se duplica aquí). Dos archivos, propósitos distintos:
@@ -114,7 +163,8 @@ Runbook completo en `openspec/changes/backend-supabase-migrations/design.md` D-5
 | `companies` | (lote `01a`, migrado) `authenticated` ve `status = 'activo'` (directorio público), más su propia empresa en cualquier status vía `EXISTS` sobre `profiles.company_id` |
 | `company_dispatch_zones` | (lote `01a`, migrado) Hereda la visibilidad de su `companies` padre — mismo predicado activo-o-dueño, evaluado contra la fila padre |
 | `profiles` | (lote `01a`, migrado) **Conflicto con la prosa original de esta fila, no sobrescrita en silencio**: la regla real implementada es solo lectura de la propia fila (`id = auth.uid()`), **sin** política UPDATE. "...y edita..." queda superseded por design.md D-1 — mutaciones como `suspenderUsuario` van por core-api con service-role, nunca UPDATE directo del cliente. Ver `db-schema-identidad` Requirement "profiles has no client-side mutation policy" |
-| `pets`, `user_consumption`, `consumption_logs` | Visibles solo para el `userId` dueño |
+| `pets`, `user_consumption` | (lote `02`, migrado) `authenticated` ve solo filas propias, `user_id = auth.uid()` — ni siquiera proveedores tienen acceso |
+| `consumption_logs` | (lote `02`, migrado) Sin columna de dueño propia (Q8) — SELECT vía `EXISTS` contra `user_consumption.user_id`, mismo patrón único que `refill_items`/`offer_items`/`order_items` (`db-access-control`) |
 | `refill_requests`, `refill_items` | Visibles para el usuario dueño; visibles (solo lectura) para proveedores cuyo catálogo coincide y están en zona de despacho |
 | `provider_catalog` | Editable solo por `profiles` con `companyId` correspondiente |
 | `offers`, `offer_items` | El proveedor solo puede crear/editar sus propias ofertas; el usuario solo puede leer las ofertas dirigidas a sus solicitudes |
