@@ -2,6 +2,18 @@
 
 Especificación del backend antes de escribir migraciones reales. Ver `docs/DATA_MODEL.md` para el mapa de relaciones.
 
+## Definition of Done — por lote de migración
+
+Checklist, no CI (el repo no tiene tooling de CI y no se va a inventar una compuerta que no existe — ver `openspec/changes/backend-supabase-migrations/design.md` D-3). Cada lote (`NN_<dominio>`) se entrega en **un solo commit/PR** con los 5 artefactos siguientes:
+
+1. **Migración** — `supabase/migrations/<timestamp>_NN_<dominio>.sql`. Timestamps pre-asignados y congelados (D-3), nunca generados con `supabase migration new` al momento de escribir el PR. Estructura interna fija de 8 secciones, siempre en el mismo orden: enums → tablas → constraints/FK diferidas → índices → trigger `updated_at` → grants (`revoke all` → `grant` estrecho) → RLS (enable + políticas) → realtime/publication (solo donde aplica). El paso de RLS va en el **mismo archivo** que el de tablas: una tabla nunca existe en un commit sin su RLS.
+2. **Rollback** — `supabase/rollback/NN_<dominio>_down.sql`. Manual, el CLI no lo lee. Inverso completo: drop políticas → drop tablas → drop enums.
+3. **Test pgTAP** — `supabase/tests/NN_<dominio>_test.sql`, corre con `supabase test db`: esquema (`has_table`/`has_index`/`col_is_fk`), RLS por rol (`set local role` + `set local request.jwt.claims`), grants (`table_privs_are`).
+4. **Delta de tipos** — `packages/types/SPEC.md`, mapeo fijo: `snake_case`→`camelCase`, `timestamptz`→`string` (ISO-8601), `numeric(12,2)`→`number`, columna nullable→prop opcional `?`, enum PG→union type con miembros idénticos y en el mismo orden, `uuid`→`string`.
+5. **Delta de spec** — este mismo archivo (`supabase/SPEC.md`), columnas reales del lote recién migrado.
+
+Un PR de lote que rompa la regla "tabla sin RLS en el mismo commit" o que falte cualquiera de los 5 artefactos se rechaza en revisión. Fase 0 (scaffolding de CLI + pgTAP, ver `supabase/migrations/00000000000000_enable_pgtap.sql`) es prerrequisito de todos los lotes.
+
 ## Tablas (a migrar en `migrations/`)
 
 Orden sugerido de creación (respeta dependencias de foreign keys):

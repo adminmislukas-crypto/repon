@@ -1,0 +1,5 @@
+# Pinned by sdd-apply (backend-supabase-migrations, PR 0 — tooling scaffolding).
+# Read by asdf (https://asdf-vm.com) or mise (https://mise.jdx.dev) if adopted later;
+# until then this is the authoritative version reference for `supabase init`/CLI usage.
+# Install: `brew install supabase` (Homebrew bottles the exact version below).
+supabase 2.111.0

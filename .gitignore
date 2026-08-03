@@ -9,3 +9,8 @@ build/
 coverage/
 *.log
 .turbo/
+
+# Supabase CLI local artifacts (also covered by supabase/.gitignore,
+# repeated at root so `git status` stays clean regardless of cwd)
+supabase/.branches/
+supabase/.temp/

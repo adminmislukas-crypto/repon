@@ -1,0 +1,11 @@
+-- Phase 0 (tooling scaffolding) — enable pgTAP for `supabase test db`.
+--
+-- Frozen at the epoch-zero timestamp on purpose: this file is infrastructure,
+-- not a domain batch (see design.md D-3 for the frozen-timestamp scheme that
+-- starts domain batches at 20260803120000). It must run before every domain
+-- batch AND before any pgTAP test file, because pgTAP test files wrap their
+-- assertions in `begin ... rollback` (see supabase/tests/*_test.sql) — an
+-- extension created inside that pattern would be rolled back with everything
+-- else. `create extension` therefore lives in a real migration, committed by
+-- `supabase db reset` / `supabase migration up`, never inside a test file.
+create extension if not exists pgtap with schema extensions;
