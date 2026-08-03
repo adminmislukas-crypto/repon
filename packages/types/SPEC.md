@@ -100,6 +100,7 @@ export interface RefillRequest {
   userId: string
   items: RefillItem[]
   direccion: string
+  comuna: string
   urgencia: 'lo_antes_posible' | 'hoy' | 'manana' | 'en_2_3_dias'
   estado: 'abierta' | 'ofertada' | 'confirmada'
 }
@@ -109,6 +110,7 @@ export interface RefillItem {
   nombre: string
   categoria: string
   precioReferencia: number
+  catalogProductId?: string // NULL por diseño (Q4, db-schema-refill-matching) -- el usuario puede pedir un producto que no matchea contra el catálogo de referencia
 }
 
 export type OfferStatus = 'pendiente' | 'aceptada' | 'rechazada' | 'expirada'
@@ -153,6 +155,8 @@ export interface Order {
 - `UserConsumption.horarios` siempre tiene al menos 1 elemento
 - `ConsumptionLog` no expone `createdAt` (aunque la tabla física sí lo tiene) — mismo patrón que `Company`/`Profile`, que tampoco exponen sus columnas físicas `created_at`/`updated_at`: son metadata de auditoría, no campos de dominio que la app consuma. `tomadoAt` sí se expone porque es el dato de negocio (cuándo se tomó la dosis)
 - `ProviderCatalogItem.catalogProductId` es opcional a propósito (Q4, `db-schema-catalogo`): un proveedor puede cargar un producto que no matchea contra `catalog_products`, usando `nombre`/`categoria` para matching — nunca se fuerza a `NOT NULL`
+- `RefillItem.catalogProductId` es opcional por el mismo motivo (Q4, `db-schema-refill-matching`): el usuario puede pedir un producto que no está en `catalog_products`
+- `RefillRequest.comuna` es siempre requerido (Q2, `db-schema-refill-matching`): clave de join estructurada para matching de zona de despacho, separada de `direccion` (texto libre) — ni la Edge Function de matching ni RLS pueden operar sobre una dirección sin estructurar
 - `CatalogProduct` no filtra por `status` en el tipo: `'inactivo'` sigue siendo un valor válido y visible (Q6, no es soft-delete oculto al cliente autenticado)
 - `Offer.refillRequestId` presente siempre que `kind === 'reactiva'`, ausente cuando `kind === 'proactiva'`. Cuando está presente, `Offer.userId` DEBE coincidir con el `userId` de esa `RefillRequest` — invariante que vive en el caso de uso de `ofertas`, no en la DB
 - `OfferItem` siempre tiene exactamente uno de `refillItemId` (si la oferta es `reactiva`) o `providerCatalogItemId` (si es `proactiva`) — nunca ambos, nunca ninguno

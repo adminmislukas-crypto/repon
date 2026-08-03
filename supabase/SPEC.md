@@ -190,6 +190,42 @@ Migrado en `supabase/migrations/20260803120300_03_catalogo.sql`.
 
 Ninguna de las dos tablas tiene grant de `insert`/`update`/`delete` para el cliente: las mutaciones (`cargarProductoCatalogo`, etc.) van por core-api con service-role, mismo patrón que `companies`/`profiles` (lote `01a`) y `pets`/`user_consumption` (lote `02`).
 
+## Columnas reales — lote `04` (`refill_matching`)
+
+Migrado en `supabase/migrations/20260803120400_04_refill_matching.sql`.
+
+### refill_requests
+
+| Columna | Tipo | Constraint |
+|---|---|---|
+| id | uuid | PK default `gen_random_uuid()` |
+| user_id | uuid | NOT NULL REFERENCES `profiles(id)` (physical-only, dueño) |
+| direccion | text | NOT NULL |
+| comuna | text | NOT NULL — clave de join estructurada (Q2), separada de `direccion` |
+| urgencia | refill_urgencia | NOT NULL |
+| estado | refill_estado | NOT NULL DEFAULT `'abierta'` |
+| created_at / updated_at | timestamptz | NOT NULL DEFAULT `now()` |
+| — | — | INDEX(`user_id`) |
+
+`refill_urgencia`: `'lo_antes_posible' | 'hoy' | 'manana' | 'en_2_3_dias'`. `refill_estado`: `'abierta' | 'ofertada' | 'confirmada'`.
+
+### refill_items
+
+| Columna | Tipo | Constraint |
+|---|---|---|
+| id | uuid | PK default `gen_random_uuid()` |
+| refill_request_id | uuid | NOT NULL REFERENCES `refill_requests(id)` |
+| catalog_product_id | uuid | NULL REFERENCES `catalog_products(id)` — nullable por diseño (Q4, misma filosofía que `provider_catalog.catalog_product_id`, lote `03`) |
+| nombre | text | NOT NULL |
+| categoria | text | NOT NULL |
+| precio_referencia | numeric(12,2) | NOT NULL |
+| created_at | timestamptz | NOT NULL DEFAULT `now()` |
+| — | — | INDEX(`refill_request_id`) |
+
+Sin `updated_at` (inmutable una vez creada, mismo patrón que `consumption_logs`/`order_items`). Owner-less by design (Q8, `db-access-control`): sin columna de dueño propia. SELECT vía `EXISTS` contra `refill_requests.user_id`.
+
+**Q2 — corrección de la prosa "zona de despacho"**: la fila de RLS más abajo para `refill_requests`/`refill_items` decía "visibles (solo lectura) para proveedores cuyo catálogo coincide y están en zona de despacho" — esto es RLS-inexpresable sin un predicado cross-tenant auto-derrotante (D1). El matching por `comuna`/categoría es responsabilidad de core-api (`buscarProveedoresCompatibles`, service-role) y de la futura Edge Function `match-refill-request` (fuera de alcance de este cambio, ver `proposal.md` "Out of Scope"), nunca de una política RLS. La política real implementada es **owner-only**: `user_id = auth.uid()` en `refill_requests`; `EXISTS` contra `refill_requests.user_id` en `refill_items`. Ningún proveedor puede leer `refill_requests` directamente, ni siquiera el que tiene un ítem de catálogo compatible.
+
 ## Bootstrap de administrador
 
 Runbook completo en `openspec/changes/backend-supabase-migrations/design.md` D-5 (no se duplica aquí). Dos archivos, propósitos distintos:
@@ -206,7 +242,7 @@ Runbook completo en `openspec/changes/backend-supabase-migrations/design.md` D-5
 | `profiles` | (lote `01a`, migrado) **Conflicto con la prosa original de esta fila, no sobrescrita en silencio**: la regla real implementada es solo lectura de la propia fila (`id = auth.uid()`), **sin** política UPDATE. "...y edita..." queda superseded por design.md D-1 — mutaciones como `suspenderUsuario` van por core-api con service-role, nunca UPDATE directo del cliente. Ver `db-schema-identidad` Requirement "profiles has no client-side mutation policy" |
 | `pets`, `user_consumption` | (lote `02`, migrado) `authenticated` ve solo filas propias, `user_id = auth.uid()` — ni siquiera proveedores tienen acceso |
 | `consumption_logs` | (lote `02`, migrado) Sin columna de dueño propia (Q8) — SELECT vía `EXISTS` contra `user_consumption.user_id`, mismo patrón único que `refill_items`/`offer_items`/`order_items` (`db-access-control`) |
-| `refill_requests`, `refill_items` | Visibles para el usuario dueño; visibles (solo lectura) para proveedores cuyo catálogo coincide y están en zona de despacho |
+| `refill_requests`, `refill_items` | (lote `04`, migrado) **Conflicto con la prosa original de esta fila, no sobrescrita en silencio**: la regla real implementada es owner-only, `user_id = auth.uid()` en `refill_requests` y `EXISTS` contra `refill_requests.user_id` en `refill_items` — **ningún** proveedor puede leerlas directamente. "...visibles (solo lectura) para proveedores cuyo catálogo coincide..." queda superseded por Q2/D1: el matching cross-tenant es RLS-inexpresable sin un predicado auto-derrotante, va por core-api (`buscarProveedoresCompatibles`, service-role) y la futura Edge Function `match-refill-request` (fuera de alcance de este cambio). Ver "Columnas reales — lote `04`" más abajo y `db-schema-refill-matching` Requirement "refill_requests SELECT is owner-only" |
 | `catalog_products` | (lote `03`, migrado) `authenticated` ve todas las filas sin filtro de status (Q6) — **sin** política ni grant `anon`, para no exponer el catálogo de referencia a scrapers sin sesión |
 | `provider_catalog` | (lote `03`, migrado) **Conflicto con la prosa original de esta fila, no sobrescrita en silencio**: la regla real implementada es solo lectura, dos políticas `authenticated` — pública (`disponible = true`) y dueño (`EXISTS` sobre `profiles.company_id`, ve todo incl. `disponible = false`). No hay política de escritura para el cliente; `cargarProductoCatalogo` va por core-api con service-role, igual que `companies`/`profiles` |
 | `offers`, `offer_items` | El proveedor solo puede crear/editar sus propias ofertas; el usuario solo puede leer las ofertas dirigidas a sus solicitudes |
