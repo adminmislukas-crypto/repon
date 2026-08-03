@@ -80,6 +80,33 @@ Sin `created_at`/`updated_at` (no aplica: fila inmutable, se reemplaza por compl
 
 `id` uuid PK REFERENCES `auth.users(id)` ON DELETE RESTRICT (design.md D-1); `company_id` uuid NULL REFERENCES `companies(id)` (solo cuando `role = 'provider'`, invariante enforceado en core-api, no vía CHECK); `created_at`/`updated_at` timestamptz NOT NULL DEFAULT `now()`. El resto de columnas (`role`, `status`, `nombre`, `email`, `telefono`) ya estaban fijadas por `packages/types/SPEC.md`.
 
+## Columnas reales — lote `01b` (`identidad_admin`)
+
+Migrado en `supabase/migrations/20260803120110_01b_identidad_admin.sql`.
+
+### admin_roles
+
+| Columna | Tipo | Constraint |
+|---|---|---|
+| id | uuid | PK default `gen_random_uuid()` |
+| profile_id | uuid | NOT NULL, UNIQUE, REFERENCES `profiles(id)` |
+| rol | admin_role | NOT NULL |
+| granted_by | uuid | NOT NULL REFERENCES `profiles(id)` |
+| created_at | timestamptz | NOT NULL DEFAULT `now()` |
+
+`admin_role`: `'super_admin' | 'soporte' | 'finanzas'`. UNIQUE(`profile_id`): un sub-rol por admin, re-asignar reemplaza la fila. `granted_by = profile_id` es válido únicamente en la fila del bootstrap manual (ver "Bootstrap de administrador" más abajo) — documentado con `comment on column` en la migración, no enforceado por CHECK.
+
+### v_auth_orphans (vista, design.md D-1)
+
+Detecta filas `auth.users` sin `profiles` correspondiente, más viejas que 15 minutos. `service_role`-only (`revoke all ... grant select ... to service_role`) — superficie de detección para el flujo de compensación Auth↔profiles documentado en `services/core-api/domains/identidad/SPEC.md`. El job de reconciliación que la consume se entrega en el cambio de Edge Functions, no en este.
+
+## Bootstrap de administrador
+
+Runbook completo en `openspec/changes/backend-supabase-migrations/design.md` D-5 (no se duplica aquí). Dos archivos, propósitos distintos:
+
+- `supabase/seed.sql` — solo dev local, lo corre `supabase db reset`.
+- `supabase/seed/00_bootstrap_super_admin.sql` — staging/producción, manual, parametrizado, con el runbook de 6 pasos en su propio encabezado.
+
 ## Row Level Security — reglas por tabla
 
 | Tabla | Regla |
@@ -92,7 +119,8 @@ Sin `created_at`/`updated_at` (no aplica: fila inmutable, se reemplaza por compl
 | `provider_catalog` | Editable solo por `profiles` con `companyId` correspondiente |
 | `offers`, `offer_items` | El proveedor solo puede crear/editar sus propias ofertas; el usuario solo puede leer las ofertas dirigidas a sus solicitudes |
 | `orders`, `payments` | Visibles solo para el usuario y el proveedor involucrados en ese pedido |
-| `admin_roles`, `audit_log` | Sin acceso desde clave pública — solo alcanzables vía `service role key` desde `admin-web` |
+| `admin_roles` | (lote `01b`, migrado) Cero acceso de cliente — RLS habilitado + `revoke all` + cero políticas para `anon`/`authenticated` (los dos mecanismos de design.md D-2). Solo alcanzable vía `service role key` desde `admin-web`/core-api. Ver "Bootstrap de administrador" más arriba para cómo se crea la primera fila |
+| `audit_log` | (pendiente, lote `07`) Sin acceso desde clave pública — solo alcanzable vía `service role key` desde `admin-web` |
 
 **Nota:** ninguna tabla admite `DELETE` desde el cliente. Todas las bajas son un `UPDATE` de `status`.
 
