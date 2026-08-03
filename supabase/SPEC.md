@@ -283,6 +283,59 @@ Solo `offers` está en la publicación `supabase_realtime` (`alter publication s
 4. Verificar: sesión 1 recibe el evento `INSERT`; sesión 2 no recibe nada (la política SELECT de Realtime lo descarta en silencio, no es un error visible).
 5. Repetir el mismo flujo con una oferta **proactiva** (`refill_request_id = NULL`) — debe comportarse igual: el destinatario la recibe vía el compare directo de `user_id`, no vía `refill_requests`.
 
+## Columnas reales — lote `06` (`pedidos_pagos`)
+
+Migrado en `supabase/migrations/20260803120600_06_pedidos_pagos.sql`.
+
+### orders
+
+| Columna | Tipo | Constraint |
+|---|---|---|
+| id | uuid | PK default `gen_random_uuid()` |
+| offer_id | uuid | NOT NULL REFERENCES `offers(id)` |
+| user_id | uuid | NOT NULL REFERENCES `profiles(id)` — dueño |
+| company_id | uuid | NOT NULL REFERENCES `companies(id)` |
+| status | order_status | NOT NULL DEFAULT `'confirmado'` |
+| total | numeric(12,2) | NOT NULL |
+| created_at / updated_at | timestamptz | NOT NULL DEFAULT `now()` |
+| — | — | INDEX(`user_id`), INDEX(`company_id`), INDEX(`offer_id`) |
+
+`order_status`: `'confirmado' | 'preparando' | 'en_camino' | 'entregado'`.
+
+### order_items — snapshot inmutable (D-6)
+
+| Columna | Tipo | Constraint |
+|---|---|---|
+| id | uuid | PK default `gen_random_uuid()` |
+| order_id | uuid | NOT NULL REFERENCES `orders(id)` |
+| offer_item_id | uuid | NOT NULL REFERENCES `offer_items(id)` — **solo procedencia, nunca fuente de lectura de precio/descripcion** |
+| nombre | text | NOT NULL — copiado por valor desde `offer_items` al crear el pedido |
+| cantidad | numeric | NOT NULL, CHECK `> 0` |
+| precio_unitario | numeric(12,2) | NOT NULL, CHECK `>= 0` |
+| subtotal | numeric(12,2) | NOT NULL, CHECK `>= 0` — columna plana, no `GENERATED ALWAYS`, para permitir descuentos/redondeos pactados |
+| is_alt / alt_size / alt_qty / alt_note | — | copiados igual que el resto, forman parte de lo que el usuario aceptó comprar |
+| created_at | timestamptz | NOT NULL DEFAULT `now()` |
+| — | — | INDEX(`order_id`) |
+
+Sin `updated_at`, sin columna de dueño (Q8). **Inmutable por grants, no por RLS**: `revoke update, delete on public.order_items from anon, authenticated, service_role` — `service_role` tiene `BYPASSRLS`, así que solo la ausencia del privilegio detiene un `UPDATE`, incluso desde `core-api`. Verificado con `supabase test db` (throws `42501` para `authenticated` y para `service_role`).
+
+### payments
+
+| Columna | Tipo | Constraint |
+|---|---|---|
+| id | uuid | PK default `gen_random_uuid()` |
+| order_id | uuid | NOT NULL UNIQUE REFERENCES `orders(id)` |
+| gateway | text | NOT NULL, CHECK IN (`'webpay'`, `'mercadopago'`) — CHECK, no enum, para que sumar un gateway sea una migración de una línea |
+| external_transaction_id | text | NOT NULL |
+| monto | numeric(12,2) | NOT NULL, CHECK `> 0` |
+| moneda | text | NOT NULL DEFAULT `'CLP'` |
+| estado | payment_status | NOT NULL DEFAULT `'pendiente'` |
+| raw_payload | jsonb | NOT NULL DEFAULT `'{}'::jsonb` — interno, nunca expuesto en `packages/types/SPEC.md` |
+| paid_at | timestamptz | NULL |
+| created_at / updated_at | timestamptz | NOT NULL DEFAULT `now()` |
+
+`payment_status`: `'pendiente' | 'pagado' | 'fallido' | 'reembolsado'`. **Sin ninguna columna capaz de guardar PAN/CVV/vencimiento** (PCI scope avoidance). **Cero SELECT de cliente**: ni owner ni company tienen grant ni política — `revoke all` sin `grant select` para `anon`/`authenticated`, y cero políticas RLS. El estado del pago se lee vía core-api, nunca directo.
+
 ## Bootstrap de administrador
 
 Runbook completo en `openspec/changes/backend-supabase-migrations/design.md` D-5 (no se duplica aquí). Dos archivos, propósitos distintos:
@@ -303,7 +356,8 @@ Runbook completo en `openspec/changes/backend-supabase-migrations/design.md` D-5
 | `catalog_products` | (lote `03`, migrado) `authenticated` ve todas las filas sin filtro de status (Q6) — **sin** política ni grant `anon`, para no exponer el catálogo de referencia a scrapers sin sesión |
 | `provider_catalog` | (lote `03`, migrado) **Conflicto con la prosa original de esta fila, no sobrescrita en silencio**: la regla real implementada es solo lectura, dos políticas `authenticated` — pública (`disponible = true`) y dueño (`EXISTS` sobre `profiles.company_id`, ve todo incl. `disponible = false`). No hay política de escritura para el cliente; `cargarProductoCatalogo` va por core-api con service-role, igual que `companies`/`profiles` |
 | `offers`, `offer_items` | (lote `05`, migrado) **Conflicto con la prosa original de esta fila, no sobrescrita en silencio**: no hay política de escritura para el cliente — `enviarOferta`/`enviarOfertaProactiva`/`aceptarOferta` van por core-api con service-role, igual que el resto del cambio. `offers` tiene dos políticas SELECT `authenticated`: destinatario (`user_id = auth.uid()`, comparación directa — no `EXISTS` contra `refill_requests`, es lo que hace visibles a las ofertas proactivas sin solicitud) y proveedor (`EXISTS` sobre `profiles.company_id`, mismo patrón literal que `companies`/`provider_catalog`). `offer_items` usa el patrón `EXISTS`-contra-el-padre uniforme (Q8) sobre `offers.user_id` únicamente — el proveedor no tiene lectura directa de `offer_items` en este lote. Ver "Columnas reales — lote `05`" más abajo y `db-schema-ofertas` Requirement "SELECT allowlist for offers is required for Realtime to deliver anything" |
-| `orders`, `payments` | Visibles solo para el usuario y el proveedor involucrados en ese pedido |
+| `orders`, `order_items` | (lote `06`, migrado) `orders` tiene dos políticas SELECT `authenticated`: dueño (`user_id = auth.uid()`) y empresa (`EXISTS` sobre `profiles.company_id`, mismo patrón literal que `companies`/`offers`). `order_items` usa el patrón `EXISTS`-contra-el-padre (Q8) sobre `orders.user_id` únicamente — el proveedor no lee `order_items` directo, mismo carve-out que `offer_items` en lote `05`. `order_items` además es inmutable por grants (`revoke update, delete` incl. `service_role`, D-6) |
+| `payments` | (lote `06`, migrado) **Conflicto con la prosa original de esta fila, no sobrescrita en silencio**: la regla real implementada es **cero acceso de cliente**, ni owner ni company — sin grant `select`, sin política. El estado del pago se lee vía core-api. Ver "Columnas reales — lote `06`" más abajo y `db-schema-pedidos-pagos` Requirement "payments has no direct client SELECT policy" |
 | `admin_roles` | (lote `01b`, migrado) Cero acceso de cliente — RLS habilitado + `revoke all` + cero políticas para `anon`/`authenticated` (los dos mecanismos de design.md D-2). Solo alcanzable vía `service role key` desde `admin-web`/core-api. Ver "Bootstrap de administrador" más arriba para cómo se crea la primera fila |
 | `audit_log` | (pendiente, lote `07`) Sin acceso desde clave pública — solo alcanzable vía `service role key` desde `admin-web` |
 

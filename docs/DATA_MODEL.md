@@ -31,8 +31,9 @@ Referencia de las tablas principales en Postgres (Supabase). El detalle de colum
 
 ## Pedidos y pagos
 
-- **orders** + **order_items** — se crean al aceptar una oferta
-- **payments** — referencia a la transacción del checkout hospedado (id de Webpay/MercadoPago). Nunca se guardan datos de tarjeta.
+- **orders** — se crea al aceptar una oferta, visible para el usuario dueño y la empresa proveedora
+- **order_items** — snapshot inmutable: copiado por valor desde `offer_items` al crear el pedido (nombre, cantidad, precio, presentación alternativa incluida). `offer_item_id` se conserva solo como procedencia, nunca se relee para mostrar precio/descripción — el catálogo del proveedor puede cambiar libremente sin alterar el historial. Inmutable a nivel de base de datos vía `revoke update`, incluso para `service_role`, no solo por RLS
+- **payments** — referencia a la transacción del checkout hospedado (id de Webpay/MercadoPago). Nunca se guardan datos de tarjeta. Sin lectura directa de cliente; el estado se consulta vía core-api
 
 ## Administración
 

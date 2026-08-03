@@ -147,6 +147,33 @@ export interface Order {
   status: OrderStatus
   total: number
 }
+
+export interface OrderItem {
+  id: string
+  offerItemId: string // solo procedencia -- ver order_items.offer_item_id comment on column (D-6), nunca fuente de precio/descripcion
+  nombre: string
+  cantidad: number
+  precioUnitario: number
+  subtotal: number
+  isAlt: boolean
+  altSize?: number
+  altQty?: number
+  altNote?: string
+}
+
+export type PaymentStatus = 'pendiente' | 'pagado' | 'fallido' | 'reembolsado'
+
+export interface Payment {
+  id: string
+  orderId: string
+  gateway: string // CHECK IN ('webpay','mercadopago') en la DB, no enum -- sumar un gateway no requiere cambiar este tipo
+  externalTransactionId: string
+  monto: number
+  moneda: string
+  estado: PaymentStatus
+  paidAt?: string
+  // raw_payload NO se expone: es interno de core-api, nunca viaja al cliente
+}
 ```
 
 ## Reglas de validación que deben vivir en el tipo, no solo en el formulario
