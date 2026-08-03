@@ -174,6 +174,17 @@ export interface Payment {
   paidAt?: string
   // raw_payload NO se expone: es interno de core-api, nunca viaja al cliente
 }
+
+export interface AuditLog {
+  id: string
+  actorProfileId: string
+  accion: string
+  entityType: string
+  entityId: string // polimórfico, sin FK -- ver audit_log.entity_id comment on column
+  cambios: Record<string, unknown>
+  motivo?: string
+  createdAt: string
+}
 ```
 
 ## Reglas de validación que deben vivir en el tipo, no solo en el formulario

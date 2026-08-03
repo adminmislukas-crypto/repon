@@ -336,6 +336,26 @@ Sin `updated_at`, sin columna de dueño (Q8). **Inmutable por grants, no por RLS
 
 `payment_status`: `'pendiente' | 'pagado' | 'fallido' | 'reembolsado'`. **Sin ninguna columna capaz de guardar PAN/CVV/vencimiento** (PCI scope avoidance). **Cero SELECT de cliente**: ni owner ni company tienen grant ni política — `revoke all` sin `grant select` para `anon`/`authenticated`, y cero políticas RLS. El estado del pago se lee vía core-api, nunca directo.
 
+## Columnas reales — lote `07` (`auditoria`)
+
+Migrado en `supabase/migrations/20260803120700_07_auditoria.sql`.
+
+### audit_log — append-only (D-6, mismo mecanismo que order_items)
+
+| Columna | Tipo | Constraint |
+|---|---|---|
+| id | uuid | PK default `gen_random_uuid()` |
+| actor_profile_id | uuid | NOT NULL REFERENCES `profiles(id)` |
+| accion | text | NOT NULL |
+| entity_type | text | NOT NULL |
+| entity_id | uuid | NOT NULL — **polimórfico, sin FK a propósito** (spans todos los dominios) |
+| cambios | jsonb | NOT NULL |
+| motivo | text | NULL |
+| created_at | timestamptz | NOT NULL DEFAULT `now()` |
+| — | — | INDEX(`actor_profile_id`), INDEX(`entity_type`, `entity_id`) |
+
+**Grants append-only**: `grant insert, select on public.audit_log to service_role` + `revoke update, delete on public.audit_log from anon, authenticated, service_role` — `service_role` tiene `BYPASSRLS`, así que solo la ausencia del privilegio detiene un `UPDATE`/`DELETE`, incluso desde `core-api`. `anon`/`authenticated` sin ningún grant (RLS habilitado + `revoke all` + cero políticas = deny-all). Verificado con `supabase test db` (throws `42501` para lectura directa y para `UPDATE`/`DELETE` de `service_role`).
+
 ## Bootstrap de administrador
 
 Runbook completo en `openspec/changes/backend-supabase-migrations/design.md` D-5 (no se duplica aquí). Dos archivos, propósitos distintos:
@@ -359,7 +379,7 @@ Runbook completo en `openspec/changes/backend-supabase-migrations/design.md` D-5
 | `orders`, `order_items` | (lote `06`, migrado) `orders` tiene dos políticas SELECT `authenticated`: dueño (`user_id = auth.uid()`) y empresa (`EXISTS` sobre `profiles.company_id`, mismo patrón literal que `companies`/`offers`). `order_items` usa el patrón `EXISTS`-contra-el-padre (Q8) sobre `orders.user_id` únicamente — el proveedor no lee `order_items` directo, mismo carve-out que `offer_items` en lote `05`. `order_items` además es inmutable por grants (`revoke update, delete` incl. `service_role`, D-6) |
 | `payments` | (lote `06`, migrado) **Conflicto con la prosa original de esta fila, no sobrescrita en silencio**: la regla real implementada es **cero acceso de cliente**, ni owner ni company — sin grant `select`, sin política. El estado del pago se lee vía core-api. Ver "Columnas reales — lote `06`" más abajo y `db-schema-pedidos-pagos` Requirement "payments has no direct client SELECT policy" |
 | `admin_roles` | (lote `01b`, migrado) Cero acceso de cliente — RLS habilitado + `revoke all` + cero políticas para `anon`/`authenticated` (los dos mecanismos de design.md D-2). Solo alcanzable vía `service role key` desde `admin-web`/core-api. Ver "Bootstrap de administrador" más arriba para cómo se crea la primera fila |
-| `audit_log` | (pendiente, lote `07`) Sin acceso desde clave pública — solo alcanzable vía `service role key` desde `admin-web` |
+| `audit_log` | (lote `07`, migrado) Append-only incl. `service_role` — `revoke update, delete` de todos los roles (D-6). Sin acceso desde clave pública — solo alcanzable vía `service role key` desde `admin-web`/core-api |
 
 **Nota:** ninguna tabla admite `DELETE` desde el cliente. Todas las bajas son un `UPDATE` de `status`.
 
