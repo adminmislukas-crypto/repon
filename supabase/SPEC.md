@@ -226,6 +226,63 @@ Sin `updated_at` (inmutable una vez creada, mismo patrón que `consumption_logs`
 
 **Q2 — corrección de la prosa "zona de despacho"**: la fila de RLS más abajo para `refill_requests`/`refill_items` decía "visibles (solo lectura) para proveedores cuyo catálogo coincide y están en zona de despacho" — esto es RLS-inexpresable sin un predicado cross-tenant auto-derrotante (D1). El matching por `comuna`/categoría es responsabilidad de core-api (`buscarProveedoresCompatibles`, service-role) y de la futura Edge Function `match-refill-request` (fuera de alcance de este cambio, ver `proposal.md` "Out of Scope"), nunca de una política RLS. La política real implementada es **owner-only**: `user_id = auth.uid()` en `refill_requests`; `EXISTS` contra `refill_requests.user_id` en `refill_items`. Ningún proveedor puede leer `refill_requests` directamente, ni siquiera el que tiene un ítem de catálogo compatible.
 
+## Columnas reales — lote `05` (`ofertas`)
+
+Migrado en `supabase/migrations/20260803120500_05_ofertas.sql`.
+
+### offers
+
+| Columna | Tipo | Constraint |
+|---|---|---|
+| id | uuid | PK default `gen_random_uuid()` |
+| user_id | uuid | NOT NULL REFERENCES `profiles(id)` — destinatario, physical-only, denormalizado a propósito (D-2): es la única columna de la que depende la visibilidad de una oferta proactiva, que no tiene `refill_request` |
+| refill_request_id | uuid | NULL REFERENCES `refill_requests(id)` — presente solo cuando `kind = 'reactiva'` |
+| company_id | uuid | NOT NULL REFERENCES `companies(id)` |
+| kind | offer_kind | NOT NULL — enum no listado explícitamente en tasks.md 7.1 (que solo nombra `offer_status`), agregado aquí porque `Offer.kind` es una columna fija del tipo (`packages/types/SPEC.md`) y sigue la misma convención enum↔union-type que el resto de columnas de este cambio |
+| status | offer_status | NOT NULL DEFAULT `'pendiente'` |
+| tiempo_entrega_horas | integer | NOT NULL |
+| costo_despacho | numeric(12,2) | NOT NULL |
+| total | numeric(12,2) | NOT NULL |
+| mensaje | text | NULL |
+| created_at / updated_at | timestamptz | NOT NULL DEFAULT `now()` |
+| — | — | ÍNDICE ÚNICO PARCIAL `(refill_request_id) WHERE status = 'aceptada' AND refill_request_id IS NOT NULL` — a lo sumo una oferta `aceptada` por solicitud |
+| — | — | INDEX(`user_id`), INDEX(`company_id`), INDEX(`refill_request_id`) |
+
+`offer_kind`: `'reactiva' | 'proactiva'`. `offer_status`: `'pendiente' | 'aceptada' | 'rechazada' | 'expirada'`.
+
+### offer_items
+
+| Columna | Tipo | Constraint |
+|---|---|---|
+| id | uuid | PK default `gen_random_uuid()` — physical-only, no está en `OfferItem` de `packages/types/SPEC.md` (mismo patrón de columna de infra no expuesta al dominio que otras tablas de este cambio) |
+| offer_id | uuid | NOT NULL REFERENCES `offers(id)` |
+| refill_item_id | uuid | NULL REFERENCES `refill_items(id)` — presente solo si la offer padre es `kind = 'reactiva'` |
+| provider_catalog_item_id | uuid | NULL REFERENCES `provider_catalog(id)` — presente solo si la offer padre es `kind = 'proactiva'` |
+| — | — | CHECK `(refill_item_id IS NOT NULL) <> (provider_catalog_item_id IS NOT NULL)` — exactamente uno, nunca ambos ni ninguno |
+| is_alt | boolean | NOT NULL DEFAULT `false` |
+| alt_size | numeric | NULL |
+| alt_qty | numeric | NULL |
+| alt_note | text | NULL |
+| precio | numeric(12,2) | NOT NULL |
+| created_at | timestamptz | NOT NULL DEFAULT `now()` |
+| — | — | INDEX(`offer_id`) |
+
+Sin `updated_at` (inmutable una vez creada, mismo patrón que `refill_items`/`consumption_logs`). Owner-less by design (Q8, `db-access-control`): sin columna de dueño propia. SELECT vía `EXISTS` contra `offers.user_id` — mismo patrón uniforme, sin lógica bespoke; en este lote el proveedor NO lee `offer_items` directamente vía RLS (solo vía core-api con service-role).
+
+**Gap cerrado en `sdd-spec`, no presente en propose/design**: `OfferItem.refillItemId` era `NOT NULL` en el tipo original — hacía a los ítems de `enviarOfertaProactiva` no representables (una oferta proactiva no tiene `refill_request`, por lo tanto no tiene `refill_items` que referenciar). Resuelto con la FK dual-nullable + CHECK de arriba.
+
+### Realtime (D-4)
+
+Solo `offers` está en la publicación `supabase_realtime` (`alter publication supabase_realtime add table public.offers;`), `REPLICA IDENTITY DEFAULT` (sin tocar). `offer_items` NO se publica — el cliente invalida su query de bandeja al recibir el evento y vuelve a pedir el detalle completo (incl. items) por REST, nunca usa el payload del evento como dato. `grant select on public.offers to authenticated` es un prerequisito duro: sin ese grant, Realtime no entrega eventos a nadie sin importar cuántas políticas existan.
+
+**Smoke test manual (D-4, no automatizable con pgTAP)** — pendiente de ejecutar contra un ambiente real antes de considerar Realtime verificado end-to-end (`supabase test db` no puede probar WAL/websocket):
+
+1. Sesión 1 (destinatario): cliente autenticado como el usuario dueño de una `offer`, suscrito a `postgres_changes` sobre `public.offers` filtrado por su propio `user_id`.
+2. Sesión 2 (no-dueño): otro cliente autenticado, suscrito al mismo canal sin filtro de propiedad.
+3. `core-api` (service-role) inserta una `offer` nueva para el destinatario de la sesión 1.
+4. Verificar: sesión 1 recibe el evento `INSERT`; sesión 2 no recibe nada (la política SELECT de Realtime lo descarta en silencio, no es un error visible).
+5. Repetir el mismo flujo con una oferta **proactiva** (`refill_request_id = NULL`) — debe comportarse igual: el destinatario la recibe vía el compare directo de `user_id`, no vía `refill_requests`.
+
 ## Bootstrap de administrador
 
 Runbook completo en `openspec/changes/backend-supabase-migrations/design.md` D-5 (no se duplica aquí). Dos archivos, propósitos distintos:
@@ -245,7 +302,7 @@ Runbook completo en `openspec/changes/backend-supabase-migrations/design.md` D-5
 | `refill_requests`, `refill_items` | (lote `04`, migrado) **Conflicto con la prosa original de esta fila, no sobrescrita en silencio**: la regla real implementada es owner-only, `user_id = auth.uid()` en `refill_requests` y `EXISTS` contra `refill_requests.user_id` en `refill_items` — **ningún** proveedor puede leerlas directamente. "...visibles (solo lectura) para proveedores cuyo catálogo coincide..." queda superseded por Q2/D1: el matching cross-tenant es RLS-inexpresable sin un predicado auto-derrotante, va por core-api (`buscarProveedoresCompatibles`, service-role) y la futura Edge Function `match-refill-request` (fuera de alcance de este cambio). Ver "Columnas reales — lote `04`" más abajo y `db-schema-refill-matching` Requirement "refill_requests SELECT is owner-only" |
 | `catalog_products` | (lote `03`, migrado) `authenticated` ve todas las filas sin filtro de status (Q6) — **sin** política ni grant `anon`, para no exponer el catálogo de referencia a scrapers sin sesión |
 | `provider_catalog` | (lote `03`, migrado) **Conflicto con la prosa original de esta fila, no sobrescrita en silencio**: la regla real implementada es solo lectura, dos políticas `authenticated` — pública (`disponible = true`) y dueño (`EXISTS` sobre `profiles.company_id`, ve todo incl. `disponible = false`). No hay política de escritura para el cliente; `cargarProductoCatalogo` va por core-api con service-role, igual que `companies`/`profiles` |
-| `offers`, `offer_items` | El proveedor solo puede crear/editar sus propias ofertas; el usuario solo puede leer las ofertas dirigidas a sus solicitudes |
+| `offers`, `offer_items` | (lote `05`, migrado) **Conflicto con la prosa original de esta fila, no sobrescrita en silencio**: no hay política de escritura para el cliente — `enviarOferta`/`enviarOfertaProactiva`/`aceptarOferta` van por core-api con service-role, igual que el resto del cambio. `offers` tiene dos políticas SELECT `authenticated`: destinatario (`user_id = auth.uid()`, comparación directa — no `EXISTS` contra `refill_requests`, es lo que hace visibles a las ofertas proactivas sin solicitud) y proveedor (`EXISTS` sobre `profiles.company_id`, mismo patrón literal que `companies`/`provider_catalog`). `offer_items` usa el patrón `EXISTS`-contra-el-padre uniforme (Q8) sobre `offers.user_id` únicamente — el proveedor no tiene lectura directa de `offer_items` en este lote. Ver "Columnas reales — lote `05`" más abajo y `db-schema-ofertas` Requirement "SELECT allowlist for offers is required for Realtime to deliver anything" |
 | `orders`, `payments` | Visibles solo para el usuario y el proveedor involucrados en ese pedido |
 | `admin_roles` | (lote `01b`, migrado) Cero acceso de cliente — RLS habilitado + `revoke all` + cero políticas para `anon`/`authenticated` (los dos mecanismos de design.md D-2). Solo alcanzable vía `service role key` desde `admin-web`/core-api. Ver "Bootstrap de administrador" más arriba para cómo se crea la primera fila |
 | `audit_log` | (pendiente, lote `07`) Sin acceso desde clave pública — solo alcanzable vía `service role key` desde `admin-web` |
