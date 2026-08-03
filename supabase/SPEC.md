@@ -14,6 +14,17 @@ Checklist, no CI (el repo no tiene tooling de CI y no se va a inventar una compu
 
 Un PR de lote que rompa la regla "tabla sin RLS en el mismo commit" o que falte cualquiera de los 5 artefactos se rechaza en revisión. Fase 0 (scaffolding de CLI + pgTAP, ver `supabase/migrations/00000000000000_enable_pgtap.sql`) es prerrequisito de todos los lotes.
 
+## Primitivas transversales (lote `00`)
+
+Creadas una sola vez en `supabase/migrations/20260803120000_00_extensions_enums.sql` (+ rollback `supabase/rollback/00_extensions_enums_down.sql`, test `supabase/tests/00_extensions_enums_test.sql`). El resto de los lotes las **consumen**, nunca las redefinen. Este lote no trae tablas ni enums propios — ningún enum es cross-domain en las specs finalizadas, cada dominio trae el suyo dentro de su propio lote (design.md D-3, orden interno fijo).
+
+| Primitiva | Tipo | Uso |
+|---|---|---|
+| Extensión `pgcrypto` | extension | Backing para defaults `gen_random_uuid()` en PKs `uuid` de todos los lotes posteriores |
+| Extensión `pg_trgm` | extension | Índices GIN de trigram para búsqueda por texto (`catalog_products`, `provider_catalog`, lote `03`) |
+| `public.set_updated_at()` | función `plpgsql`, trigger, `VOLATILE` | Se ata como `BEFORE UPDATE` en cada tabla con columna `updated_at`, una vez por tabla en cada lote posterior (design.md D-3). Una sola implementación para las 17 tablas — nunca se redefine por dominio. |
+| `public.current_company_id()` | función `sql stable security definer` | Devuelve el `company_id` del usuario que llama, vía `profiles`, sin re-evaluar el RLS de `profiles` desde dentro de otra política (design.md D-2). Consumida por las políticas RLS de tablas "company-owned" desde el lote `01a` en adelante. Referencia `public.profiles`, que no existe hasta el lote `01a` — válido porque el cuerpo de una función `language sql` no se valida contra el catálogo en `CREATE FUNCTION`, solo en la primera invocación (a diferencia de `CREATE POLICY`, que sí exige que las tablas referenciadas ya existan). |
+
 ## Tablas (a migrar en `migrations/`)
 
 Orden sugerido de creación (respeta dependencias de foreign keys):
