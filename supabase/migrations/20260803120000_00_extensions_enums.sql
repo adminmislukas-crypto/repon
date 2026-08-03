@@ -50,20 +50,28 @@ comment on function public.set_updated_at() is
 -- against `profiles` (which would re-evaluate `profiles`' own RLS from
 -- inside another table's policy — cost + recursion risk, design.md D-2).
 --
--- Note: this function body references `public.profiles`, which does not
--- exist until batch 01a. This is safe and intentional: unlike
--- `CREATE POLICY`, a `language sql` function body is not validated against
--- the catalog at `CREATE FUNCTION` time, only at first invocation (see
--- tasks.md Phase 2 rationale for the identidad batch split).
+-- CORRECTION (found during PR 4, batch 02, via a real `supabase db reset`):
+-- this function body references `public.profiles`, which does not exist
+-- until batch 01a. The original comment here claimed a `language sql`
+-- function body is not validated against the catalog at `CREATE FUNCTION`
+-- time — that's wrong. Postgres resolves a SQL-language function's body
+-- immediately to determine its result projection, so `CREATE FUNCTION`
+-- fails outright when the referenced table doesn't exist yet. `language
+-- plpgsql` defers that resolution to first call, which is what forward
+-- references across migration batches actually require. Verified: a clean
+-- `supabase db reset` fails at this statement with `language sql`, and
+-- succeeds through the full chain with `language plpgsql`.
 -- ============================================================
 create function public.current_company_id()
 returns uuid
-language sql
+language plpgsql
 stable
 security definer
 set search_path = ''
 as $$
-  select company_id from public.profiles where id = (select auth.uid())
+begin
+  return (select company_id from public.profiles where id = (select auth.uid()));
+end;
 $$;
 
 comment on function public.current_company_id() is

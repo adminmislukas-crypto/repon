@@ -18,9 +18,10 @@ select function_lang_is('public', 'set_updated_at', array[]::text[], 'plpgsql', 
 select function_returns('public', 'set_updated_at', array[]::text[], 'trigger', 'set_updated_at() returns trigger');
 select volatility_is('public', 'set_updated_at', array[]::text[], 'volatile', 'set_updated_at() is VOLATILE (default, not declared otherwise)');
 
--- public.current_company_id() — sql, stable, security definer (design.md D-2)
+-- public.current_company_id() — plpgsql (fixed post-PR4, see migration
+-- comment), stable, security definer (design.md D-2)
 select has_function('public', 'current_company_id', array[]::text[], 'public.current_company_id() exists');
-select function_lang_is('public', 'current_company_id', array[]::text[], 'sql', 'current_company_id() is written in sql');
+select function_lang_is('public', 'current_company_id', array[]::text[], 'plpgsql', 'current_company_id() is written in plpgsql (language sql would fail CREATE FUNCTION against a nonexistent profiles table)');
 select function_returns('public', 'current_company_id', array[]::text[], 'uuid', 'current_company_id() returns uuid');
 select is_definer('public', 'current_company_id', array[]::text[], 'current_company_id() is SECURITY DEFINER');
 select volatility_is('public', 'current_company_id', array[]::text[], 'stable', 'current_company_id() is STABLE');
