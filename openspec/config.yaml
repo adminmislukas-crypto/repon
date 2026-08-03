@@ -1,0 +1,61 @@
+schema: spec-driven
+
+context: |
+  Tech stack: RN+Expo (usuario-mobile, proveedor-mobile) w/ NativeWind, TanStack Query,
+  Zustand; Next.js App Router (admin-web); NestJS modular monolith (core-api), hexagonal
+  per domain. Supabase (Auth/Postgres/Storage/Realtime) as pure infra, not business logic.
+  Architecture: hexagonal per domain (identidad, catalogo, consumo, refill-matching,
+  ofertas, pedidos-pagos), event-driven via EventEmitter2 today, extractable to
+  microservices per-domain later without touching business rules.
+  Testing: NOT YET CONFIGURED — no package.json/test runner/CI anywhere in the repo.
+  Project is in spec + HTML-mockup phase, pre-implementation.
+  Style: every app/domain/package already has a product-level SPEC.md (pre-existing
+  convention, NOT SDD-generated); docs/ARCHITECTURE.md + docs/DATA_MODEL.md at root are
+  the canonical references and MUST be read before touching data model or service
+  boundaries.
+
+strict_tdd: false
+
+testing:
+  status: not_configured
+  reason: >-
+    No package.json, test runner, linter, type checker, formatter, or CI config
+    detected anywhere in the repo (root, apps/*, services/*, packages/*). Confirmed via
+    direct file inspection, not inferred. Project is pre-implementation: only SPEC.md
+    files, docs/, and one HTML mockup per app exist so far.
+  test_command: ""
+  build_command: ""
+  lint_command: ""
+  typecheck_command: ""
+  format_command: ""
+  coverage_threshold: 0
+
+rules:
+  proposal:
+    - Read docs/ARCHITECTURE.md and docs/DATA_MODEL.md before proposing changes to data model or service boundaries
+    - Read the relevant app/domain/package SPEC.md first — it is a pre-existing contract, not something SDD owns; flag conflicts instead of silently overriding it
+    - Include rollback plan for risky changes
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+    - Delta specs MUST NOT silently contradict the existing product-level SPEC.md files — flag conflicts explicitly instead
+  design:
+    - Respect hexagonal boundaries: a domain only talks to infrastructure through the ports declared in its SPEC.md
+    - Client apps call core-api for business logic; no direct Supabase business-logic access from usuario-mobile/proveedor-mobile/admin-web
+    - Document architecture decisions with rationale
+    - Include sequence diagrams for complex flows (e.g. refill -> matching -> offer -> order)
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - Keep tasks completable in one session
+    - Because no test runner exists yet, the FIRST tasks that introduce real code for a sub-project MUST include scaffolding an appropriate test runner (Jest/Vitest for NestJS or Next.js, Jest + RNTL for the Expo apps) before or alongside the feature code
+  apply:
+    - Follow existing SPEC.md naming and domain language (Spanish entity/event names, e.g. RefillRequest, OfertaAceptada)
+    - Never implement a physical DELETE on usuarios/empresas/productos — use the `status` field (soft delete) per docs/ARCHITECTURE.md "Principio de dar de baja"
+    tdd: false
+    test_command: ""
+  verify:
+    test_command: ""
+    build_command: ""
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas
