@@ -1,0 +1,1132 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Repón 🔔 — portal proveedor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<style>
+  :root {
+    --bg: #F0F2F5;
+    --surface: #FFFFFF;
+    --surface-2: #F7F8FA;
+    --border: rgba(0,0,0,0.08);
+    --border-strong: rgba(0,0,0,0.13);
+    --text-primary: #1A1916;
+    --text-secondary: #6B6860;
+    --text-muted: #A09E98;
+    --accent: #0F6E56;
+    --accent-light: #E1F5EE;
+    --accent-mid: #5DCAA5;
+    --danger: #A32D2D;
+    --danger-light: #FCEBEB;
+    --warning: #854F0B;
+    --warning-light: #FAEEDA;
+    --success: #3B6D11;
+    --success-light: #EAF3DE;
+    --purple: #534AB7;
+    --purple-light: #EEEDFE;
+    --purple-mid: #AFA9EC;
+    --blue: #185FA5;
+    --blue-light: #E6F1FB;
+    --radius: 8px;
+    --radius-lg: 14px;
+    --font: 'Inter', system-ui, sans-serif;
+    --nav-h: 62px;
+    --max-w: 430px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text-primary);
+    min-height: 100dvh;
+    display: flex;
+    justify-content: center;
+  }
+
+  .app {
+    width: 100%;
+    max-width: var(--max-w);
+    min-height: 100dvh;
+    background: var(--bg);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── SCREENS ── */
+  .screen { display: none; flex-direction: column; flex: 1; padding-bottom: var(--nav-h); }
+  .screen.active { display: flex; }
+
+  /* ── TOPBAR ── */
+  .topbar {
+    background: var(--surface);
+    border-bottom: 0.5px solid var(--border);
+    padding: 14px 16px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .topbar-eyebrow { font-size: 10px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 2px; }
+  .topbar h1 { font-size: 16px; font-weight: 600; color: var(--text-primary); }
+  .topbar-action {
+    background: none; border: none; cursor: pointer;
+    color: var(--text-secondary); font-size: 22px;
+    display: flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border-radius: 50%;
+    transition: background .15s;
+  }
+  .topbar-action:hover { background: var(--bg); }
+  .back-btn {
+    background: none; border: none; cursor: pointer;
+    color: var(--text-secondary); font-size: 22px;
+    margin-right: 8px; display: flex; align-items: center;
+  }
+  .provider-avatar {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: var(--accent-light); color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600;
+  }
+
+  /* ── SCROLL CONTENT ── */
+  .content { flex: 1; overflow-y: auto; padding: 14px 0 8px; }
+
+  /* ── BOTTOM NAV ── */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: var(--max-w);
+    height: var(--nav-h);
+    background: var(--surface);
+    border-top: 0.5px solid var(--border);
+    display: flex;
+    z-index: 20;
+  }
+  .nav-btn {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 3px; background: none; border: none; cursor: pointer;
+    font-size: 10px; color: var(--text-muted); font-family: var(--font);
+    transition: color .15s;
+  }
+  .nav-btn i { font-size: 22px; }
+  .nav-btn.active { color: var(--accent); }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 13px 15px;
+    margin: 0 14px 10px;
+  }
+
+  /* ── SECTION LABEL ── */
+  .sec {
+    font-size: 11px; font-weight: 600; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 0 14px; margin: 12px 0 6px;
+  }
+
+  /* ── STAT GRID ── */
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 14px; margin-bottom: 12px; }
+  .stat-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; }
+  .stat-label { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+  .stat-value { font-size: 22px; font-weight: 600; color: var(--text-primary); }
+
+  /* ── ROW ── */
+  .row {
+    display: flex; align-items: center; gap: 11px;
+    padding: 10px 0; border-bottom: 0.5px solid var(--border);
+  }
+  .row:last-child { border-bottom: none; padding-bottom: 0; }
+
+  /* ── ICON ── */
+  .ico {
+    width: 34px; height: 34px; border-radius: var(--radius);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px; flex-shrink: 0;
+  }
+  .ico-tea { background: var(--accent-light); color: var(--accent); }
+  .ico-pur { background: var(--purple-light); color: var(--purple); }
+  .ico-amb { background: var(--warning-light); color: var(--warning); }
+  .ico-cor { background: var(--danger-light); color: var(--danger); }
+  .ico-gre { background: var(--success-light); color: var(--success); }
+  .ico-blu { background: var(--blue-light); color: var(--blue); }
+
+  /* ── META ── */
+  .meta { flex: 1; min-width: 0; }
+  .meta-name { font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .meta-sub { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+
+  /* ── BADGES ── */
+  .badge { font-size: 10px; padding: 3px 8px; border-radius: 20px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+  .b-red { background: var(--danger-light); color: var(--danger); }
+  .b-amb { background: var(--warning-light); color: var(--warning); }
+  .b-grn { background: var(--success-light); color: var(--success); }
+  .b-pur { background: var(--purple-light); color: var(--purple); }
+  .b-blu { background: var(--blue-light); color: var(--blue); }
+  .b-tea { background: var(--accent-light); color: var(--accent); }
+
+  /* ── BUTTONS ── */
+  .btn-primary {
+    display: block; padding: 13px; border-radius: var(--radius-lg); border: none;
+    background: var(--accent); color: white; font-size: 14px;
+    font-weight: 600; font-family: var(--font); cursor: pointer;
+    text-align: center; transition: opacity .15s; width: calc(100% - 28px); margin: 0 14px 8px;
+  }
+  .btn-primary:hover { opacity: .9; }
+  .btn-secondary {
+    display: block; padding: 12px; border-radius: var(--radius-lg);
+    border: 0.5px solid var(--border-strong);
+    background: var(--surface); color: var(--text-primary);
+    font-size: 14px; font-weight: 500; font-family: var(--font);
+    cursor: pointer; text-align: center; transition: background .15s;
+    width: calc(100% - 28px); margin: 0 14px 8px;
+  }
+  .btn-secondary:hover { background: var(--bg); }
+  .btn-xs {
+    font-size: 11px; padding: 5px 10px; border-radius: var(--radius);
+    cursor: pointer; border: 0.5px solid var(--border-strong);
+    background: var(--surface); color: var(--text-primary);
+    font-family: var(--font); white-space: nowrap;
+  }
+  .btn-xsp {
+    font-size: 11px; padding: 5px 10px; border-radius: var(--radius);
+    cursor: pointer; border: none; background: var(--accent);
+    color: white; font-family: var(--font); white-space: nowrap;
+  }
+  .btn-danger {
+    font-size: 11px; padding: 5px 10px; border-radius: var(--radius);
+    cursor: pointer; border: none; background: var(--danger-light);
+    color: var(--danger); font-family: var(--font); white-space: nowrap;
+  }
+
+  /* ── CHIPS ── */
+  .chips { display: flex; flex-wrap: wrap; padding: 0 14px; margin-bottom: 8px; gap: 6px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 5px 11px; border-radius: 20px; font-size: 11px;
+    font-weight: 500; cursor: pointer; font-family: var(--font);
+    border: 0.5px solid var(--border-strong);
+    background: var(--surface); color: var(--text-secondary);
+    transition: all .15s;
+  }
+  .chip.active { background: var(--accent-light); color: var(--accent); border-color: var(--accent-mid); }
+
+  /* ── FORM ELEMENTS ── */
+  .form-wrap { padding: 0 14px; }
+  .form-group { margin-bottom: 12px; }
+  .form-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; display: block; margin-bottom: 5px; }
+  .form-input, .form-select, .form-textarea {
+    width: 100%; padding: 10px 12px; border-radius: var(--radius);
+    border: 0.5px solid var(--border-strong); background: var(--surface);
+    color: var(--text-primary); font-size: 13px; font-family: var(--font);
+    outline: none; transition: border-color .15s;
+  }
+  .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--accent); }
+  .form-input-sm { font-size: 12px; padding: 5px 8px; width: 80px; border-radius: var(--radius); border: 0.5px solid var(--border-strong); background: var(--surface); color: var(--text-primary); font-family: var(--font); outline: none; }
+  .form-select-sm { font-size: 11px; padding: 4px 7px; border-radius: var(--radius); border: 0.5px solid var(--border-strong); background: var(--surface); color: var(--text-primary); font-family: var(--font); }
+  .form-textarea { resize: none; height: 64px; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* ── USER CARD (proactive) ── */
+  .user-card { border: 0.5px solid var(--border); border-radius: var(--radius-lg); margin: 0 14px 10px; overflow: hidden; }
+  .user-card.hot { border-color: #EF9F27; }
+  .user-card.critical { border-color: #E24B4A; }
+  .uc-head { display: flex; align-items: center; gap: 10px; padding: 11px 14px; background: var(--surface-2); border-bottom: 0.5px solid var(--border); }
+  .uc-head.hot { background: var(--warning-light); }
+  .uc-head.critical { background: var(--danger-light); }
+  .uc-prod { display: flex; align-items: center; gap: 9px; padding: 9px 14px; border-bottom: 0.5px solid var(--border); }
+  .uc-prod:last-child { border-bottom: none; }
+  .uc-prod-name { flex: 1; font-size: 12px; color: var(--text-primary); }
+  .uc-prod-ref { font-size: 11px; color: var(--text-muted); }
+  .uc-prod-price { font-size: 12px; font-weight: 600; color: var(--accent); margin-right: 6px; }
+  .uc-footer { display: flex; align-items: center; justify-content: space-between; padding: 9px 14px; background: var(--surface-2); }
+
+  /* ── AVATAR ── */
+  .avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600; flex-shrink: 0;
+  }
+
+  /* ── BANNER ── */
+  .banner { border-radius: var(--radius); padding: 10px 13px; margin: 0 14px 10px; font-size: 12px; line-height: 1.5; }
+  .banner-title { font-weight: 600; margin-bottom: 3px; }
+  .banner-tea { background: var(--accent-light); color: var(--accent); }
+  .banner-pur { background: var(--purple-light); color: var(--purple); }
+  .banner-amb { background: var(--warning-light); color: var(--warning); }
+
+  /* ── CAT BLOCK ── */
+  .cat-block { border: 0.5px solid var(--border); border-radius: var(--radius-lg); margin: 0 14px 10px; overflow: hidden; }
+  .cat-hdr { display: flex; align-items: center; gap: 9px; padding: 11px 14px; background: var(--surface-2); border-bottom: 0.5px solid var(--border); cursor: pointer; }
+  .cat-item { display: flex; align-items: center; gap: 9px; padding: 9px 14px; border-bottom: 0.5px solid var(--border); background: var(--surface); }
+  .cat-item:last-child { border-bottom: none; }
+
+  /* ── OFFER PREVIEW ── */
+  .offer-preview { background: var(--accent-light); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 10px; }
+  .offer-preview-title { font-size: 11px; font-weight: 600; color: var(--accent); margin-bottom: 5px; }
+
+  .offer-item { border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 12px 13px; margin-bottom: 12px; background: var(--surface); }
+  .oi-top { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; }
+  .avail-toggle { display: flex; gap: 6px; margin-bottom: 10px; }
+  .chip-avail { flex: 1; text-align: center; padding: 7px 8px; border-radius: var(--radius); font-size: 11px; font-weight: 600; cursor: pointer; border: 0.5px solid var(--border-strong); background: var(--surface); color: var(--text-secondary); font-family: inherit; }
+  .chip-avail.on { background: var(--accent-light); color: var(--accent); border-color: var(--accent); }
+  .alt-note { display: flex; gap: 7px; background: var(--warning-light); border-radius: var(--radius); padding: 9px 11px; margin-top: 8px; font-size: 11px; line-height: 1.5; color: var(--warning); }
+  .alt-note i { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+  .unit-hint { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
+  .offer-total-row { display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0; color: var(--accent); }
+  .offer-total-final { display: flex; justify-content: space-between; font-size: 14px; font-weight: 600; padding: 8px 0 0; border-top: 0.5px solid var(--accent-mid); margin-top: 5px; color: var(--accent); }
+
+  /* ── TIMELINE ── */
+  .timeline-item { display: flex; gap: 10px; padding: 5px 0; }
+  .tl-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
+
+  /* ── DIVIDER ── */
+  .divider { height: 0.5px; background: var(--border); margin: 6px 0; }
+
+  /* ── TOTAL ROW ── */
+  .total-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; }
+  .total-row span:first-child { color: var(--text-secondary); }
+
+  /* ── CHECKBOX LABEL ── */
+  .check-label { display: flex; align-items: center; gap: 9px; font-size: 12px; color: var(--text-primary); cursor: pointer; padding: 4px 0; }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ═══════════════════════════════════════
+       SCREEN: DASHBOARD
+  ═══════════════════════════════════════ -->
+  <div class="screen active" id="screen-dashboard">
+    <div class="topbar">
+      <div>
+        <div class="topbar-eyebrow">portal proveedor</div>
+        <h1>FarmaExpress</h1>
+      </div>
+      <div class="provider-avatar">FE</div>
+    </div>
+    <div class="content">
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-label">solicitudes hoy</div><div class="stat-value">14</div></div>
+        <div class="stat-card"><div class="stat-label">ganadas</div><div class="stat-value" style="color:var(--success)">6</div></div>
+        <div class="stat-card"><div class="stat-label">venta del día</div><div class="stat-value">$312k</div></div>
+        <div class="stat-card"><div class="stat-label">auto-ofertadas</div><div class="stat-value" style="color:var(--purple)">9</div></div>
+      </div>
+
+      <div class="banner banner-pur">
+        <div class="banner-title"><i class="ti ti-bolt" style="font-size:13px;vertical-align:-1px;margin-right:4px"></i>oferta automática activa</div>
+        cuando llega una solicitud con productos de tu catálogo, ofertamos automáticamente con tu precio base.
+      </div>
+
+      <div class="sec">proactivas — usuarios próximos a refill</div>
+      <div class="user-card critical">
+        <div class="uc-head critical">
+          <div class="avatar" style="background:#F7C1C1;color:#791F1F">VS</div>
+          <div style="flex:1"><div style="font-size:13px;font-weight:500;color:var(--text-primary)">Valentina Soto</div><div class="meta-sub">Providencia · 2 productos</div></div>
+          <div style="text-align:right"><div style="font-size:12px;font-weight:600;color:var(--danger)">2 días</div><div style="font-size:10px;color:var(--danger)">para refill</div></div>
+        </div>
+        <div class="uc-prod">
+          <div class="ico ico-cor" style="width:28px;height:28px;font-size:13px"><i class="ti ti-pill"></i></div>
+          <span class="uc-prod-name">Eutirox 50mcg x30</span>
+          <span class="uc-prod-price">$17.900</span>
+          <button class="btn-xsp" onclick="go('screen-oferta-proactiva')">ofertar</button>
+        </div>
+        <div class="uc-prod">
+          <div class="ico ico-amb" style="width:28px;height:28px;font-size:13px"><i class="ti ti-dog"></i></div>
+          <span class="uc-prod-name">Royal Canin 15kg</span>
+          <span class="uc-prod-price">$32.500</span>
+          <button class="btn-xsp" onclick="go('screen-oferta-proactiva')">ofertar</button>
+        </div>
+      </div>
+
+      <div class="sec">reactivas — abiertas ahora</div>
+      <div class="card">
+        <div class="row">
+          <div class="ico ico-cor"><i class="ti ti-pill"></i></div>
+          <div class="meta"><div class="meta-name">Metformina 850mg x30</div><div class="meta-sub">Las Condes · hace 8 min</div></div>
+          <button class="btn-xsp" onclick="go('screen-ofertar')">ofertar</button>
+        </div>
+        <div class="row">
+          <div class="ico ico-amb"><i class="ti ti-dog"></i></div>
+          <div class="meta"><div class="meta-name">Frontline Spray 500ml</div><div class="meta-sub">Vitacura · hace 22 min</div></div>
+          <button class="btn-xsp" onclick="go('screen-ofertar')">ofertar</button>
+        </div>
+        <div class="row">
+          <div class="ico ico-pur"><i class="ti ti-sparkles"></i></div>
+          <div class="meta"><div class="meta-name">Shampoo antipulgas</div><div class="meta-sub">Providencia · hace 40 min</div></div>
+          <span class="badge b-pur">ofertada</span>
+        </div>
+      </div>
+    </div>
+    <nav class="bottom-nav">
+      <button class="nav-btn active"><i class="ti ti-chart-bar"></i>dashboard</button>
+      <button class="nav-btn" onclick="go('screen-solicitudes')"><i class="ti ti-inbox"></i>solicitudes</button>
+      <button class="nav-btn" onclick="go('screen-catalogo')"><i class="ti ti-packages"></i>catálogo</button>
+      <button class="nav-btn" onclick="go('screen-pedidos')"><i class="ti ti-truck"></i>pedidos</button>
+    </nav>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       SCREEN: SOLICITUDES
+  ═══════════════════════════════════════ -->
+  <div class="screen" id="screen-solicitudes">
+    <div class="topbar">
+      <h1>solicitudes</h1>
+      <span class="badge b-red">12 nuevas</span>
+    </div>
+    <div class="content">
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-label">reactivas</div><div class="stat-value">7</div></div>
+        <div class="stat-card"><div class="stat-label">proactivas</div><div class="stat-value" style="color:var(--warning)">5</div></div>
+      </div>
+      <div class="chips">
+        <span class="chip active" onclick="filterChip(this)">todas</span>
+        <span class="chip" onclick="filterChip(this)">reactivas</span>
+        <span class="chip" onclick="filterChip(this)">proactivas</span>
+        <span class="chip" onclick="filterChip(this)">ofertadas</span>
+      </div>
+
+      <div class="sec">proactivas — urgentes</div>
+      <div class="user-card critical">
+        <div class="uc-head critical">
+          <div class="avatar" style="background:#F7C1C1;color:#791F1F">VS</div>
+          <div style="flex:1"><div style="font-size:13px;font-weight:500;color:var(--text-primary)">Valentina Soto</div><div class="meta-sub">Providencia · 2 productos</div></div>
+          <div style="text-align:right"><div style="font-size:12px;font-weight:600;color:var(--danger)">2 días</div><div style="font-size:10px;color:var(--danger)">para refill</div></div>
+        </div>
+        <div class="uc-prod"><div class="ico ico-cor" style="width:26px;height:26px;font-size:13px"><i class="ti ti-pill"></i></div><span class="uc-prod-name">Eutirox 50mcg x30</span><span class="uc-prod-price">$17.900</span></div>
+        <div class="uc-prod"><div class="ico ico-amb" style="width:26px;height:26px;font-size:13px"><i class="ti ti-dog"></i></div><span class="uc-prod-name">Royal Canin 15kg</span><span class="uc-prod-price">$32.500</span></div>
+        <div class="uc-footer"><span style="font-size:12px;color:var(--text-secondary)">total est. <strong style="color:var(--accent)">$50.400</strong></span><button class="btn-xsp" onclick="go('screen-oferta-proactiva')">enviar oferta</button></div>
+      </div>
+
+      <div class="user-card hot">
+        <div class="uc-head hot">
+          <div class="avatar" style="background:#FAC775;color:#633806">JM</div>
+          <div style="flex:1"><div style="font-size:13px;font-weight:500;color:var(--text-primary)">Jorge Méndez</div><div class="meta-sub">Las Condes · 1 producto</div></div>
+          <div style="text-align:right"><div style="font-size:12px;font-weight:600;color:var(--warning)">5 días</div><div style="font-size:10px;color:var(--warning)">para refill</div></div>
+        </div>
+        <div class="uc-prod"><div class="ico ico-tea" style="width:26px;height:26px;font-size:13px"><i class="ti ti-pill"></i></div><span class="uc-prod-name">Omeprazol 20mg x60</span><span class="uc-prod-price">$4.800</span></div>
+        <div class="uc-footer"><span style="font-size:12px;color:var(--text-secondary)">total est. <strong style="color:var(--accent)">$4.800</strong></span><button class="btn-xsp" onclick="go('screen-oferta-proactiva')">enviar oferta</button></div>
+      </div>
+
+      <div class="sec">reactivas — abiertas</div>
+      <div class="card">
+        <div class="row">
+          <div class="ico ico-cor"><i class="ti ti-pill"></i></div>
+          <div class="meta"><div class="meta-name">Metformina 850mg x30</div><div class="meta-sub">2 productos · Las Condes</div></div>
+          <button class="btn-xsp" onclick="go('screen-ofertar')">ofertar</button>
+        </div>
+        <div class="row">
+          <div class="ico ico-amb"><i class="ti ti-dog"></i></div>
+          <div class="meta"><div class="meta-name">Frontline Spray 500ml</div><div class="meta-sub">1 producto · Vitacura</div></div>
+          <button class="btn-xsp" onclick="go('screen-ofertar')">ofertar</button>
+        </div>
+        <div class="row">
+          <div class="ico ico-pur"><i class="ti ti-sparkles"></i></div>
+          <div class="meta"><div class="meta-name">Shampoo antipulgas</div><div class="meta-sub">1 producto · Ñuñoa</div></div>
+          <span class="badge b-pur">ofertada</span>
+        </div>
+        <div class="row">
+          <div class="ico ico-gre"><i class="ti ti-apple"></i></div>
+          <div class="meta"><div class="meta-name">Whey Protein + creatina</div><div class="meta-sub">2 productos · Vitacura</div></div>
+          <button class="btn-xs">ver</button>
+        </div>
+      </div>
+    </div>
+    <nav class="bottom-nav">
+      <button class="nav-btn" onclick="go('screen-dashboard')"><i class="ti ti-chart-bar"></i>dashboard</button>
+      <button class="nav-btn active"><i class="ti ti-inbox"></i>solicitudes</button>
+      <button class="nav-btn" onclick="go('screen-catalogo')"><i class="ti ti-packages"></i>catálogo</button>
+      <button class="nav-btn" onclick="go('screen-pedidos')"><i class="ti ti-truck"></i>pedidos</button>
+    </nav>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       SCREEN: OFERTA PROACTIVA
+  ═══════════════════════════════════════ -->
+  <div class="screen" id="screen-oferta-proactiva">
+    <div class="topbar">
+      <button class="back-btn" onclick="goBack()" aria-label="volver"><i class="ti ti-arrow-left"></i></button>
+      <h1>oferta proactiva</h1>
+      <span class="badge b-red">vence en 2 días</span>
+    </div>
+    <div class="content">
+      <div style="background:var(--danger-light);border-radius:var(--radius-lg);padding:12px 14px;margin:0 14px 12px;display:flex;align-items:center;gap:10px">
+        <div class="avatar" style="background:#F7C1C1;color:#791F1F;width:34px;height:34px">VS</div>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--danger)">Valentina Soto · Providencia</div>
+          <div style="font-size:11px;color:var(--danger);margin-top:2px">su Eutirox vence en 2 días · compradora mensual confirmada</div>
+        </div>
+      </div>
+      <div class="form-wrap">
+
+        <div class="offer-item" id="oip-eutirox">
+          <div class="oi-top">
+            <div class="ico ico-cor" style="width:26px;height:26px;font-size:13px"><i class="ti ti-pill"></i></div>
+            <div class="meta"><div class="meta-name" style="font-size:12px">Eutirox 50mcg x30</div><div class="meta-sub">ref. $18.900</div></div>
+          </div>
+          <div class="avail-toggle">
+            <button type="button" class="chip-avail on" onclick="setAvail('oip-eutirox','exact',this)">tengo x30</button>
+            <button type="button" class="chip-avail" onclick="setAvail('oip-eutirox','alt',this)">no tengo x30</button>
+          </div>
+          <div class="oi-exact">
+            <input class="form-input oi-price" type="text" value="$17.900" oninput="recalcTotal('screen-oferta-proactiva')">
+          </div>
+          <div class="oi-alt" style="display:none">
+            <div class="two-col">
+              <select class="form-select oi-alt-size" onchange="updateAltNote('oip-eutirox','med');recalcTotal('screen-oferta-proactiva')">
+                <option value="15|2">2 cajas x15 (= 30 en total)</option>
+                <option value="20|1">1 caja x20</option>
+              </select>
+              <input class="form-input oi-price-alt" type="text" value="$9.900" oninput="updateAltNote('oip-eutirox','med');recalcTotal('screen-oferta-proactiva')">
+            </div>
+            <div class="alt-note"><i class="ti ti-info-circle"></i><span id="oip-eutirox-note">Sin envase de 30. Ofreces <strong>2 cajas x15</strong> por <strong>$19.800</strong>.</span></div>
+          </div>
+        </div>
+
+        <div class="offer-item" id="oip-royal">
+          <div class="oi-top">
+            <div class="ico ico-amb" style="width:26px;height:26px;font-size:13px"><i class="ti ti-dog"></i></div>
+            <div class="meta"><div class="meta-name" style="font-size:12px">Royal Canin 15kg</div><div class="meta-sub">ref. $33.500</div></div>
+          </div>
+          <div class="avail-toggle">
+            <button type="button" class="chip-avail on" onclick="setAvail('oip-royal','exact',this)">tengo 15kg</button>
+            <button type="button" class="chip-avail" onclick="setAvail('oip-royal','alt',this)">no tengo 15kg</button>
+          </div>
+          <div class="oi-exact">
+            <input class="form-input oi-price" type="text" value="$32.500" oninput="recalcTotal('screen-oferta-proactiva')">
+          </div>
+          <div class="oi-alt" style="display:none">
+            <div class="two-col">
+              <select class="form-select oi-alt-size" onchange="updateAltNote('oip-royal','pet');recalcTotal('screen-oferta-proactiva')">
+                <option value="25|1">1 saco de 25kg</option>
+                <option value="10|1">1 saco de 10kg</option>
+              </select>
+              <input class="form-input oi-price-alt" type="text" value="$48.900" oninput="updateAltNote('oip-royal','pet');recalcTotal('screen-oferta-proactiva')">
+            </div>
+            <div class="alt-note"><i class="ti ti-info-circle"></i><span id="oip-royal-note">Sin saco de 15kg. Ofreces <strong>1 saco de 25kg</strong> por <strong>$48.900</strong>.</span></div>
+          </div>
+        </div>
+
+        <div class="two-col">
+          <div class="form-group">
+            <label class="form-label">entrega</label>
+            <select class="form-select"><option>en 2 horas</option><option>mismo día</option><option>mañana</option></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">despacho</label>
+            <select class="form-select"><option>gratis</option><option>$1.990</option><option>$2.500</option></select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">mensaje al usuario (opcional)</label>
+          <textarea class="form-textarea" placeholder="ej: entrega en 2h con despacho gratis en tu próximo refill"></textarea>
+        </div>
+        <div class="offer-preview">
+          <div class="offer-preview-title">resumen de tu oferta</div>
+          <div class="offer-total-final"><span>total oferta</span><span id="screen-oferta-proactiva-total">$50.400</span></div>
+          <div style="font-size:10px;color:var(--accent);margin-top:4px" id="screen-oferta-proactiva-nota">todas las presentaciones coinciden con lo solicitado</div>
+        </div>
+        <button class="btn-primary" style="margin:4px 0 6px;width:100%" onclick="go('screen-oferta-enviada')">enviar oferta proactiva</button>
+        <div style="text-align:center;font-size:11px;color:var(--text-muted)">el usuario recibirá una notificación con tu oferta</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       SCREEN: OFERTA ENVIADA
+  ═══════════════════════════════════════ -->
+  <div class="screen" id="screen-oferta-enviada">
+    <div class="topbar"><h1>oferta enviada</h1></div>
+    <div class="content" style="display:flex;flex-direction:column;align-items:center;padding:40px 14px 20px">
+      <div style="width:64px;height:64px;border-radius:50%;background:var(--accent-light);display:flex;align-items:center;justify-content:center;margin-bottom:16px">
+        <i class="ti ti-send" style="font-size:30px;color:var(--accent)"></i>
+      </div>
+      <div style="font-size:16px;font-weight:600;color:var(--text-primary);margin-bottom:6px">oferta enviada a Valentina</div>
+      <div style="font-size:13px;color:var(--text-secondary);text-align:center;margin-bottom:24px;max-width:260px">Le llegará una notificación. Si acepta, el pedido se confirma automáticamente.</div>
+      <div style="width:100%;background:var(--surface);border-radius:var(--radius-lg);padding:14px 16px;border:0.5px solid var(--border);margin-bottom:16px">
+        <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">estado</div>
+        <div class="timeline-item"><div class="tl-dot" style="background:var(--accent)"></div><div><div style="font-size:13px;font-weight:500;color:var(--text-primary)">oferta enviada</div><div style="font-size:11px;color:var(--text-secondary)">ahora</div></div></div>
+        <div class="timeline-item"><div class="tl-dot" style="background:var(--border-strong)"></div><div><div style="font-size:13px;color:var(--text-secondary)">usuario revisa notificación</div></div></div>
+        <div class="timeline-item"><div class="tl-dot" style="background:var(--border-strong)"></div><div><div style="font-size:13px;color:var(--text-secondary)">pedido confirmado</div></div></div>
+      </div>
+      <button class="btn-primary" style="margin:0 0 8px;width:100%" onclick="go('screen-solicitudes')">ver más oportunidades</button>
+      <button class="btn-secondary" style="margin:0;width:100%" onclick="go('screen-dashboard')">volver al dashboard</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       SCREEN: OFERTAR (reactiva)
+  ═══════════════════════════════════════ -->
+  <div class="screen" id="screen-ofertar">
+    <div class="topbar">
+      <button class="back-btn" onclick="goBack()" aria-label="volver"><i class="ti ti-arrow-left"></i></button>
+      <h1>enviar oferta</h1>
+      <span></span>
+    </div>
+    <div class="content">
+      <div class="card" style="margin-bottom:12px">
+        <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">solicitud del cliente</div>
+        <div style="font-size:11px;color:var(--text-secondary)">¿no tienes exactamente lo pedido? ofrece otra presentación — se lo mostramos claro al cliente</div>
+      </div>
+      <div class="form-wrap">
+
+        <div class="offer-item" id="oi-eutirox">
+          <div class="oi-top">
+            <div class="ico ico-cor" style="width:28px;height:28px;font-size:14px"><i class="ti ti-pill"></i></div>
+            <div class="meta"><div class="meta-name">Eutirox 50mcg x30</div><div class="meta-sub">solicitado · precio ref. $18.900</div></div>
+          </div>
+          <div class="avail-toggle">
+            <button type="button" class="chip-avail on" onclick="setAvail('oi-eutirox','exact',this)">tengo x30</button>
+            <button type="button" class="chip-avail" onclick="setAvail('oi-eutirox','alt',this)">no tengo x30</button>
+          </div>
+          <div class="oi-exact">
+            <label class="form-label">precio — caja x30</label>
+            <input class="form-input oi-price" type="text" value="$17.900" oninput="recalcTotal('screen-ofertar')">
+          </div>
+          <div class="oi-alt" style="display:none">
+            <div class="two-col">
+              <div class="form-group">
+                <label class="form-label">presentación disponible</label>
+                <select class="form-select oi-alt-size" onchange="updateAltNote('oi-eutirox','med');recalcTotal('screen-ofertar')">
+                  <option value="15|2">2 cajas x15 (= 30 en total)</option>
+                  <option value="20|1">1 caja x20</option>
+                  <option value="60|1">1 caja x60</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">precio de esa caja</label>
+                <input class="form-input oi-price-alt" type="text" value="$9.900" oninput="updateAltNote('oi-eutirox','med');recalcTotal('screen-ofertar')">
+              </div>
+            </div>
+            <div class="alt-note">
+              <i class="ti ti-info-circle"></i>
+              <span id="oi-eutirox-note">No tenemos el envase de 30 unidades. Te ofrecemos <strong>2 cajas x15</strong> (30 unidades en total) por <strong>$19.800</strong> — mismo principio activo y dosis.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="offer-item" id="oi-royal">
+          <div class="oi-top">
+            <div class="ico ico-amb" style="width:28px;height:28px;font-size:14px"><i class="ti ti-dog"></i></div>
+            <div class="meta"><div class="meta-name">Royal Canin Medium 15kg</div><div class="meta-sub">solicitado · precio ref. $33.500</div></div>
+          </div>
+          <div class="avail-toggle">
+            <button type="button" class="chip-avail" onclick="setAvail('oi-royal','exact',this)">tengo 15kg</button>
+            <button type="button" class="chip-avail on" onclick="setAvail('oi-royal','alt',this)">no tengo 15kg</button>
+          </div>
+          <div class="oi-exact" style="display:none">
+            <label class="form-label">precio — saco 15kg</label>
+            <input class="form-input oi-price" type="text" value="$32.500" oninput="recalcTotal('screen-ofertar')">
+          </div>
+          <div class="oi-alt">
+            <div class="two-col">
+              <div class="form-group">
+                <label class="form-label">presentación disponible</label>
+                <select class="form-select oi-alt-size" onchange="updateAltNote('oi-royal','pet');recalcTotal('screen-ofertar')">
+                  <option value="25|1" selected>1 saco de 25kg</option>
+                  <option value="10|1">1 saco de 10kg</option>
+                  <option value="3|5">5 sacos de 3kg</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">precio de esa presentación</label>
+                <input class="form-input oi-price-alt" type="text" value="$48.900" oninput="updateAltNote('oi-royal','pet');recalcTotal('screen-ofertar')">
+              </div>
+            </div>
+            <div class="alt-note">
+              <i class="ti ti-info-circle"></i>
+              <span id="oi-royal-note">No tenemos el saco de 15kg. Te ofrecemos <strong>1 saco de 25kg</strong> por <strong>$48.900</strong> ($1.956/kg vs. $2.233/kg de referencia) — le rinde más al cliente por kilo.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="two-col">
+          <div class="form-group">
+            <label class="form-label">tiempo de entrega</label>
+            <select class="form-select"><option>en 2 horas</option><option>mismo día</option><option>mañana</option></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">costo despacho</label>
+            <select class="form-select"><option>gratis</option><option>$1.990</option><option>$2.500</option></select>
+          </div>
+        </div>
+        <div class="offer-preview">
+          <div class="offer-preview-title">total de tu oferta</div>
+          <div class="offer-total-final" style="margin-top:0;padding-top:0;border-top:none"><span style="font-size:22px" id="screen-ofertar-total">$66.800</span></div>
+          <div style="font-size:11px;color:var(--accent);margin-top:3px" id="screen-ofertar-nota">1 producto con presentación distinta a la solicitada — se lo mostramos claro al cliente</div>
+        </div>
+        <button class="btn-primary" style="margin:0 0 8px;width:100%" onclick="go('screen-oferta-enviada')">enviar oferta</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       SCREEN: CATÁLOGO
+  ═══════════════════════════════════════ -->
+  <div class="screen" id="screen-catalogo">
+    <div class="topbar">
+      <div>
+        <div class="topbar-eyebrow">FarmaExpress</div>
+        <h1>mi catálogo</h1>
+      </div>
+      <button class="topbar-action" onclick="go('screen-agregar-producto')" aria-label="agregar">
+        <i class="ti ti-plus"></i>
+      </button>
+    </div>
+    <div class="content">
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-label">productos</div><div class="stat-value">84</div></div>
+        <div class="stat-card"><div class="stat-label">categorías</div><div class="stat-value">5</div></div>
+        <div class="stat-card"><div class="stat-label">sin precio</div><div class="stat-value" style="color:var(--danger)">3</div></div>
+        <div class="stat-card"><div class="stat-label">actualizados</div><div class="stat-value" style="color:var(--success)">hoy</div></div>
+      </div>
+      <div class="chips">
+        <span class="chip active" onclick="filterChip(this)">todos</span>
+        <span class="chip" onclick="filterChip(this)"><i class="ti ti-pill" style="font-size:11px"></i> medicamentos</span>
+        <span class="chip" onclick="filterChip(this)"><i class="ti ti-dog" style="font-size:11px"></i> mascotas</span>
+        <span class="chip" onclick="filterChip(this)"><i class="ti ti-apple" style="font-size:11px"></i> alimentos</span>
+      </div>
+
+      <div class="cat-block">
+        <div class="cat-hdr">
+          <div class="ico ico-cor" style="width:28px;height:28px;font-size:14px"><i class="ti ti-pill"></i></div>
+          <span style="flex:1;font-size:13px;font-weight:500;color:var(--text-primary)">medicamentos</span>
+          <span style="font-size:11px;color:var(--text-muted)">32 productos</span>
+          <i class="ti ti-chevron-right" style="font-size:14px;color:var(--text-muted)"></i>
+        </div>
+        <div class="cat-item">
+          <div style="flex:1"><div style="font-size:12px;font-weight:500;color:var(--text-primary)">Eutirox 50mcg x30</div><div style="font-size:10px;color:var(--text-muted)">Lab. Chile · activo</div></div>
+          <span style="font-size:12px;font-weight:600;color:var(--accent);margin-right:8px">$17.900</span>
+          <button class="btn-xs" onclick="go('screen-editar-producto')"><i class="ti ti-edit" style="font-size:12px"></i></button>
+        </div>
+        <div class="cat-item">
+          <div style="flex:1"><div style="font-size:12px;font-weight:500;color:var(--text-primary)">Omeprazol 20mg x60</div><div style="font-size:10px;color:var(--text-muted)">Genérico · activo</div></div>
+          <span style="font-size:12px;font-weight:600;color:var(--accent);margin-right:8px">$4.800</span>
+          <button class="btn-xs" onclick="go('screen-editar-producto')"><i class="ti ti-edit" style="font-size:12px"></i></button>
+        </div>
+        <div class="cat-item">
+          <div style="flex:1"><div style="font-size:12px;font-weight:500;color:var(--text-primary)">Metformina 850mg x30</div><div style="font-size:10px;color:var(--danger)">sin precio base</div></div>
+          <span class="badge b-red" style="margin-right:6px">falta precio</span>
+          <button class="btn-xsp" onclick="go('screen-editar-producto')">fijar</button>
+        </div>
+      </div>
+
+      <div class="cat-block">
+        <div class="cat-hdr">
+          <div class="ico ico-amb" style="width:28px;height:28px;font-size:14px"><i class="ti ti-dog"></i></div>
+          <span style="flex:1;font-size:13px;font-weight:500;color:var(--text-primary)">mascotas</span>
+          <span style="font-size:11px;color:var(--text-muted)">28 productos</span>
+          <i class="ti ti-chevron-right" style="font-size:14px;color:var(--text-muted)"></i>
+        </div>
+        <div class="cat-item">
+          <div style="flex:1"><div style="font-size:12px;font-weight:500;color:var(--text-primary)">Royal Canin Medium 15kg</div><div style="font-size:10px;color:var(--text-muted)">Royal Canin · activo</div></div>
+          <span style="font-size:12px;font-weight:600;color:var(--accent);margin-right:8px">$32.500</span>
+          <button class="btn-xs" onclick="go('screen-editar-producto')"><i class="ti ti-edit" style="font-size:12px"></i></button>
+        </div>
+        <div class="cat-item">
+          <div style="flex:1"><div style="font-size:12px;font-weight:500;color:var(--text-primary)">Frontline Spray 500ml</div><div style="font-size:10px;color:var(--text-muted)">Merial · activo</div></div>
+          <span style="font-size:12px;font-weight:600;color:var(--accent);margin-right:8px">$19.200</span>
+          <button class="btn-xs" onclick="go('screen-editar-producto')"><i class="ti ti-edit" style="font-size:12px"></i></button>
+        </div>
+      </div>
+
+      <button class="btn-secondary" onclick="go('screen-carga-masiva')">
+        <i class="ti ti-upload" style="font-size:14px;vertical-align:-2px;margin-right:4px"></i>
+        carga masiva (.xlsx)
+      </button>
+      <button class="btn-secondary" onclick="go('screen-precios')">
+        <i class="ti ti-tag" style="font-size:14px;vertical-align:-2px;margin-right:4px"></i>
+        gestión de precios
+      </button>
+    </div>
+    <nav class="bottom-nav">
+      <button class="nav-btn" onclick="go('screen-dashboard')"><i class="ti ti-chart-bar"></i>dashboard</button>
+      <button class="nav-btn" onclick="go('screen-solicitudes')"><i class="ti ti-inbox"></i>solicitudes</button>
+      <button class="nav-btn active"><i class="ti ti-packages"></i>catálogo</button>
+      <button class="nav-btn" onclick="go('screen-pedidos')"><i class="ti ti-truck"></i>pedidos</button>
+    </nav>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       SCREEN: AGREGAR PRODUCTO
+  ═══════════════════════════════════════ -->
+  <div class="screen" id="screen-agregar-producto">
+    <div class="topbar">
+      <button class="back-btn" onclick="goBack()" aria-label="volver"><i class="ti ti-arrow-left"></i></button>
+      <h1>nuevo producto</h1>
+      <span style="width:36px"></span>
+    </div>
+    <div class="content">
+      <div class="form-wrap">
+        <div class="form-group">
+          <span class="form-label">categoría</span>
+          <div class="chips" style="padding:0;gap:6px;flex-wrap:wrap;margin-bottom:0">
+            <span class="chip active" onclick="filterChip(this)"><i class="ti ti-pill" style="font-size:11px"></i> medicamento</span>
+            <span class="chip" onclick="filterChip(this)"><i class="ti ti-dog" style="font-size:11px"></i> mascota</span>
+            <span class="chip" onclick="filterChip(this)"><i class="ti ti-apple" style="font-size:11px"></i> alimento</span>
+            <span class="chip" onclick="filterChip(this)"><i class="ti ti-sparkles" style="font-size:11px"></i> higiene</span>
+            <span class="chip" onclick="filterChip(this)"><i class="ti ti-dots" style="font-size:11px"></i> otro</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">nombre del producto</label>
+          <input class="form-input" type="text" placeholder="ej: Eutirox 50mcg x30">
+        </div>
+        <div class="form-group">
+          <label class="form-label">laboratorio / marca</label>
+          <input class="form-input" type="text" placeholder="ej: Lab. Chile">
+        </div>
+        <div class="form-group">
+          <label class="form-label">SKU / código interno</label>
+          <input class="form-input" type="text" placeholder="ej: MED-00123">
+        </div>
+        <div class="two-col">
+          <div class="form-group">
+            <label class="form-label">precio base</label>
+            <input class="form-input" type="text" placeholder="$17.900">
+          </div>
+          <div class="form-group">
+            <label class="form-label">precio máx.</label>
+            <input class="form-input" type="text" placeholder="$20.000">
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="form-group">
+            <label class="form-label">stock</label>
+            <input class="form-input" type="number" value="150">
+          </div>
+          <div class="form-group">
+            <label class="form-label">disponibilidad</label>
+            <select class="form-select"><option>siempre</option><option>bajo pedido</option><option>sin stock</option></select>
+          </div>
+        </div>
+        <div style="background:var(--accent-light);border-radius:var(--radius);padding:10px 12px;margin-bottom:14px">
+          <div style="font-size:11px;font-weight:600;color:var(--accent);margin-bottom:5px">vista previa en ofertas</div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><div style="font-size:13px;font-weight:500;color:var(--text-primary)">Eutirox 50mcg x30</div><div style="font-size:11px;color:var(--text-secondary)">Lab. Chile</div></div>
+            <div style="text-align:right"><div style="font-size:16px;font-weight:600;color:var(--accent)">$17.900</div><div style="font-size:10px;color:var(--text-muted)">precio base</div></div>
+          </div>
+        </div>
+        <button class="btn-primary" style="margin:0 0 8px;width:100%" onclick="go('screen-catalogo')">guardar producto</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       SCREEN: EDITAR PRODUCTO
+  ═══════════════════════════════════════ -->
+  <div class="screen" id="screen-editar-producto">
+    <div class="topbar">
+      <button class="back-btn" onclick="goBack()" aria-label="volver"><i class="ti ti-arrow-left"></i></button>
+      <h1>editar producto</h1>
+      <button class="btn-danger" onclick="go('screen-catalogo')"><i class="ti ti-trash" style="font-size:12px"></i></button>
+    </div>
+    <div class="content">
+      <div class="card" style="display:flex;align-items:center;gap:11px;margin-bottom:12px">
+        <div class="ico ico-cor"><i class="ti ti-pill"></i></div>
+        <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--text-primary)">Eutirox 50mcg x30</div><div style="font-size:11px;color:var(--text-secondary)">SKU: MED-00087 · Lab. Chile</div></div>
+        <span class="badge b-tea">activo</span>
+      </div>
+      <div class="form-wrap">
+        <div class="form-group">
+          <label class="form-label">nombre</label>
+          <input class="form-input" type="text" value="Eutirox 50mcg x30">
+        </div>
+        <div class="two-col">
+          <div class="form-group">
+            <label class="form-label">precio base</label>
+            <input class="form-input" type="text" value="$17.900">
+          </div>
+          <div class="form-group">
+            <label class="form-label">precio máx.</label>
+            <input class="form-input" type="text" value="$19.900">
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="form-group">
+            <label class="form-label">stock</label>
+            <input class="form-input" type="number" value="243">
+          </div>
+          <div class="form-group">
+            <label class="form-label">disponibilidad</label>
+            <select class="form-select"><option>siempre</option></select>
+          </div>
+        </div>
+        <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:12px">
+          <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:7px">historial de precio</div>
+          <div class="total-row" style="border-bottom:0.5px solid var(--border);padding-bottom:5px"><span>precio actual</span><span style="font-weight:600;color:var(--text-primary)">$17.900</span></div>
+          <div class="total-row"><span>hace 30 días</span><span>$18.400</span></div>
+          <div class="total-row"><span>hace 60 días</span><span>$18.900</span></div>
+        </div>
+        <button class="btn-primary" style="margin:0 0 8px;width:100%" onclick="go('screen-catalogo')">guardar cambios</button>
+        <button class="btn-secondary" style="margin:0;width:100%;color:var(--danger);border-color:#F09595" onclick="go('screen-catalogo')">desactivar producto</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       SCREEN: CARGA MASIVA
+  ═══════════════════════════════════════ -->
+  <div class="screen" id="screen-carga-masiva">
+    <div class="topbar">
+      <button class="back-btn" onclick="goBack()" aria-label="volver"><i class="ti ti-arrow-left"></i></button>
+      <h1>carga masiva</h1>
+      <span style="width:36px"></span>
+    </div>
+    <div class="content">
+      <div style="border:2px dashed var(--border-strong);border-radius:var(--radius-lg);padding:30px 20px;text-align:center;margin:0 14px 12px;cursor:pointer;background:var(--surface)" onclick="go('screen-catalogo')">
+        <i class="ti ti-upload" style="font-size:32px;color:var(--text-muted)"></i>
+        <div style="font-size:14px;font-weight:500;color:var(--text-primary);margin:10px 0 4px">arrastra tu archivo aquí</div>
+        <div style="font-size:12px;color:var(--text-secondary)">o toca para buscar</div>
+        <div style="margin-top:12px;display:flex;gap:8px;justify-content:center">
+          <span class="badge b-grn">.xlsx</span>
+          <span class="badge b-blu">.csv</span>
+        </div>
+      </div>
+      <div class="card">
+        <div style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:8px">columnas requeridas</div>
+        <div style="font-size:11px;color:var(--text-secondary);line-height:2.2;flex-wrap:wrap">
+          <code style="background:var(--bg);padding:2px 6px;border-radius:4px;color:var(--text-primary);margin:0 3px 4px;display:inline-block">nombre</code>
+          <code style="background:var(--bg);padding:2px 6px;border-radius:4px;color:var(--text-primary);margin:0 3px 4px;display:inline-block">categoria</code>
+          <code style="background:var(--bg);padding:2px 6px;border-radius:4px;color:var(--text-primary);margin:0 3px 4px;display:inline-block">precio_base</code>
+          <code style="background:var(--bg);padding:2px 6px;border-radius:4px;color:var(--text-primary);margin:0 3px 4px;display:inline-block">precio_max</code>
+          <code style="background:var(--bg);padding:2px 6px;border-radius:4px;color:var(--text-primary);margin:0 3px 4px;display:inline-block">stock</code>
+          <code style="background:var(--bg);padding:2px 6px;border-radius:4px;color:var(--text-primary);margin:0 3px 4px;display:inline-block">sku</code>
+        </div>
+      </div>
+      <button class="btn-secondary">
+        <i class="ti ti-download" style="font-size:14px;vertical-align:-2px;margin-right:5px"></i>
+        descargar plantilla .xlsx
+      </button>
+      <div style="text-align:center;font-size:11px;color:var(--text-muted);padding:4px 14px">hasta 500 productos por carga</div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       SCREEN: GESTIÓN DE PRECIOS
+  ═══════════════════════════════════════ -->
+  <div class="screen" id="screen-precios">
+    <div class="topbar">
+      <button class="back-btn" onclick="goBack()" aria-label="volver"><i class="ti ti-arrow-left"></i></button>
+      <h1>gestión de precios</h1>
+      <button class="btn-xsp" onclick="go('screen-catalogo')">guardar</button>
+    </div>
+    <div class="content">
+      <div class="sec">ajuste masivo por categoría</div>
+      <div class="cat-block">
+        <div class="cat-item">
+          <div class="ico ico-cor" style="width:28px;height:28px;font-size:14px"><i class="ti ti-pill"></i></div>
+          <span style="flex:1;font-size:13px;font-weight:500;color:var(--text-primary)">medicamentos</span>
+          <span style="font-size:11px;color:var(--text-muted);margin-right:6px">ajuste:</span>
+          <select class="form-select-sm"><option>-0%</option><option>-5%</option><option>-10%</option><option>+5%</option></select>
+        </div>
+        <div class="cat-item">
+          <div class="ico ico-amb" style="width:28px;height:28px;font-size:14px"><i class="ti ti-dog"></i></div>
+          <span style="flex:1;font-size:13px;font-weight:500;color:var(--text-primary)">mascotas</span>
+          <span style="font-size:11px;color:var(--text-muted);margin-right:6px">ajuste:</span>
+          <select class="form-select-sm"><option>-5%</option><option>-0%</option><option>-10%</option><option>+5%</option></select>
+        </div>
+        <div class="cat-item">
+          <div class="ico ico-gre" style="width:28px;height:28px;font-size:14px"><i class="ti ti-apple"></i></div>
+          <span style="flex:1;font-size:13px;font-weight:500;color:var(--text-primary)">alimentos</span>
+          <span style="font-size:11px;color:var(--text-muted);margin-right:6px">ajuste:</span>
+          <select class="form-select-sm"><option>-0%</option><option>-5%</option><option>-10%</option><option>+5%</option></select>
+        </div>
+      </div>
+      <div class="sec">sin precio base — requieren atención</div>
+      <div class="card">
+        <div class="row">
+          <div class="ico ico-cor"><i class="ti ti-pill"></i></div>
+          <div class="meta"><div class="meta-name">Metformina 850mg x30</div><div class="meta-sub">medicamento</div></div>
+          <button class="btn-xsp" onclick="go('screen-editar-producto')">fijar</button>
+        </div>
+        <div class="row">
+          <div class="ico ico-amb"><i class="ti ti-dog"></i></div>
+          <div class="meta"><div class="meta-name">Purina ProPlan 8kg</div><div class="meta-sub">mascota</div></div>
+          <button class="btn-xsp" onclick="go('screen-editar-producto')">fijar</button>
+        </div>
+        <div class="row">
+          <div class="ico ico-gre"><i class="ti ti-apple"></i></div>
+          <div class="meta"><div class="meta-name">Ensure Advance 400g</div><div class="meta-sub">alimento</div></div>
+          <button class="btn-xsp" onclick="go('screen-editar-producto')">fijar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       SCREEN: PEDIDOS
+  ═══════════════════════════════════════ -->
+  <div class="screen" id="screen-pedidos">
+    <div class="topbar"><h1>mis pedidos</h1></div>
+    <div class="content">
+      <div class="chips">
+        <span class="chip active" onclick="filterChip(this)">todos</span>
+        <span class="chip" onclick="filterChip(this)">en preparación</span>
+        <span class="chip" onclick="filterChip(this)">en camino</span>
+        <span class="chip" onclick="filterChip(this)">entregados</span>
+      </div>
+      <div class="sec">en curso</div>
+      <div class="card">
+        <div class="row">
+          <div class="ico ico-blu"><i class="ti ti-truck"></i></div>
+          <div class="meta"><div class="meta-name">Valentina S. · 2 items</div><div class="meta-sub">Providencia · sale en 40 min</div></div>
+          <span class="badge b-blu">en camino</span>
+        </div>
+        <div class="row">
+          <div class="ico ico-amb"><i class="ti ti-package"></i></div>
+          <div class="meta"><div class="meta-name">Jorge M. · 3 items</div><div class="meta-sub">Las Condes · preparando</div></div>
+          <span class="badge b-amb">prep.</span>
+        </div>
+        <div class="row">
+          <div class="ico ico-pur"><i class="ti ti-package"></i></div>
+          <div class="meta"><div class="meta-name">Carmen R. · 1 item</div><div class="meta-sub">Ñuñoa · confirmado</div></div>
+          <span class="badge b-pur">pendiente</span>
+        </div>
+      </div>
+      <div class="sec">entregados hoy</div>
+      <div class="card">
+        <div class="row">
+          <div class="ico ico-gre"><i class="ti ti-check"></i></div>
+          <div class="meta"><div class="meta-name">Luis P. · 4 items</div><div class="meta-sub">Vitacura · $89.400</div></div>
+          <span class="badge b-grn">listo</span>
+        </div>
+        <div class="row">
+          <div class="ico ico-gre"><i class="ti ti-check"></i></div>
+          <div class="meta"><div class="meta-name">María T. · 2 items</div><div class="meta-sub">Las Condes · $38.200</div></div>
+          <span class="badge b-grn">listo</span>
+        </div>
+      </div>
+    </div>
+    <nav class="bottom-nav">
+      <button class="nav-btn" onclick="go('screen-dashboard')"><i class="ti ti-chart-bar"></i>dashboard</button>
+      <button class="nav-btn" onclick="go('screen-solicitudes')"><i class="ti ti-inbox"></i>solicitudes</button>
+      <button class="nav-btn" onclick="go('screen-catalogo')"><i class="ti ti-packages"></i>catálogo</button>
+      <button class="nav-btn active"><i class="ti ti-truck"></i>pedidos</button>
+    </nav>
+  </div>
+
+</div>
+
+<script>
+  let history = ['screen-dashboard'];
+
+  function go(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    if (history[history.length - 1] !== id) history.push(id);
+    window.scrollTo(0, 0);
+  }
+
+  function goBack() {
+    history.pop();
+    const prev = history[history.length - 1] || 'screen-dashboard';
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(prev).classList.add('active');
+    window.scrollTo(0, 0);
+  }
+
+  function filterChip(el) {
+    const group = el.closest('.chips') || el.parentElement;
+    group.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+  }
+
+  function parseMoney(str) {
+    return parseInt(String(str).replace(/[^0-9]/g, '')) || 0;
+  }
+  function formatMoney(n) {
+    return '$' + Math.round(n).toLocaleString('es-CL');
+  }
+
+  function setAvail(itemId, mode, btn) {
+    const item = document.getElementById(itemId);
+    item.querySelectorAll('.chip-avail').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+    item.querySelector('.oi-exact').style.display = mode === 'exact' ? 'block' : 'none';
+    item.querySelector('.oi-alt').style.display = mode === 'alt' ? 'block' : 'none';
+    const screen = item.closest('.screen');
+    if (screen) recalcTotal(screen.id);
+  }
+
+  const refData = {
+    eutirox: { refPrice: 18900, refUnit: 30, label: 'unidades', kind: 'caja' },
+    royal:   { refPrice: 33500, refUnit: 15, label: 'kg',       kind: 'saco' }
+  };
+
+  function updateAltNote(itemId, kind) {
+    const key = itemId.includes('eutirox') ? 'eutirox' : 'royal';
+    const ref = refData[key];
+    const item = document.getElementById(itemId);
+    const [altSize, altQty] = item.querySelector('.oi-alt-size').value.split('|').map(Number);
+    const altPrice = parseMoney(item.querySelector('.oi-price-alt').value);
+    const totalAlt = altPrice * altQty;
+    const totalUnits = altSize * altQty;
+    const noteEl = document.getElementById(itemId + '-note');
+    if (!noteEl) return;
+
+    if (kind === 'med') {
+      const presStr = altQty > 1 ? (altQty + ' cajas x' + altSize) : ('1 caja x' + altSize);
+      noteEl.innerHTML = 'No tenemos el envase de ' + ref.refUnit + ' unidades. Te ofrecemos <strong>' + presStr + '</strong>' +
+        (totalUnits !== ref.refUnit ? ' (' + totalUnits + ' unidades en total)' : '') +
+        ' por <strong>' + formatMoney(totalAlt) + '</strong> — mismo principio activo y dosis.';
+    } else {
+      const unitAlt = altSize > 0 ? (totalAlt / (altSize * altQty)) : 0;
+      const unitRef = ref.refPrice / ref.refUnit;
+      const presStr = altQty > 1 ? (altQty + ' sacos de ' + altSize + 'kg') : ('1 saco de ' + altSize + 'kg');
+      const cheaper = unitAlt < unitRef;
+      noteEl.innerHTML = 'No tenemos el saco de ' + ref.refUnit + 'kg. Te ofrecemos <strong>' + presStr + '</strong> por <strong>' + formatMoney(totalAlt) + '</strong>' +
+        ' (' + formatMoney(unitAlt) + '/kg vs. ' + formatMoney(unitRef) + '/kg de referencia)' +
+        (cheaper ? ' — le rinde más al cliente por kilo.' : ' — precio por kilo algo mayor, coméntaselo al cliente.');
+    }
+  }
+
+  function recalcTotal(screenId) {
+    const screen = document.getElementById(screenId);
+    if (!screen) return;
+    let total = 0;
+    let altCount = 0;
+    screen.querySelectorAll('.offer-item').forEach(item => {
+      const altBlock = item.querySelector('.oi-alt');
+      const isAlt = altBlock && altBlock.style.display !== 'none';
+      if (isAlt) {
+        altCount++;
+        const [altSize, altQty] = item.querySelector('.oi-alt-size').value.split('|').map(Number);
+        const altPrice = parseMoney(item.querySelector('.oi-price-alt').value);
+        total += altPrice * altQty;
+      } else {
+        total += parseMoney(item.querySelector('.oi-price').value);
+      }
+    });
+    const totalEl = document.getElementById(screenId + '-total');
+    if (totalEl) totalEl.textContent = formatMoney(total);
+    const notaEl = document.getElementById(screenId + '-nota');
+    if (notaEl) {
+      notaEl.textContent = altCount > 0
+        ? altCount + (altCount > 1 ? ' productos con presentación distinta' : ' producto con presentación distinta') + ' a la solicitada — se lo mostramos claro al cliente'
+        : 'todas las presentaciones coinciden con lo solicitado';
+    }
+  }
+
+  recalcTotal('screen-ofertar');
+  recalcTotal('screen-oferta-proactiva');
+</script>
+</body>
+</html>

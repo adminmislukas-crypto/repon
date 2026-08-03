@@ -1,0 +1,1677 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Repón 🔔</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<style>
+:root {
+  --bg:         #F2F1ED;
+  --surface:    #FFFFFF;
+  --surface-2:  #F8F7F5;
+  --border:     rgba(0,0,0,0.07);
+  --border-md:  rgba(0,0,0,0.12);
+  --t1: #18170F;
+  --t2: #6B6A63;
+  --t3: #A8A79F;
+  --accent:     #3D34C4;
+  --accent-bg:  #ECEAFC;
+  --accent-mid: #8B85E0;
+  --danger:     #9E2B2B;
+  --danger-bg:  #FAEAEA;
+  --warn:       #7A4A08;
+  --warn-bg:    #FDF0DC;
+  --ok:         #2E6310;
+  --ok-bg:      #E8F4DC;
+  --blue:       #145196;
+  --blue-bg:    #E3EEF9;
+  --r: 10px;
+  --rl: 16px;
+  --nav: 64px;
+  --mw: 430px;
+  --font: 'Inter', system-ui, sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t1)}
+body{display:flex;justify-content:center}
+.shell{width:100%;max-width:var(--mw);min-height:100dvh;position:relative;display:flex;flex-direction:column}
+
+/* ── NAV ── */
+.nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:var(--mw);height:var(--nav);background:var(--surface);border-top:.5px solid var(--border-md);display:flex;z-index:50}
+.nb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;border:none;cursor:pointer;font-size:10px;font-family:var(--font);color:var(--t3);transition:color .15s}
+.nb i{font-size:22px}
+.nb.on{color:var(--accent)}
+.nb-badge{position:relative}
+.nb-badge::after{content:'';position:absolute;top:-1px;right:-3px;width:7px;height:7px;background:var(--danger);border-radius:50%;border:1.5px solid var(--surface)}
+
+/* ── SCREENS ── */
+.scr{display:none;flex-direction:column;flex:1;padding-bottom:var(--nav)}
+.scr.on{display:flex}
+
+/* ── TOPBAR ── */
+.top{background:var(--surface);border-bottom:.5px solid var(--border);padding:14px 16px 12px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:20}
+.top-title{font-size:17px;font-weight:600;color:var(--t1)}
+.top-eye{font-size:11px;color:var(--t3);margin-bottom:2px}
+.icon-btn{background:none;border:none;cursor:pointer;font-size:22px;color:var(--t2);width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background .15s}
+.icon-btn:hover{background:var(--bg)}
+.back{background:none;border:none;cursor:pointer;font-size:22px;color:var(--t2);display:flex;align-items:center;margin-right:6px}
+
+/* ── SCROLL BODY ── */
+.body{flex:1;overflow-y:auto;padding:14px 0 10px}
+
+/* ── TYPOGRAPHY ── */
+.sec{font-size:11px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;padding:0 16px;margin:14px 0 6px}
+
+/* ── STAT GRID ── */
+.sgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 16px;margin-bottom:14px}
+.scard{background:var(--surface);border:.5px solid var(--border);border-radius:var(--rl);padding:12px 14px}
+.slabel{font-size:11px;color:var(--t3);margin-bottom:4px}
+.sval{font-size:22px;font-weight:600;color:var(--t1)}
+
+/* ── CARD ── */
+.card{background:var(--surface);border:.5px solid var(--border);border-radius:var(--rl);padding:13px 15px;margin:0 16px 10px}
+
+/* ── ROW ── */
+.row{display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:.5px solid var(--border)}
+.row:last-child{border-bottom:none;padding-bottom:0}
+.row-top{align-items:flex-start}
+
+/* ── ICO ── */
+.ico{width:36px;height:36px;border-radius:var(--r);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.ic-pur{background:var(--accent-bg);color:var(--accent)}
+.ic-cor{background:var(--danger-bg);color:var(--danger)}
+.ic-amb{background:var(--warn-bg);color:var(--warn)}
+.ic-gre{background:var(--ok-bg);color:var(--ok)}
+.ic-blu{background:var(--blue-bg);color:var(--blue)}
+.ic-tea{background:#E1F5EE;color:#0F6E56}
+
+/* ── META ── */
+.meta{flex:1;min-width:0}
+.mname{font-size:13px;font-weight:500;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.msub{font-size:11px;color:var(--t2);margin-top:2px}
+
+/* ── PROGRESS ── */
+.pbar{height:3px;background:var(--bg);border-radius:2px;margin-top:5px}
+.pfill{height:3px;border-radius:2px}
+
+/* ── BADGES ── */
+.badge{font-size:10px;padding:3px 8px;border-radius:20px;font-weight:600;white-space:nowrap;flex-shrink:0}
+.bd-red{background:var(--danger-bg);color:var(--danger)}
+.bd-amb{background:var(--warn-bg);color:var(--warn)}
+.bd-grn{background:var(--ok-bg);color:var(--ok)}
+.bd-pur{background:var(--accent-bg);color:var(--accent)}
+.bd-blu{background:var(--blue-bg);color:var(--blue)}
+.bd-tea{background:#E1F5EE;color:#0F6E56}
+
+/* ── BUTTONS ── */
+.btn{display:block;padding:13px;border-radius:var(--rl);border:none;font-size:14px;font-weight:600;font-family:var(--font);cursor:pointer;text-align:center;transition:opacity .15s;width:calc(100% - 32px);margin:0 16px 8px}
+.btn:hover{opacity:.88}
+.btn-acc{background:var(--accent);color:#fff}
+.btn-out{background:var(--surface);color:var(--t1);border:.5px solid var(--border-md) !important}
+.btn-pay{background:linear-gradient(135deg,#2D25A8,#534AB7);color:#fff;font-size:15px;padding:15px}
+.btn-xs{font-size:11px;padding:5px 10px;border-radius:var(--r);cursor:pointer;border:.5px solid var(--border-md);background:var(--surface);color:var(--t1);font-family:var(--font);white-space:nowrap}
+.btn-xsp{font-size:11px;padding:5px 10px;border-radius:var(--r);cursor:pointer;border:none;background:var(--accent);color:#fff;font-family:var(--font);white-space:nowrap}
+.btn-xsd{font-size:11px;padding:5px 10px;border-radius:var(--r);cursor:pointer;border:none;background:var(--danger-bg);color:var(--danger);font-family:var(--font);white-space:nowrap}
+
+/* ── CHIPS ── */
+.chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 16px;margin-bottom:10px}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border-radius:20px;font-size:11px;font-weight:500;cursor:pointer;border:.5px solid var(--border-md);background:var(--surface);color:var(--t2);font-family:var(--font);transition:all .15s}
+.chip.on{background:var(--accent-bg);color:var(--accent);border-color:var(--accent-mid)}
+
+/* ── SEARCH BOX ── */
+.search-wrap{padding:0 16px;margin-bottom:12px;position:relative}
+.search-input{width:100%;padding:11px 14px 11px 40px;border-radius:var(--rl);border:.5px solid var(--border-md);background:var(--surface);font-size:14px;font-family:var(--font);color:var(--t1);outline:none;transition:border-color .15s}
+.search-input:focus{border-color:var(--accent)}
+.search-icon{position:absolute;left:28px;top:50%;transform:translateY(-50%);font-size:18px;color:var(--t3);pointer-events:none}
+.search-clear{position:absolute;right:28px;top:50%;transform:translateY(-50%);font-size:16px;color:var(--t3);cursor:pointer;display:none}
+
+/* ── FORM ── */
+.fwrap{padding:0 16px}
+.fg{margin-bottom:12px}
+.flabel{font-size:11px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px}
+.finput,.fselect,.ftextarea{width:100%;padding:10px 12px;border-radius:var(--r);border:.5px solid var(--border-md);background:var(--surface);color:var(--t1);font-size:13px;font-family:var(--font);outline:none;transition:border-color .15s}
+.finput:focus,.fselect:focus,.ftextarea:focus{border-color:var(--accent)}
+.ftextarea{resize:none;height:64px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+/* ── OFFER CARD ── */
+.offer-card{background:var(--surface);border:.5px solid var(--border);border-radius:var(--rl);padding:14px 16px;margin:0 16px 10px;transition:border-color .2s}
+.offer-card.best{border:2px solid var(--accent)}
+.offer-card.selected{border:2px solid var(--ok);background:var(--ok-bg)}
+.offer-vendor{font-size:13px;font-weight:600;color:var(--t1)}
+.offer-price{font-size:22px;font-weight:600;color:var(--accent)}
+.offer-det{font-size:11px;color:var(--t2);margin:3px 0 10px}
+.stars{color:#B8720F;font-size:12px}
+
+/* ── INBOX OFFER ── */
+.inbox-card{background:var(--surface);border:.5px solid var(--border);border-radius:var(--rl);margin:0 16px 10px;overflow:hidden}
+.inbox-card.unread{border-left:3px solid var(--accent)}
+.inbox-head{padding:12px 14px;border-bottom:.5px solid var(--border);display:flex;align-items:center;gap:10px}
+.inbox-body{padding:12px 14px}
+.inbox-prod{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:.5px solid var(--border)}
+.inbox-prod:last-child{border-bottom:none}
+.inbox-pname{flex:1;font-size:12px;color:var(--t1)}
+.inbox-price{font-size:12px;font-weight:600;color:var(--accent)}
+.inbox-footer{padding:10px 14px;background:var(--surface-2);display:flex;align-items:center;justify-content:space-between;border-top:.5px solid var(--border)}
+.alt-flag{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:600;padding:2px 7px;border-radius:20px;background:var(--warn-bg);color:var(--warn);margin-left:6px;white-space:nowrap}
+.alt-explain{display:flex;gap:7px;background:var(--warn-bg);border-radius:var(--r);padding:8px 10px;margin-top:6px;font-size:11px;line-height:1.5;color:var(--warn)}
+.alt-explain i{font-size:14px;flex-shrink:0;margin-top:1px}
+.inbox-pname-wrap{flex:1;min-width:0;display:flex;flex-direction:column}
+.inbox-pname-req{font-size:9px;color:var(--t3);text-decoration:line-through;margin-top:1px}
+
+/* ── CART ── */
+.cart-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:.5px solid var(--border)}
+.cart-row:last-child{border-bottom:none;padding-bottom:0}
+.cart-total-row{display:flex;justify-content:space-between;font-size:13px;padding:4px 0}
+.cart-total-row span:first-child{color:var(--t2)}
+.cart-final{display:flex;justify-content:space-between;font-size:16px;font-weight:600;padding:11px 0 0;border-top:.5px solid var(--border);margin-top:6px}
+
+/* ── AVATAR ── */
+.av{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:600;flex-shrink:0}
+
+/* ── PROACTIVE BANNER ── */
+.pro-banner{background:var(--surface);border:1.5px solid var(--accent);border-radius:var(--rl);padding:13px 15px;margin:0 16px 12px}
+
+/* ── TIMELINE ── */
+.tl{display:flex;gap:10px;padding:5px 0}
+.tldot{width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:3px}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:calc(var(--nav) + 12px);left:50%;transform:translateX(-50%) translateY(20px);background:var(--t1);color:#fff;padding:10px 18px;border-radius:30px;font-size:13px;font-weight:500;z-index:999;opacity:0;transition:all .3s;pointer-events:none;max-width:320px;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── SEARCH RESULTS ── */
+.search-result{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:.5px solid var(--border);cursor:pointer;transition:background .1s}
+.search-result:hover{background:var(--surface-2)}
+.search-result:last-child{border-bottom:none}
+
+/* ── PAYMENT SCREEN ── */
+.pay-total{font-size:32px;font-weight:600;color:var(--accent);text-align:center;padding:20px 0}
+.pay-method{display:flex;align-items:center;gap:12px;padding:12px 14px;border:.5px solid var(--border-md);border-radius:var(--r);cursor:pointer;margin-bottom:8px;transition:border-color .15s}
+.pay-method.selected{border-color:var(--accent);background:var(--accent-bg)}
+.pay-radio{width:18px;height:18px;border-radius:50%;border:2px solid var(--border-md);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.pay-radio.on{border-color:var(--accent);background:var(--accent)}
+.pay-radio.on::after{content:'';width:6px;height:6px;border-radius:50%;background:#fff}
+
+/* ── REFILL BUILDER ── */
+.refill-item{background:var(--surface);border:.5px solid var(--border);border-radius:var(--r);padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;gap:10px}
+.refill-item.adding{border-color:var(--accent);background:var(--accent-bg)}
+
+/* ── DIVIDER ── */
+.div{height:.5px;background:var(--border);margin:6px 0}
+
+/* ── CONSUMO / DOSAGE MODULE ── */
+.owner-tab{display:flex;background:var(--bg);border-radius:var(--r);padding:3px;margin:0 16px 12px;border:.5px solid var(--border)}
+.otab{flex:1;padding:8px;border-radius:7px;border:none;background:none;cursor:pointer;font-size:12px;font-weight:500;color:var(--t2);font-family:var(--font);text-align:center;transition:all .15s}
+.otab.on{background:var(--surface);color:var(--t1);border:.5px solid var(--border-md)}
+.today-card{background:var(--surface);border:.5px solid var(--border);border-radius:var(--rl);padding:13px 15px;margin:0 16px 10px}
+.today-card.done{border-color:var(--ok);background:var(--ok-bg)}
+.today-head{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+.dose-line{display:flex;align-items:center;gap:9px;padding:8px 0;border-top:.5px solid var(--border)}
+.dose-time{font-size:13px;font-weight:600;color:var(--t1);min-width:50px}
+.taken-btn{width:34px;height:34px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;transition:all .15s}
+.taken-btn.yes{background:var(--ok-bg);color:var(--ok)}
+.taken-btn.no{background:var(--bg);color:var(--t3)}
+.streak-bar{display:flex;gap:4px;margin-top:7px}
+.streak-day{width:21px;height:21px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600}
+.sd-ok{background:var(--ok-bg);color:var(--ok)}
+.sd-no{background:var(--danger-bg);color:var(--danger)}
+.sd-today{background:var(--accent);color:#fff;opacity:.8}
+.pet-avatar{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
+.type-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.type-card{border:.5px solid var(--border-md);border-radius:var(--r);padding:11px;cursor:pointer;text-align:center;background:var(--surface);transition:all .15s}
+.type-card.on{border-color:var(--accent);background:var(--accent-bg)}
+.type-card i{font-size:21px;margin-bottom:4px;display:block;color:var(--t2)}
+.type-card span{font-size:11px;font-weight:600;color:var(--t1)}
+.type-card.on i,.type-card.on span{color:var(--accent)}
+.day-pill{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;font-size:11px;font-weight:600;cursor:pointer;border:.5px solid var(--border-md);background:var(--surface);color:var(--t2)}
+.day-pill.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.day-row{display:flex;gap:5px;margin-top:6px;flex-wrap:wrap}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:.5px solid var(--border)}
+.toggle-row:last-child{border-bottom:none}
+.toggle{width:38px;height:21px;border-radius:11px;background:var(--border-md);cursor:pointer;position:relative;transition:background .2s;flex-shrink:0;border:none}
+.toggle.on{background:var(--accent)}
+.toggle::after{content:'';position:absolute;width:15px;height:15px;border-radius:50%;background:#fff;top:3px;left:3px;transition:left .2s}
+.toggle.on::after{left:20px}
+.adherence-ring{position:relative;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- ════════════════════════════════
+     SCREEN: INICIO
+════════════════════════════════ -->
+<div class="scr on" id="s-home">
+  <div class="top">
+    <div>
+      <div class="top-eye">hola, Valentina 👋</div>
+      <div class="top-title">mis compras</div>
+    </div>
+    <button class="icon-btn nb-badge" onclick="go('s-inbox')" aria-label="ofertas recibidas">
+      <i class="ti ti-inbox"></i>
+    </button>
+  </div>
+  <div class="body">
+    <div class="sgrid">
+      <div class="scard"><div class="slabel">gasto mes</div><div class="sval">$84.200</div></div>
+      <div class="scard"><div class="slabel">por reponer</div><div class="sval" style="color:var(--danger)">3</div></div>
+      <div class="scard"><div class="slabel">ahorro refill</div><div class="sval" style="color:var(--ok)">$9.400</div></div>
+      <div class="scard"><div class="slabel">ofertas nuevas</div><div class="sval" style="color:var(--accent)">2</div></div>
+    </div>
+
+    <!-- Oferta proactiva recibida -->
+    <div class="pro-banner">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span class="badge bd-pur"><i class="ti ti-bolt" style="font-size:10px;vertical-align:-1px"></i> oferta anticipada</span>
+        <span style="font-size:11px;color:var(--t3)">FarmaExpress · hace 10 min</span>
+      </div>
+      <div style="font-size:13px;color:var(--t1);margin-bottom:10px">Te enviaron una oferta para tu próximo refill: <strong>Eutirox + Royal Canin por $50.400</strong> con despacho gratis.</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-xsp" onclick="go('s-inbox')">ver ofertas</button>
+        <button class="btn-xs">descartar</button>
+      </div>
+    </div>
+
+    <div class="sec">urgente — reponer ahora</div>
+    <div class="card">
+      <div class="row">
+        <div class="ico ic-cor"><i class="ti ti-pill"></i></div>
+        <div class="meta">
+          <div class="mname">Eutirox 50mcg x30</div>
+          <div class="msub">quedan ~4 · cada 30 días</div>
+          <div class="pbar"><div class="pfill" style="width:13%;background:#D94545"></div></div>
+        </div>
+        <span class="badge bd-red">urgente</span>
+      </div>
+      <div class="row">
+        <div class="ico ic-amb"><i class="ti ti-dog"></i></div>
+        <div class="meta">
+          <div class="mname">Royal Canin Medium 15kg</div>
+          <div class="msub">quedan ~7 días · cada 45 días</div>
+          <div class="pbar"><div class="pfill" style="width:16%;background:#E8940D"></div></div>
+        </div>
+        <span class="badge bd-amb">pronto</span>
+      </div>
+    </div>
+
+    <div class="sec">stock ok</div>
+    <div class="card">
+      <div class="row">
+        <div class="ico ic-tea"><i class="ti ti-pill"></i></div>
+        <div class="meta">
+          <div class="mname">Omeprazol 20mg x60</div>
+          <div class="msub">quedan ~18 días · cada 60 días</div>
+          <div class="pbar"><div class="pfill" style="width:30%;background:#1D9E75"></div></div>
+        </div>
+        <span class="badge bd-grn">ok</span>
+      </div>
+      <div class="row">
+        <div class="ico ic-gre"><i class="ti ti-apple"></i></div>
+        <div class="meta">
+          <div class="mname">Whey Protein 1kg</div>
+          <div class="msub">quedan ~22 días · mensual</div>
+          <div class="pbar"><div class="pfill" style="width:73%;background:#5A9E1F"></div></div>
+        </div>
+        <span class="badge bd-grn">ok</span>
+      </div>
+    </div>
+
+    <button class="btn btn-acc" onclick="go('s-refill-builder')">
+      <i class="ti ti-refresh" style="font-size:15px;vertical-align:-2px;margin-right:5px"></i>
+      crear nuevo refill
+    </button>
+  </div>
+  <nav class="nav">
+    <button class="nb on"><i class="ti ti-layout-dashboard"></i>dashboard</button>
+    <button class="nb" onclick="go('s-consumo')"><i class="ti ti-pill"></i>consumos</button>
+    <button class="nb" onclick="go('s-buscar')"><i class="ti ti-refresh"></i>refill</button>
+    <button class="nb nb-badge" onclick="go('s-inbox')"><i class="ti ti-inbox"></i>ofertas</button>
+    <button class="nb" onclick="go('s-perfil')"><i class="ti ti-user"></i>perfil</button>
+  </nav>
+</div>
+
+<!-- ════════════════════════════════
+     SCREEN: CONSUMO — HOY
+════════════════════════════════ -->
+<div class="scr" id="s-consumo">
+  <div class="top">
+    <div>
+      <div class="top-eye">lunes 20 jul</div>
+      <div class="top-title">consumo de hoy</div>
+    </div>
+    <div style="display:flex;gap:4px">
+      <button class="icon-btn" onclick="go('s-consumo-historial')" aria-label="ver adherencia">
+        <i class="ti ti-chart-bar"></i>
+      </button>
+      <button class="icon-btn" onclick="go('s-consumo-config')" aria-label="configurar consumo">
+        <i class="ti ti-settings"></i>
+      </button>
+    </div>
+  </div>
+  <div class="body">
+
+    <div class="owner-tab">
+      <button class="otab on" id="ctab-yo" onclick="switchConsumo('yo')">
+        <i class="ti ti-user" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Valentina
+      </button>
+      <button class="otab" id="ctab-pet" onclick="switchConsumo('pet')">
+        <i class="ti ti-dog" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Rocky
+      </button>
+    </div>
+
+    <!-- ── PERSONA: Valentina ── -->
+    <div id="consumo-yo">
+      <div style="padding:0 16px;margin-bottom:12px">
+        <div style="background:var(--accent-bg);border-radius:var(--rl);padding:12px 14px;display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="font-size:11px;color:var(--accent)">adherencia esta semana</div>
+            <div style="font-size:20px;font-weight:600;color:var(--accent)">85% · 5 días seguidos</div>
+          </div>
+          <div class="adherence-ring">
+            <svg width="46" height="46" viewBox="0 0 46 46">
+              <circle cx="23" cy="23" r="19" fill="none" stroke="var(--accent-mid)" stroke-width="4" opacity=".35"/>
+              <circle cx="23" cy="23" r="19" fill="none" stroke="var(--accent)" stroke-width="4"
+                stroke-dasharray="119" stroke-dashoffset="18" stroke-linecap="round" transform="rotate(-90 23 23)"/>
+            </svg>
+            <span style="position:absolute;font-size:11px;font-weight:600;color:var(--accent)">85%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sec">tus medicamentos</div>
+
+      <div class="today-card" id="tc-eutirox">
+        <div class="today-head">
+          <div class="ico ic-cor"><i class="ti ti-pill"></i></div>
+          <div class="meta"><div class="mname">Eutirox 50mcg</div><div class="msub">1 comprimido · en ayunas</div></div>
+          <span class="badge bd-amb" id="tb-eutirox">pendiente</span>
+        </div>
+        <div class="dose-line">
+          <div class="dose-time">07:00</div>
+          <div class="meta"><div style="font-size:12px;color:var(--t2)">1 comprimido · en ayunas</div></div>
+          <button class="taken-btn no" onclick="marcarDosis(this,'tc-eutirox','tb-eutirox')" aria-label="marcar como tomado"><i class="ti ti-check"></i></button>
+        </div>
+        <div style="margin-top:8px">
+          <div style="font-size:10px;color:var(--t3);margin-bottom:3px">últimos 7 días</div>
+          <div class="streak-bar">
+            <div class="streak-day sd-ok">L</div><div class="streak-day sd-ok">M</div>
+            <div class="streak-day sd-ok">X</div><div class="streak-day sd-no">J</div>
+            <div class="streak-day sd-ok">V</div><div class="streak-day sd-ok">S</div>
+            <div class="streak-day sd-today">H</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="today-card done">
+        <div class="today-head">
+          <div class="ico ic-gre"><i class="ti ti-pill"></i></div>
+          <div class="meta"><div class="mname">Vitamina D 1000 UI</div><div class="msub">1 cápsula · con desayuno</div></div>
+          <span class="badge bd-grn">tomada</span>
+        </div>
+        <div class="dose-line" style="border-color:var(--ok)">
+          <div class="dose-time" style="color:var(--ok)">09:00</div>
+          <div class="meta"><div style="font-size:12px;color:var(--ok)">1 cápsula · con desayuno</div></div>
+          <button class="taken-btn yes" aria-label="tomada"><i class="ti ti-check"></i></button>
+        </div>
+      </div>
+
+      <button class="btn btn-out" onclick="go('s-consumo-nuevo')">
+        <i class="ti ti-plus" style="font-size:14px;vertical-align:-2px;margin-right:4px"></i>
+        agregar medicamento
+      </button>
+    </div>
+
+    <!-- ── MASCOTA: Rocky ── -->
+    <div id="consumo-pet" style="display:none">
+      <div style="padding:0 16px;margin-bottom:12px">
+        <div style="background:#E1F5EE;border-radius:var(--rl);padding:12px 14px;display:flex;align-items:center;gap:12px">
+          <div class="pet-avatar" style="background:#C6EEDD">🐕</div>
+          <div class="meta">
+            <div class="mname" style="color:#085041">Rocky · Labrador 4 años</div>
+            <div class="msub" style="color:#0F6E56">28 kg · alimento + medicamento activo</div>
+          </div>
+          <button class="btn-xs" onclick="go('s-consumo-config')">editar</button>
+        </div>
+      </div>
+
+      <div class="sec">alimentación</div>
+      <div class="today-card" id="tc-alimento">
+        <div class="today-head">
+          <div class="pet-avatar" style="background:var(--warn-bg);font-size:19px">🍖</div>
+          <div class="meta"><div class="mname">Royal Canin Medium Adult</div><div class="msub">300g por porción · 2 veces al día</div></div>
+          <span class="badge bd-amb" id="tb-alimento">1/2 servido</span>
+        </div>
+        <div class="dose-line">
+          <div class="dose-time">08:00</div>
+          <div class="meta"><div style="font-size:12px;color:var(--t2)">300g · mañana</div></div>
+          <button class="taken-btn yes" aria-label="servido"><i class="ti ti-check"></i></button>
+        </div>
+        <div class="dose-line">
+          <div class="dose-time">18:00</div>
+          <div class="meta"><div style="font-size:12px;color:var(--t2)">300g · tarde</div></div>
+          <button class="taken-btn no" onclick="marcarDosis(this,'tc-alimento','tb-alimento','servido')" aria-label="marcar como servido"><i class="ti ti-check"></i></button>
+        </div>
+        <div style="margin-top:8px;padding-top:8px;border-top:.5px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:10px;color:var(--t3)">stock restante</div>
+            <div style="font-size:12px;font-weight:600;color:var(--warn)">~12 días · 3,6 kg</div>
+          </div>
+          <div class="pbar" style="margin-top:4px"><div class="pfill" style="width:18%;background:#E8940D"></div></div>
+        </div>
+      </div>
+
+      <div class="sec">medicamentos</div>
+      <div class="today-card">
+        <div class="today-head">
+          <div class="pet-avatar" style="background:var(--danger-bg);font-size:19px">💊</div>
+          <div class="meta"><div class="mname">Frontline antipulgas</div><div class="msub">aplicación mensual</div></div>
+          <span class="badge bd-grn">aplicado</span>
+        </div>
+        <div class="dose-line">
+          <div class="dose-time" style="color:var(--ok)">15 jul</div>
+          <div class="meta"><div style="font-size:12px;color:var(--t2)">1 pipeta · entre los omóplatos</div></div>
+          <button class="taken-btn yes" aria-label="aplicado"><i class="ti ti-check"></i></button>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0 0">
+          <div style="font-size:10px;color:var(--t3)">próxima aplicación</div>
+          <span class="badge bd-grn">15 ago</span>
+        </div>
+      </div>
+
+      <div class="today-card" id="tc-meloxicam">
+        <div class="today-head">
+          <div class="pet-avatar" style="background:var(--accent-bg);font-size:19px">💊</div>
+          <div class="meta"><div class="mname">Meloxicam 1mg/ml</div><div class="msub">0,5 ml · cada 24h · 5 días</div></div>
+          <span class="badge bd-amb" id="tb-meloxicam">pendiente</span>
+        </div>
+        <div class="dose-line">
+          <div class="dose-time">19:00</div>
+          <div class="meta"><div style="font-size:12px;color:var(--t2)">0,5 ml · con la comida</div></div>
+          <button class="taken-btn no" onclick="marcarDosis(this,'tc-meloxicam','tb-meloxicam')" aria-label="marcar"><i class="ti ti-check"></i></button>
+        </div>
+        <div style="margin-top:8px">
+          <div style="display:flex;justify-content:space-between">
+            <div style="font-size:10px;color:var(--t3)">tratamiento</div>
+            <div style="font-size:10px;color:var(--accent)">día 3 de 5</div>
+          </div>
+          <div class="pbar" style="margin-top:3px"><div class="pfill" style="width:60%;background:var(--accent)"></div></div>
+        </div>
+      </div>
+
+      <button class="btn btn-out" onclick="go('s-consumo-nuevo-pet')">
+        <i class="ti ti-plus" style="font-size:14px;vertical-align:-2px;margin-right:4px"></i>
+        agregar a Rocky
+      </button>
+    </div>
+  </div>
+  <nav class="nav">
+    <button class="nb" onclick="go('s-home')"><i class="ti ti-layout-dashboard"></i>dashboard</button>
+    <button class="nb on"><i class="ti ti-pill"></i>consumos</button>
+    <button class="nb" onclick="go('s-buscar')"><i class="ti ti-refresh"></i>refill</button>
+    <button class="nb nb-badge" onclick="go('s-inbox')"><i class="ti ti-inbox"></i>ofertas</button>
+    <button class="nb" onclick="go('s-perfil')"><i class="ti ti-user"></i>perfil</button>
+  </nav>
+</div>
+
+<!-- ════════════════════════════════
+     SCREEN: CONFIGURAR CONSUMO
+════════════════════════════════ -->
+<div class="scr" id="s-consumo-config">
+  <div class="top">
+    <button class="back" onclick="goBack()" aria-label="volver"><i class="ti ti-arrow-left"></i></button>
+    <div class="top-title">configurar consumo</div>
+    <span style="width:30px"></span>
+  </div>
+  <div class="body">
+    <div class="owner-tab">
+      <button class="otab on" id="cctab-yo" onclick="switchConsumoConfig('yo')">
+        <i class="ti ti-user" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Valentina
+      </button>
+      <button class="otab" id="cctab-pet" onclick="switchConsumoConfig('pet')">
+        <i class="ti ti-dog" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Rocky
+      </button>
+    </div>
+
+    <div id="cfg-consumo-yo">
+      <div class="sec">activos</div>
+      <div class="card">
+        <div class="row">
+          <div class="ico ic-cor"><i class="ti ti-pill"></i></div>
+          <div class="meta">
+            <div class="mname">Eutirox 50mcg</div>
+            <div class="msub">1 comp · 07:00 · todos los días</div>
+            <div class="pbar"><div class="pfill" style="width:13%;background:#D94545"></div></div>
+          </div>
+          <button class="btn-xsp" onclick="go('s-consumo-nuevo')">editar</button>
+        </div>
+        <div class="row">
+          <div class="ico ic-gre"><i class="ti ti-pill"></i></div>
+          <div class="meta">
+            <div class="mname">Vitamina D 1000 UI</div>
+            <div class="msub">1 cáp · 09:00 · todos los días</div>
+            <div class="pbar"><div class="pfill" style="width:80%;background:#5A9E1F"></div></div>
+          </div>
+          <button class="btn-xs" onclick="go('s-consumo-nuevo')">editar</button>
+        </div>
+      </div>
+      <button class="btn btn-out" onclick="go('s-consumo-nuevo')">
+        <i class="ti ti-plus" style="font-size:14px;vertical-align:-2px;margin-right:4px"></i>agregar medicamento
+      </button>
+    </div>
+
+    <div id="cfg-consumo-pet" style="display:none">
+      <div class="sec">alimentación</div>
+      <div class="card">
+        <div class="row">
+          <div class="pet-avatar" style="background:var(--warn-bg);font-size:17px">🍖</div>
+          <div class="meta"><div class="mname">Royal Canin Medium Adult</div><div class="msub">300g · 08:00 y 18:00</div></div>
+          <button class="btn-xsp" onclick="go('s-consumo-nuevo-pet')">editar</button>
+        </div>
+      </div>
+      <div class="sec">medicamentos</div>
+      <div class="card">
+        <div class="row">
+          <div class="ico ic-cor"><i class="ti ti-pill"></i></div>
+          <div class="meta"><div class="mname">Frontline antipulgas</div><div class="msub">1 pipeta · mensual · próx. 15 ago</div></div>
+          <button class="btn-xs" onclick="go('s-consumo-nuevo-pet')">editar</button>
+        </div>
+        <div class="row">
+          <div class="ico ic-pur"><i class="ti ti-pill"></i></div>
+          <div class="meta"><div class="mname">Meloxicam 1mg/ml</div><div class="msub">0,5 ml · 19:00 · tratamiento 5 días</div></div>
+          <button class="btn-xs" onclick="go('s-consumo-nuevo-pet')">editar</button>
+        </div>
+      </div>
+      <button class="btn btn-out" onclick="go('s-consumo-nuevo-pet')">
+        <i class="ti ti-plus" style="font-size:14px;vertical-align:-2px;margin-right:4px"></i>agregar a Rocky
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     SCREEN: NUEVO CONSUMO — PERSONA
+════════════════════════════════ -->
+<div class="scr" id="s-consumo-nuevo">
+  <div class="top">
+    <button class="back" onclick="goBack()" aria-label="volver"><i class="ti ti-arrow-left"></i></button>
+    <div class="top-title">nuevo medicamento</div>
+    <span style="width:30px"></span>
+  </div>
+  <div class="body">
+    <div class="fwrap">
+      <div class="fg">
+        <span class="flabel">medicamento</span>
+        <input class="finput" type="text" placeholder="busca por nombre...">
+      </div>
+      <div class="fg">
+        <span class="flabel">presentación</span>
+        <select class="fselect">
+          <option>comprimido</option>
+          <option>cápsula</option>
+          <option>solución oral (ml)</option>
+          <option>gotas</option>
+          <option>parche</option>
+        </select>
+      </div>
+      <div class="two">
+        <div class="fg">
+          <span class="flabel">dosis por toma</span>
+          <input class="finput" type="number" value="1" min="0.5" step="0.5">
+        </div>
+        <div class="fg">
+          <span class="flabel">stock actual</span>
+          <input class="finput" type="number" value="30">
+        </div>
+      </div>
+      <div class="fg">
+        <span class="flabel">frecuencia</span>
+        <select class="fselect" onchange="showFreqDays(this)">
+          <option value="d">una vez al día</option>
+          <option value="2d">dos veces al día</option>
+          <option value="s">días específicos</option>
+        </select>
+      </div>
+      <div class="fg" id="freq-dias-wrap" style="display:none">
+        <span class="flabel">días de la semana</span>
+        <div class="day-row">
+          <div class="day-pill on" onclick="this.classList.toggle('on')">L</div>
+          <div class="day-pill on" onclick="this.classList.toggle('on')">M</div>
+          <div class="day-pill on" onclick="this.classList.toggle('on')">X</div>
+          <div class="day-pill on" onclick="this.classList.toggle('on')">J</div>
+          <div class="day-pill on" onclick="this.classList.toggle('on')">V</div>
+          <div class="day-pill" onclick="this.classList.toggle('on')">S</div>
+          <div class="day-pill" onclick="this.classList.toggle('on')">D</div>
+        </div>
+      </div>
+      <div class="fg">
+        <span class="flabel">horario</span>
+        <div style="display:flex;gap:8px">
+          <input class="finput" type="time" value="07:00" style="flex:1">
+          <select class="fselect" style="flex:1">
+            <option>en ayunas</option>
+            <option>con desayuno</option>
+            <option>antes de almuerzo</option>
+            <option>antes de cena</option>
+            <option>al acostarse</option>
+          </select>
+        </div>
+      </div>
+      <div class="card" style="margin:0 0 12px;padding:12px 14px">
+        <div style="font-size:12px;font-weight:600;color:var(--t1);margin-bottom:9px">recordatorios</div>
+        <div class="toggle-row">
+          <div><div class="mname" style="font-size:13px">notificación antes de la toma</div><div class="msub">15 min antes</div></div>
+          <button class="toggle on" onclick="this.classList.toggle('on')" aria-label="toggle"></button>
+        </div>
+        <div class="toggle-row">
+          <div><div class="mname" style="font-size:13px">alerta de stock bajo</div><div class="msub">cuando queden 7 días</div></div>
+          <button class="toggle on" onclick="this.classList.toggle('on')" aria-label="toggle"></button>
+        </div>
+        <div class="toggle-row">
+          <div><div class="mname" style="font-size:13px">auto-crear refill</div><div class="msub">al llegar al mínimo de stock</div></div>
+          <button class="toggle" onclick="this.classList.toggle('on')" aria-label="toggle"></button>
+        </div>
+      </div>
+      <button class="btn btn-acc" onclick="go('s-consumo-config')">guardar medicamento</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     SCREEN: NUEVO CONSUMO — MASCOTA
+════════════════════════════════ -->
+<div class="scr" id="s-consumo-nuevo-pet">
+  <div class="top">
+    <button class="back" onclick="goBack()" aria-label="volver"><i class="ti ti-arrow-left"></i></button>
+    <div class="top-title">agregar a Rocky</div>
+    <span style="width:30px"></span>
+  </div>
+  <div class="body">
+    <div class="fwrap">
+      <div class="fg">
+        <span class="flabel">tipo de consumo</span>
+        <div class="type-grid">
+          <div class="type-card on" id="tcard-ali" onclick="selectPetType('ali')">
+            <i class="ti ti-meat"></i><span>alimento</span>
+          </div>
+          <div class="type-card" id="tcard-med" onclick="selectPetType('med')">
+            <i class="ti ti-pill"></i><span>medicamento</span>
+          </div>
+          <div class="type-card" id="tcard-vac" onclick="selectPetType('vac')">
+            <i class="ti ti-vaccine"></i><span>vacuna / pipeta</span>
+          </div>
+          <div class="type-card" id="tcard-spl" onclick="selectPetType('spl')">
+            <i class="ti ti-heart"></i><span>suplemento</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="petfields-ali">
+        <div class="fg"><span class="flabel">producto</span><input class="finput" type="text" placeholder="ej: Royal Canin Medium Adult"></div>
+        <div class="two">
+          <div class="fg"><span class="flabel">porción (g)</span><input class="finput" type="number" value="300"></div>
+          <div class="fg"><span class="flabel">veces al día</span><select class="fselect"><option>1</option><option selected>2</option><option>3</option></select></div>
+        </div>
+        <div class="fg">
+          <span class="flabel">horarios</span>
+          <div style="display:flex;gap:8px">
+            <input class="finput" type="time" value="08:00" style="flex:1">
+            <input class="finput" type="time" value="18:00" style="flex:1">
+          </div>
+        </div>
+        <div class="fg"><span class="flabel">stock (kg)</span><input class="finput" type="number" value="15" step="0.5"></div>
+      </div>
+
+      <div id="petfields-med" style="display:none">
+        <div class="fg"><span class="flabel">medicamento</span><input class="finput" type="text" placeholder="ej: Meloxicam 1mg/ml"></div>
+        <div class="fg">
+          <span class="flabel">presentación</span>
+          <select class="fselect"><option>solución oral (ml)</option><option>comprimido</option><option>pipeta</option></select>
+        </div>
+        <div class="two">
+          <div class="fg"><span class="flabel">dosis por toma</span><input class="finput" type="number" value="0.5" step="0.1"></div>
+          <div class="fg"><span class="flabel">frecuencia</span><select class="fselect"><option>cada 24h</option><option>cada 12h</option></select></div>
+        </div>
+        <div class="two">
+          <div class="fg"><span class="flabel">duración</span><select class="fselect"><option>indefinido</option><option selected>5 días</option><option>7 días</option></select></div>
+          <div class="fg"><span class="flabel">horario</span><input class="finput" type="time" value="19:00"></div>
+        </div>
+      </div>
+
+      <div id="petfields-vac" style="display:none">
+        <div class="fg"><span class="flabel">producto</span><input class="finput" type="text" placeholder="ej: Frontline antipulgas"></div>
+        <div class="fg"><span class="flabel">periodicidad</span><select class="fselect"><option>mensual</option><option>cada 3 meses</option><option>anual</option></select></div>
+        <div class="fg"><span class="flabel">última aplicación</span><input class="finput" type="date" value="2026-07-15"></div>
+      </div>
+
+      <div class="card" style="margin:0 0 12px;padding:12px 14px">
+        <div style="font-size:12px;font-weight:600;color:var(--t1);margin-bottom:9px">recordatorios</div>
+        <div class="toggle-row">
+          <div><div class="mname" style="font-size:13px">notificación antes de cada toma</div><div class="msub">15 min antes</div></div>
+          <button class="toggle on" onclick="this.classList.toggle('on')" aria-label="toggle"></button>
+        </div>
+        <div class="toggle-row">
+          <div><div class="mname" style="font-size:13px">alerta stock bajo</div><div class="msub">cuando queden 7 días</div></div>
+          <button class="toggle on" onclick="this.classList.toggle('on')" aria-label="toggle"></button>
+        </div>
+        <div class="toggle-row">
+          <div><div class="mname" style="font-size:13px">auto-crear refill</div></div>
+          <button class="toggle" onclick="this.classList.toggle('on')" aria-label="toggle"></button>
+        </div>
+      </div>
+      <button class="btn btn-acc" onclick="go('s-consumo')">guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     SCREEN: HISTORIAL DE CONSUMO / ADHERENCIA
+════════════════════════════════ -->
+<div class="scr" id="s-consumo-historial">
+  <div class="top">
+    <button class="back" onclick="goBack()" aria-label="volver"><i class="ti ti-arrow-left"></i></button>
+    <div class="top-title">adherencia</div>
+    <span style="width:30px"></span>
+  </div>
+  <div class="body">
+    <div class="owner-tab">
+      <button class="otab on" id="chtab-yo" onclick="switchConsumoHist('yo')">
+        <i class="ti ti-user" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Valentina
+      </button>
+      <button class="otab" id="chtab-pet" onclick="switchConsumoHist('pet')">
+        <i class="ti ti-dog" style="font-size:13px;vertical-align:-2px;margin-right:4px"></i>Rocky
+      </button>
+    </div>
+
+    <div id="hist-consumo-yo">
+      <div style="padding:0 16px;margin-bottom:12px">
+        <div style="background:var(--accent-bg);border-radius:var(--rl);padding:13px 15px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:10px">
+            <div><div style="font-size:11px;color:var(--accent)">julio 2026</div><div style="font-size:26px;font-weight:600;color:var(--accent)">85%</div></div>
+            <div style="text-align:right"><div style="font-size:11px;color:var(--accent)">racha</div><div style="font-size:20px;font-weight:600;color:var(--accent)">5 días</div></div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">
+            <div style="font-size:9px;color:var(--accent);text-align:center">L</div><div style="font-size:9px;color:var(--accent);text-align:center">M</div><div style="font-size:9px;color:var(--accent);text-align:center">X</div><div style="font-size:9px;color:var(--accent);text-align:center">J</div><div style="font-size:9px;color:var(--accent);text-align:center">V</div><div style="font-size:9px;color:var(--accent);text-align:center">S</div><div style="font-size:9px;color:var(--accent);text-align:center">D</div>
+            <div style="background:var(--ok-bg);border-radius:4px;height:26px"></div><div style="background:var(--ok-bg);border-radius:4px;height:26px"></div><div style="background:var(--ok-bg);border-radius:4px;height:26px"></div><div style="background:var(--danger-bg);border-radius:4px;height:26px"></div><div style="background:var(--ok-bg);border-radius:4px;height:26px"></div><div style="background:var(--ok-bg);border-radius:4px;height:26px"></div><div style="background:var(--accent);opacity:.6;border-radius:4px;height:26px"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sec">por medicamento</div>
+      <div class="card">
+        <div class="row">
+          <div class="ico ic-cor"><i class="ti ti-pill"></i></div>
+          <div class="meta">
+            <div class="mname">Eutirox 50mcg</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+              <div style="flex:1;height:4px;background:var(--bg);border-radius:2px"><div style="width:90%;height:4px;background:var(--ok);border-radius:2px"></div></div>
+              <span style="font-size:11px;font-weight:600;color:var(--ok)">90%</span>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="ico ic-gre"><i class="ti ti-pill"></i></div>
+          <div class="meta">
+            <div class="mname">Vitamina D 1000 UI</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+              <div style="flex:1;height:4px;background:var(--bg);border-radius:2px"><div style="width:100%;height:4px;background:var(--ok);border-radius:2px"></div></div>
+              <span style="font-size:11px;font-weight:600;color:var(--ok)">100%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="hist-consumo-pet" style="display:none">
+      <div style="padding:0 16px;margin-bottom:12px">
+        <div style="background:#E1F5EE;border-radius:var(--rl);padding:13px 15px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:10px">
+            <div><div style="font-size:11px;color:#0F6E56">julio 2026 · Rocky</div><div style="font-size:26px;font-weight:600;color:#0F6E56">92%</div></div>
+            <div style="text-align:right"><div style="font-size:11px;color:#0F6E56">racha</div><div style="font-size:20px;font-weight:600;color:#0F6E56">7 días</div></div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">
+            <div style="font-size:9px;color:#0F6E56;text-align:center">L</div><div style="font-size:9px;color:#0F6E56;text-align:center">M</div><div style="font-size:9px;color:#0F6E56;text-align:center">X</div><div style="font-size:9px;color:#0F6E56;text-align:center">J</div><div style="font-size:9px;color:#0F6E56;text-align:center">V</div><div style="font-size:9px;color:#0F6E56;text-align:center">S</div><div style="font-size:9px;color:#0F6E56;text-align:center">D</div>
+            <div style="background:#C6EEDD;border-radius:4px;height:26px"></div><div style="background:#C6EEDD;border-radius:4px;height:26px"></div><div style="background:var(--danger-bg);border-radius:4px;height:26px"></div><div style="background:#C6EEDD;border-radius:4px;height:26px"></div><div style="background:#C6EEDD;border-radius:4px;height:26px"></div><div style="background:#C6EEDD;border-radius:4px;height:26px"></div><div style="background:#5DCAA5;opacity:.6;border-radius:4px;height:26px"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sec">alimentación y medicamentos</div>
+      <div class="card">
+        <div class="row">
+          <div class="pet-avatar" style="background:var(--warn-bg);font-size:17px">🍖</div>
+          <div class="meta">
+            <div class="mname">Royal Canin Medium</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+              <div style="flex:1;height:4px;background:var(--bg);border-radius:2px"><div style="width:93%;height:4px;background:#0F6E56;border-radius:2px"></div></div>
+              <span style="font-size:11px;font-weight:600;color:#0F6E56">93%</span>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="ico ic-gre"><i class="ti ti-check"></i></div>
+          <div class="meta"><div class="mname">Frontline · aplicado</div><div class="msub">próxima: 15 ago</div></div>
+          <span class="badge bd-grn">al día</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     SCREEN: BUSCAR PRODUCTOS
+════════════════════════════════ -->
+<div class="scr" id="s-buscar">
+  <div class="top">
+    <div class="top-title">buscar productos</div>
+  </div>
+  <div class="body">
+    <div class="search-wrap" style="margin-top:4px">
+      <i class="ti ti-search search-icon"></i>
+      <input class="search-input" id="search-q" type="search" placeholder="nombre, marca, categoría..." oninput="doSearch(this.value)" autocomplete="off">
+      <i class="ti ti-x search-clear" id="search-clear" onclick="clearSearch()"></i>
+    </div>
+
+    <div class="chips" id="cat-chips">
+      <span class="chip on" onclick="catFilter(this,'all')">todos</span>
+      <span class="chip" onclick="catFilter(this,'med')"><i class="ti ti-pill" style="font-size:11px"></i> medicamentos</span>
+      <span class="chip" onclick="catFilter(this,'pet')"><i class="ti ti-dog" style="font-size:11px"></i> mascotas</span>
+      <span class="chip" onclick="catFilter(this,'ali')"><i class="ti ti-apple" style="font-size:11px"></i> alimentos</span>
+      <span class="chip" onclick="catFilter(this,'hig')"><i class="ti ti-sparkles" style="font-size:11px"></i> higiene</span>
+    </div>
+
+    <!-- resultados de búsqueda -->
+    <div id="search-results" style="background:var(--surface);border-radius:var(--rl);margin:0 16px;border:.5px solid var(--border);overflow:hidden">
+      <div class="search-result" onclick="addToRefill('Eutirox 50mcg x30','med')">
+        <div class="ico ic-cor" style="width:32px;height:32px;font-size:15px"><i class="ti ti-pill"></i></div>
+        <div class="meta"><div class="mname">Eutirox 50mcg x30</div><div class="msub">Lab. Chile · medicamento</div></div>
+        <button class="btn-xsp" onclick="event.stopPropagation();addToRefill('Eutirox 50mcg x30','med')">+ refill</button>
+      </div>
+      <div class="search-result" onclick="addToRefill('Omeprazol 20mg x60','med')">
+        <div class="ico ic-tea" style="width:32px;height:32px;font-size:15px"><i class="ti ti-pill"></i></div>
+        <div class="meta"><div class="mname">Omeprazol 20mg x60</div><div class="msub">Genérico · medicamento</div></div>
+        <button class="btn-xsp" onclick="event.stopPropagation();addToRefill('Omeprazol 20mg x60','med')">+ refill</button>
+      </div>
+      <div class="search-result" onclick="addToRefill('Metformina 850mg x30','med')">
+        <div class="ico ic-cor" style="width:32px;height:32px;font-size:15px"><i class="ti ti-pill"></i></div>
+        <div class="meta"><div class="mname">Metformina 850mg x30</div><div class="msub">Genérico · medicamento</div></div>
+        <button class="btn-xsp" onclick="event.stopPropagation();addToRefill('Metformina 850mg x30','med')">+ refill</button>
+      </div>
+      <div class="search-result" onclick="addToRefill('Royal Canin Medium 15kg','pet')">
+        <div class="ico ic-amb" style="width:32px;height:32px;font-size:15px"><i class="ti ti-dog"></i></div>
+        <div class="meta"><div class="mname">Royal Canin Medium 15kg</div><div class="msub">Royal Canin · mascota</div></div>
+        <button class="btn-xsp" onclick="event.stopPropagation();addToRefill('Royal Canin Medium 15kg','pet')">+ refill</button>
+      </div>
+      <div class="search-result" onclick="addToRefill('Frontline Spray 500ml','pet')">
+        <div class="ico ic-amb" style="width:32px;height:32px;font-size:15px"><i class="ti ti-dog"></i></div>
+        <div class="meta"><div class="mname">Frontline Spray 500ml</div><div class="msub">Merial · mascota</div></div>
+        <button class="btn-xsp" onclick="event.stopPropagation();addToRefill('Frontline Spray 500ml','pet')">+ refill</button>
+      </div>
+      <div class="search-result" onclick="addToRefill('Whey Protein 1kg','ali')">
+        <div class="ico ic-gre" style="width:32px;height:32px;font-size:15px"><i class="ti ti-apple"></i></div>
+        <div class="meta"><div class="mname">Whey Protein 1kg</div><div class="msub">Optimum · alimento</div></div>
+        <button class="btn-xsp" onclick="event.stopPropagation();addToRefill('Whey Protein 1kg','ali')">+ refill</button>
+      </div>
+      <div class="search-result" onclick="addToRefill('Shampoo antipulgas 250ml','hig')">
+        <div class="ico ic-blu" style="width:32px;height:32px;font-size:15px"><i class="ti ti-sparkles"></i></div>
+        <div class="meta"><div class="mname">Shampoo antipulgas 250ml</div><div class="msub">Bayer · higiene</div></div>
+        <button class="btn-xsp" onclick="event.stopPropagation();addToRefill('Shampoo antipulgas 250ml','hig')">+ refill</button>
+      </div>
+      <div class="search-result" onclick="addToRefill('Purina ProPlan Adult 8kg','pet')">
+        <div class="ico ic-amb" style="width:32px;height:32px;font-size:15px"><i class="ti ti-dog"></i></div>
+        <div class="meta"><div class="mname">Purina ProPlan Adult 8kg</div><div class="msub">Purina · mascota</div></div>
+        <button class="btn-xsp" onclick="event.stopPropagation();addToRefill('Purina ProPlan Adult 8kg','pet')">+ refill</button>
+      </div>
+    </div>
+
+    <!-- ver refill con items -->
+    <div id="refill-cta" style="display:none;margin-top:14px">
+      <div style="padding:0 16px;margin-bottom:8px">
+        <div style="background:var(--accent-bg);border-radius:var(--r);padding:10px 12px;display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--accent)">refill en preparación</div>
+            <div id="refill-count" style="font-size:11px;color:var(--accent)">0 productos agregados</div>
+          </div>
+          <button class="btn-xsp" onclick="go('s-refill-builder')">ver refill →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <nav class="nav">
+    <button class="nb" onclick="go('s-home')"><i class="ti ti-layout-dashboard"></i>dashboard</button>
+    <button class="nb" onclick="go('s-consumo')"><i class="ti ti-pill"></i>consumos</button>
+    <button class="nb on"><i class="ti ti-refresh"></i>refill</button>
+    <button class="nb nb-badge" onclick="go('s-inbox')"><i class="ti ti-inbox"></i>ofertas</button>
+    <button class="nb" onclick="go('s-perfil')"><i class="ti ti-user"></i>perfil</button>
+  </nav>
+</div>
+
+<!-- ════════════════════════════════
+     SCREEN: CREAR REFILL
+════════════════════════════════ -->
+<div class="scr" id="s-refill-builder">
+  <div class="top">
+    <div class="top-title">crear refill</div>
+    <button class="btn-xsp" onclick="enviarRefill()">solicitar ofertas</button>
+  </div>
+  <div class="body">
+    <div style="padding:0 16px;margin-bottom:12px">
+      <div style="background:var(--accent-bg);border-radius:var(--r);padding:10px 13px;font-size:12px;color:var(--accent)">
+        <strong>¿Cómo funciona?</strong> Agrega los productos que necesitas. Los proveedores recibirán tu solicitud y competirán con sus mejores precios. Tú eliges la mejor oferta.
+      </div>
+    </div>
+
+    <div class="sec">productos en tu refill</div>
+    <div id="refill-list" style="padding:0 16px;margin-bottom:10px">
+      <!-- items dinámicos -->
+      <div class="refill-item" data-name="Eutirox 50mcg x30">
+        <div class="ico ic-cor" style="width:30px;height:30px;font-size:14px"><i class="ti ti-pill"></i></div>
+        <div class="meta"><div class="mname">Eutirox 50mcg x30</div><div class="msub">precio ref. $18.900</div></div>
+        <button class="btn-xsd" onclick="removeRefillItem(this)" style="font-size:12px;padding:4px 8px"><i class="ti ti-x"></i></button>
+      </div>
+      <div class="refill-item" data-name="Royal Canin Medium 15kg">
+        <div class="ico ic-amb" style="width:30px;height:30px;font-size:14px"><i class="ti ti-dog"></i></div>
+        <div class="meta"><div class="mname">Royal Canin Medium 15kg</div><div class="msub">precio ref. $33.500</div></div>
+        <button class="btn-xsd" onclick="removeRefillItem(this)" style="font-size:12px;padding:4px 8px"><i class="ti ti-x"></i></button>
+      </div>
+    </div>
+
+    <button class="btn btn-out" onclick="go('s-buscar')" style="margin-bottom:6px">
+      <i class="ti ti-search" style="font-size:14px;vertical-align:-2px;margin-right:5px"></i>
+      agregar más productos
+    </button>
+
+    <div class="sec">datos de entrega</div>
+    <div class="card">
+      <div class="fg" style="margin-bottom:10px">
+        <span class="flabel">dirección</span>
+        <input class="finput" type="text" value="Av. Providencia 1234, Santiago">
+      </div>
+      <div class="fg" style="margin-bottom:0">
+        <span class="flabel">cuándo necesitas</span>
+        <select class="fselect">
+          <option>lo antes posible</option>
+          <option>hoy</option>
+          <option>mañana</option>
+          <option>en 2–3 días</option>
+        </select>
+      </div>
+    </div>
+
+    <button class="btn btn-acc" onclick="enviarRefill()">
+      <i class="ti ti-send" style="font-size:15px;vertical-align:-2px;margin-right:5px"></i>
+      solicitar ofertas a proveedores
+    </button>
+  </div>
+  <nav class="nav">
+    <button class="nb" onclick="go('s-home')"><i class="ti ti-layout-dashboard"></i>dashboard</button>
+    <button class="nb" onclick="go('s-consumo')"><i class="ti ti-pill"></i>consumos</button>
+    <button class="nb on"><i class="ti ti-refresh"></i>refill</button>
+    <button class="nb nb-badge" onclick="go('s-inbox')"><i class="ti ti-inbox"></i>ofertas</button>
+    <button class="nb" onclick="go('s-perfil')"><i class="ti ti-user"></i>perfil</button>
+  </nav>
+</div>
+
+<!-- ════════════════════════════════
+     SCREEN: REFILL ENVIADO
+════════════════════════════════ -->
+<div class="scr" id="s-refill-sent">
+  <div class="top">
+    <div class="top-title">solicitud enviada</div>
+  </div>
+  <div class="body" style="display:flex;flex-direction:column;align-items:center;padding:40px 16px 20px">
+    <div style="width:64px;height:64px;border-radius:50%;background:var(--accent-bg);display:flex;align-items:center;justify-content:center;margin-bottom:16px">
+      <i class="ti ti-send" style="font-size:30px;color:var(--accent)"></i>
+    </div>
+    <div style="font-size:17px;font-weight:600;color:var(--t1);margin-bottom:6px">¡refill solicitado!</div>
+    <div style="font-size:13px;color:var(--t2);text-align:center;margin-bottom:28px;max-width:270px">Los proveedores recibieron tu solicitud. Te avisamos cuando lleguen las ofertas a tu bandeja.</div>
+
+    <div style="width:100%;background:var(--surface);border-radius:var(--rl);padding:14px 16px;border:.5px solid var(--border);margin-bottom:20px">
+      <div class="sec" style="padding:0;margin:0 0 10px">estado</div>
+      <div class="tl"><div class="tldot" style="background:var(--accent)"></div><div><div style="font-size:13px;font-weight:500">solicitud enviada</div><div style="font-size:11px;color:var(--t2)">ahora</div></div></div>
+      <div class="tl"><div class="tldot" style="background:var(--border-md)"></div><div><div style="font-size:13px;color:var(--t2)">proveedores ofertan</div></div></div>
+      <div class="tl"><div class="tldot" style="background:var(--border-md)"></div><div><div style="font-size:13px;color:var(--t2)">tú eliges la mejor oferta</div></div></div>
+      <div class="tl"><div class="tldot" style="background:var(--border-md)"></div><div><div style="font-size:13px;color:var(--t2)">pago y despacho</div></div></div>
+    </div>
+    <button class="btn btn-acc" onclick="go('s-inbox')">ver bandeja de ofertas</button>
+    <button class="btn btn-out" onclick="go('s-home')">volver al inicio</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     SCREEN: BANDEJA DE OFERTAS
+════════════════════════════════ -->
+<div class="scr" id="s-inbox">
+  <div class="top">
+    <div class="top-title">bandeja de ofertas</div>
+    <span class="badge bd-red">2 nuevas</span>
+  </div>
+  <div class="body">
+    <div class="chips">
+      <span class="chip on" onclick="filterChip(this)">todas</span>
+      <span class="chip" onclick="filterChip(this)">nuevas</span>
+      <span class="chip" onclick="filterChip(this)">proactivas</span>
+      <span class="chip" onclick="filterChip(this)">aceptadas</span>
+    </div>
+
+    <div style="padding:0 16px;margin-bottom:10px;font-size:11px;color:var(--t2)">
+      <i class="ti ti-arrows-exchange" style="font-size:13px;vertical-align:-2px;margin-right:3px;color:var(--warn)"></i>
+      Cuando un proveedor no tiene exactamente lo que pediste, puede ofrecer otra presentación — siempre marcada como <span class="alt-flag" style="margin-left:0">otra presentación</span>
+    </div>
+
+    <!-- Oferta 1 — MEJOR -->
+    <div class="inbox-card unread">
+      <div class="inbox-head">
+        <div class="av" style="width:36px;height:36px;background:var(--ok-bg);color:var(--ok);font-size:12px">FE</div>
+        <div class="meta">
+          <div class="mname">FarmaExpress</div>
+          <div class="msub"><span class="stars">★★★★☆</span> (412) · hace 10 min</div>
+        </div>
+        <span class="badge bd-pur">mejor precio</span>
+      </div>
+      <div class="inbox-body">
+        <div class="inbox-prod">
+          <div class="ico ic-cor" style="width:26px;height:26px;font-size:13px"><i class="ti ti-pill"></i></div>
+          <span class="inbox-pname">Eutirox 50mcg x30</span>
+          <span class="inbox-price">$17.900</span>
+        </div>
+        <div class="inbox-prod">
+          <div class="ico ic-amb" style="width:26px;height:26px;font-size:13px"><i class="ti ti-dog"></i></div>
+          <span class="inbox-pname">Royal Canin 15kg</span>
+          <span class="inbox-price">$32.500</span>
+        </div>
+        <div style="margin-top:8px;font-size:11px;color:var(--t2)">
+          <i class="ti ti-truck" style="font-size:13px;vertical-align:-2px;margin-right:3px"></i>Entrega en 2h · despacho gratis
+          <span style="display:inline-block;margin-left:8px"><i class="ti ti-tag" style="font-size:13px;vertical-align:-2px;margin-right:3px"></i>ahorro $2.000 vs. precio ref.</span>
+        </div>
+      </div>
+      <div class="inbox-footer">
+        <div>
+          <div style="font-size:11px;color:var(--t2)">total</div>
+          <div style="font-size:18px;font-weight:600;color:var(--accent)">$50.400</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-xs">ver detalle</button>
+          <button class="btn-xsp" onclick="aceptarOferta('FarmaExpress','$50.400')">aceptar oferta</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Oferta 2 -->
+    <div class="inbox-card unread">
+      <div class="inbox-head">
+        <div class="av" style="width:36px;height:36px;background:var(--blue-bg);color:var(--blue);font-size:12px">ST</div>
+        <div class="meta">
+          <div class="mname">SaludTotal</div>
+          <div class="msub"><span class="stars">★★★★★</span> (891) · hace 28 min</div>
+        </div>
+        <span class="badge bd-blu">5 estrellas</span>
+      </div>
+      <div class="inbox-body">
+        <div class="inbox-prod">
+          <div class="ico ic-cor" style="width:26px;height:26px;font-size:13px"><i class="ti ti-pill"></i></div>
+          <span class="inbox-pname">Eutirox 50mcg x30</span>
+          <span class="inbox-price">$18.400</span>
+        </div>
+        <div class="inbox-prod" style="align-items:flex-start">
+          <div class="ico ic-amb" style="width:26px;height:26px;font-size:13px"><i class="ti ti-dog"></i></div>
+          <div class="inbox-pname-wrap">
+            <span class="inbox-pname">Royal Canin 25kg <span class="alt-flag"><i class="ti ti-arrows-exchange" style="font-size:10px"></i>otra presentación</span></span>
+            <span class="inbox-pname-req">pediste: Royal Canin 15kg</span>
+          </div>
+          <span class="inbox-price">$48.900</span>
+        </div>
+        <div class="alt-explain">
+          <i class="ti ti-info-circle"></i>
+          <span>SaludTotal no tiene el saco de 15kg. Te ofrece uno de <strong>25kg por $48.900</strong> — sale a $1.956/kg, más conveniente que el precio de referencia por kilo.</span>
+        </div>
+        <div style="margin-top:8px;font-size:11px;color:var(--t2)">
+          <i class="ti ti-truck" style="font-size:13px;vertical-align:-2px;margin-right:3px"></i>Entrega mañana · despacho $2.500
+        </div>
+      </div>
+      <div class="inbox-footer">
+        <div>
+          <div style="font-size:11px;color:var(--t2)">total</div>
+          <div style="font-size:18px;font-weight:600;color:var(--accent)">$69.800</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-xs">ver detalle</button>
+          <button class="btn-xsp" onclick="aceptarOferta('SaludTotal','$69.800')">aceptar oferta</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Oferta 3 — proactiva, presentación de medicamento distinta -->
+    <div class="inbox-card">
+      <div class="inbox-head">
+        <div class="av" style="width:36px;height:36px;background:var(--warn-bg);color:var(--warn);font-size:12px">PC</div>
+        <div class="meta">
+          <div class="mname">PetClinic Farma</div>
+          <div class="msub"><span class="stars">★★★★☆</span> (203) · ayer</div>
+        </div>
+        <span class="badge bd-amb">proactiva</span>
+      </div>
+      <div class="inbox-body">
+        <div class="inbox-prod" style="align-items:flex-start">
+          <div class="ico ic-cor" style="width:26px;height:26px;font-size:13px"><i class="ti ti-pill"></i></div>
+          <div class="inbox-pname-wrap">
+            <span class="inbox-pname">Eutirox 50mcg — 2 cajas x15 <span class="alt-flag"><i class="ti ti-arrows-exchange" style="font-size:10px"></i>otra presentación</span></span>
+            <span class="inbox-pname-req">pediste: 1 caja x30</span>
+          </div>
+          <span class="inbox-price">$19.400</span>
+        </div>
+        <div class="alt-explain">
+          <i class="ti ti-info-circle"></i>
+          <span>PetClinic Farma no tiene la caja de 30 unidades. Te ofrece <strong>2 cajas x15</strong> (30 unidades en total, mismo principio activo) por <strong>$19.400</strong>.</span>
+        </div>
+        <div style="margin-top:8px;font-size:11px;color:var(--t2)">
+          <i class="ti ti-building-store" style="font-size:13px;vertical-align:-2px;margin-right:3px"></i>Retiro en tienda · 3 sucursales
+        </div>
+      </div>
+      <div class="inbox-footer">
+        <div>
+          <div style="font-size:11px;color:var(--t2)">total</div>
+          <div style="font-size:18px;font-weight:600;color:var(--accent)">$19.400</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-xs">ver detalle</button>
+          <button class="btn-xsp" onclick="aceptarOferta('PetClinic','$19.400')">aceptar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <nav class="nav">
+    <button class="nb" onclick="go('s-home')"><i class="ti ti-layout-dashboard"></i>dashboard</button>
+    <button class="nb" onclick="go('s-consumo')"><i class="ti ti-pill"></i>consumos</button>
+    <button class="nb" onclick="go('s-buscar')"><i class="ti ti-refresh"></i>refill</button>
+    <button class="nb on"><i class="ti ti-inbox"></i>ofertas</button>
+    <button class="nb" onclick="go('s-perfil')"><i class="ti ti-user"></i>perfil</button>
+  </nav>
+</div>
+
+<!-- ════════════════════════════════
+     SCREEN: RESUMEN ANTES DE PAGAR
+════════════════════════════════ -->
+<div class="scr" id="s-resumen">
+  <div class="top">
+    <button class="back" onclick="goBack()"><i class="ti ti-arrow-left"></i></button>
+    <div class="top-title">resumen del pedido</div>
+    <span style="width:30px"></span>
+  </div>
+  <div class="body">
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:11px;margin-bottom:12px">
+        <div class="av" style="width:40px;height:40px;background:var(--ok-bg);color:var(--ok);font-size:13px" id="resumen-av">FE</div>
+        <div>
+          <div style="font-size:14px;font-weight:600;color:var(--t1)" id="resumen-vendor">FarmaExpress</div>
+          <div class="stars" style="font-size:11px">★★★★☆ <span style="color:var(--t3)"> · entrega en 2h</span></div>
+        </div>
+        <span class="badge bd-grn" style="margin-left:auto">aceptada</span>
+      </div>
+      <div class="div"></div>
+      <div style="padding-top:8px">
+        <div class="cart-total-row"><span>Eutirox 50mcg x30</span><span>$17.900</span></div>
+        <div class="cart-total-row"><span>Royal Canin Medium 15kg</span><span>$32.500</span></div>
+        <div class="cart-total-row"><span>Despacho</span><span style="color:var(--ok)">Gratis</span></div>
+        <div class="cart-final"><span>Total a pagar</span><span style="color:var(--accent)" id="resumen-total">$50.400</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="font-size:11px;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">dirección de entrega</div>
+      <div style="font-size:13px;font-weight:500;color:var(--t1)">Av. Providencia 1234, Santiago</div>
+      <div style="font-size:11px;color:var(--t2);margin-top:2px">Dpto 502 · timbre "Soto"</div>
+    </div>
+
+    <div class="sec">método de pago</div>
+    <div style="padding:0 16px;margin-bottom:10px">
+      <div class="pay-method selected" onclick="selectPay(this)">
+        <div class="pay-radio on"></div>
+        <i class="ti ti-credit-card" style="font-size:20px;color:var(--accent)"></i>
+        <div class="meta"><div class="mname">Visa ···· 4821</div><div class="msub">vence 08/27</div></div>
+        <span class="badge bd-pur">predeterminada</span>
+      </div>
+      <div class="pay-method" onclick="selectPay(this)">
+        <div class="pay-radio"></div>
+        <i class="ti ti-building-bank" style="font-size:20px;color:var(--t2)"></i>
+        <div class="meta"><div class="mname">Transferencia bancaria</div><div class="msub">sin comisión</div></div>
+      </div>
+      <div class="pay-method" onclick="selectPay(this)">
+        <div class="pay-radio"></div>
+        <i class="ti ti-device-mobile" style="font-size:20px;color:var(--t2)"></i>
+        <div class="meta"><div class="mname">Mercado Pago</div><div class="msub">pago en cuotas disponible</div></div>
+      </div>
+    </div>
+
+    <button class="btn btn-pay" onclick="go('s-pago')">
+      <i class="ti ti-lock" style="font-size:15px;vertical-align:-2px;margin-right:6px"></i>
+      ir a pagar <span id="pay-btn-total">$50.400</span>
+    </button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     SCREEN: PAGO
+════════════════════════════════ -->
+<div class="scr" id="s-pago">
+  <div class="top">
+    <button class="back" onclick="goBack()"><i class="ti ti-arrow-left"></i></button>
+    <div class="top-title">pagar pedido</div>
+    <span style="width:30px"></span>
+  </div>
+  <div class="body">
+    <div style="text-align:center;padding:20px 0 10px">
+      <div style="font-size:13px;color:var(--t2);margin-bottom:4px">total a pagar</div>
+      <div class="pay-total" id="pago-total">$50.400</div>
+      <div style="font-size:12px;color:var(--t3)">FarmaExpress · Eutirox + Royal Canin</div>
+    </div>
+
+    <div class="sec">datos de tarjeta</div>
+    <div class="card">
+      <div class="fg" style="margin-bottom:10px">
+        <span class="flabel">número de tarjeta</span>
+        <input class="finput" type="text" placeholder="0000  0000  0000  0000" value="4242  4242  4242  4821" maxlength="19">
+      </div>
+      <div class="two" style="margin-bottom:0">
+        <div class="fg" style="margin-bottom:0">
+          <span class="flabel">vencimiento</span>
+          <input class="finput" type="text" placeholder="MM/AA" value="08/27">
+        </div>
+        <div class="fg" style="margin-bottom:0">
+          <span class="flabel">CVV</span>
+          <input class="finput" type="text" placeholder="123" maxlength="4">
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="display:flex;align-items:center;gap:10px">
+      <i class="ti ti-shield-check" style="font-size:22px;color:var(--ok)"></i>
+      <div>
+        <div style="font-size:12px;font-weight:500;color:var(--t1)">pago 100% seguro</div>
+        <div style="font-size:11px;color:var(--t2)">tus datos están cifrados con SSL</div>
+      </div>
+    </div>
+
+    <button class="btn btn-pay" onclick="confirmarPago()" style="margin-top:6px">
+      <i class="ti ti-lock" style="font-size:15px;vertical-align:-2px;margin-right:6px"></i>
+      confirmar pago <span id="pago-btn-total">$50.400</span>
+    </button>
+    <div style="text-align:center;font-size:11px;color:var(--t3);padding:0 16px">el stock se actualizará automáticamente al confirmar</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     SCREEN: PAGO CONFIRMADO
+════════════════════════════════ -->
+<div class="scr" id="s-pago-ok">
+  <div class="top"><div class="top-title">pago confirmado</div></div>
+  <div class="body" style="display:flex;flex-direction:column;align-items:center;padding:40px 16px 20px">
+    <div style="width:72px;height:72px;border-radius:50%;background:var(--ok-bg);display:flex;align-items:center;justify-content:center;margin-bottom:16px">
+      <i class="ti ti-check" style="font-size:34px;color:var(--ok)"></i>
+    </div>
+    <div style="font-size:18px;font-weight:600;color:var(--t1);margin-bottom:6px">¡listo! pedido pagado</div>
+    <div style="font-size:13px;color:var(--t2);text-align:center;margin-bottom:8px;max-width:270px">FarmaExpress está preparando tu pedido. Llegará en aproximadamente 2 horas.</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:28px">n° pedido #RF-2026-00847</div>
+
+    <div style="width:100%;background:var(--surface);border-radius:var(--rl);padding:14px 16px;border:.5px solid var(--border);margin-bottom:16px">
+      <div class="sec" style="padding:0;margin:0 0 10px">estado del despacho</div>
+      <div class="tl"><div class="tldot" style="background:var(--accent)"></div><div><div style="font-size:13px;font-weight:500">pago confirmado</div><div style="font-size:11px;color:var(--t2)">ahora</div></div></div>
+      <div class="tl"><div class="tldot" style="background:var(--border-md)"></div><div><div style="font-size:13px;color:var(--t2)">en preparación</div></div></div>
+      <div class="tl"><div class="tldot" style="background:var(--border-md)"></div><div><div style="font-size:13px;color:var(--t2)">en camino</div></div></div>
+      <div class="tl"><div class="tldot" style="background:var(--border-md)"></div><div><div style="font-size:13px;color:var(--t2)">entregado</div></div></div>
+    </div>
+
+    <button class="btn btn-acc" onclick="go('s-home')">volver al inicio</button>
+    <button class="btn btn-out" onclick="go('s-historial')">ver historial</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     SCREEN: HISTORIAL
+════════════════════════════════ -->
+<div class="scr" id="s-historial">
+  <div class="top">
+    <button class="back" onclick="goBack()" aria-label="volver"><i class="ti ti-arrow-left"></i></button>
+    <div class="top-title">historial de pedidos</div>
+    <span style="width:30px"></span>
+  </div>
+  <div class="body">
+    <div class="sec">julio 2026</div>
+    <div class="card">
+      <div class="row">
+        <div class="ico ic-pur"><i class="ti ti-check"></i></div>
+        <div class="meta"><div class="mname">FarmaExpress · 2 items</div><div class="msub">10 jul · $50.400</div></div>
+        <span class="badge bd-grn">entregado</span>
+      </div>
+      <div class="row">
+        <div class="ico ic-blu"><i class="ti ti-truck"></i></div>
+        <div class="meta"><div class="mname">PetClinic · 1 item</div><div class="msub">8 jul · $31.900</div></div>
+        <span class="badge bd-blu">en camino</span>
+      </div>
+    </div>
+    <div class="sec">junio 2026</div>
+    <div class="card">
+      <div class="row">
+        <div class="ico ic-gre"><i class="ti ti-check"></i></div>
+        <div class="meta"><div class="mname">SaludTotal · 3 items</div><div class="msub">28 jun · $68.200</div></div>
+        <span class="badge bd-grn">entregado</span>
+      </div>
+      <div class="row">
+        <div class="ico ic-gre"><i class="ti ti-check"></i></div>
+        <div class="meta"><div class="mname">FarmaExpress · 2 items</div><div class="msub">14 jun · $44.100</div></div>
+        <span class="badge bd-grn">entregado</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     SCREEN: MI PERFIL
+════════════════════════════════ -->
+<div class="scr" id="s-perfil">
+  <div class="top">
+    <div class="top-title">mi perfil</div>
+  </div>
+  <div class="body">
+    <div style="display:flex;flex-direction:column;align-items:center;padding:18px 0 14px">
+      <div class="av" style="width:60px;height:60px;background:var(--accent-bg);color:var(--accent);font-size:20px;margin-bottom:10px">VS</div>
+      <div style="font-size:16px;font-weight:600;color:var(--t1)">Valentina Soto</div>
+      <div style="font-size:12px;color:var(--t2);margin-top:2px">valentina.soto@mail.com</div>
+    </div>
+
+    <div class="sgrid">
+      <div class="scard"><div class="slabel">pedidos totales</div><div class="sval">23</div></div>
+      <div class="scard"><div class="slabel">ahorro acumulado</div><div class="sval" style="color:var(--ok)">$47k</div></div>
+    </div>
+
+    <div class="sec">datos personales</div>
+    <div class="card">
+      <div class="row">
+        <div class="ico ic-pur"><i class="ti ti-user"></i></div>
+        <div class="meta"><div class="mname">nombre completo</div><div class="msub">Valentina Soto Reyes</div></div>
+        <i class="ti ti-chevron-right" style="color:var(--t3);font-size:18px"></i>
+      </div>
+      <div class="row">
+        <div class="ico ic-blu"><i class="ti ti-mail"></i></div>
+        <div class="meta"><div class="mname">correo</div><div class="msub">valentina.soto@mail.com</div></div>
+        <i class="ti ti-chevron-right" style="color:var(--t3);font-size:18px"></i>
+      </div>
+      <div class="row">
+        <div class="ico ic-tea"><i class="ti ti-phone"></i></div>
+        <div class="meta"><div class="mname">teléfono</div><div class="msub">+56 9 8765 4321</div></div>
+        <i class="ti ti-chevron-right" style="color:var(--t3);font-size:18px"></i>
+      </div>
+    </div>
+
+    <div class="sec">cuenta</div>
+    <div class="card">
+      <div class="row">
+        <div class="ico ic-pur"><i class="ti ti-map-pin"></i></div>
+        <div class="meta"><div class="mname">dirección de entrega</div><div class="msub">Av. Providencia 1234, Santiago</div></div>
+        <i class="ti ti-chevron-right" style="color:var(--t3);font-size:18px"></i>
+      </div>
+      <div class="row">
+        <div class="ico ic-blu"><i class="ti ti-credit-card"></i></div>
+        <div class="meta"><div class="mname">métodos de pago</div><div class="msub">Visa ···· 4821</div></div>
+        <i class="ti ti-chevron-right" style="color:var(--t3);font-size:18px"></i>
+      </div>
+      <div class="row">
+        <div class="ico ic-amb"><i class="ti ti-bell"></i></div>
+        <div class="meta"><div class="mname">notificaciones</div><div class="msub">alertas 3 días antes</div></div>
+        <i class="ti ti-chevron-right" style="color:var(--t3);font-size:18px"></i>
+      </div>
+    </div>
+
+    <div class="sec">historial de pedidos</div>
+    <div class="card">
+      <div class="row">
+        <div class="ico ic-pur"><i class="ti ti-check"></i></div>
+        <div class="meta"><div class="mname">FarmaExpress · 2 items</div><div class="msub">10 jul · $50.400</div></div>
+        <span class="badge bd-grn">entregado</span>
+      </div>
+      <div class="row">
+        <div class="ico ic-blu"><i class="ti ti-truck"></i></div>
+        <div class="meta"><div class="mname">PetClinic · 1 item</div><div class="msub">8 jul · $31.900</div></div>
+        <span class="badge bd-blu">en camino</span>
+      </div>
+    </div>
+    <button class="btn btn-out" onclick="go('s-historial')">ver historial completo</button>
+
+    <div class="sec">sesión</div>
+    <div class="card">
+      <div class="row" style="cursor:pointer">
+        <div class="ico" style="background:var(--danger-bg);color:var(--danger)"><i class="ti ti-logout"></i></div>
+        <div class="meta"><div class="mname" style="color:var(--danger)">cerrar sesión</div></div>
+      </div>
+    </div>
+  </div>
+  <nav class="nav">
+    <button class="nb" onclick="go('s-home')"><i class="ti ti-layout-dashboard"></i>dashboard</button>
+    <button class="nb" onclick="go('s-consumo')"><i class="ti ti-pill"></i>consumos</button>
+    <button class="nb" onclick="go('s-buscar')"><i class="ti ti-refresh"></i>refill</button>
+    <button class="nb nb-badge" onclick="go('s-inbox')"><i class="ti ti-inbox"></i>ofertas</button>
+    <button class="nb on"><i class="ti ti-user"></i>perfil</button>
+  </nav>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+</div>
+
+<script>
+// ── NAVIGATION ──
+let hist = ['s-home'];
+function go(id) {
+  document.querySelectorAll('.scr').forEach(s => s.classList.remove('on'));
+  document.getElementById(id).classList.add('active');
+  document.getElementById(id).classList.add('on');
+  if (hist[hist.length-1] !== id) hist.push(id);
+  window.scrollTo(0,0);
+}
+function goBack() {
+  hist.pop();
+  const prev = hist[hist.length-1] || 's-home';
+  document.querySelectorAll('.scr').forEach(s => s.classList.remove('on'));
+  document.getElementById(prev).classList.add('on');
+  window.scrollTo(0,0);
+}
+
+// ── TOAST ──
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── CHIPS ──
+function filterChip(el) {
+  const p = el.closest('.chips');
+  p.querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
+  el.classList.add('on');
+}
+
+// ── SEARCH ──
+const allProds = [
+  {n:'Eutirox 50mcg x30',cat:'med',icon:'ic-cor',i:'ti-pill'},
+  {n:'Omeprazol 20mg x60',cat:'med',icon:'ic-tea',i:'ti-pill'},
+  {n:'Metformina 850mg x30',cat:'med',icon:'ic-cor',i:'ti-pill'},
+  {n:'Royal Canin Medium 15kg',cat:'pet',icon:'ic-amb',i:'ti-dog'},
+  {n:'Frontline Spray 500ml',cat:'pet',icon:'ic-amb',i:'ti-dog'},
+  {n:'Purina ProPlan Adult 8kg',cat:'pet',icon:'ic-amb',i:'ti-dog'},
+  {n:'Whey Protein 1kg',cat:'ali',icon:'ic-gre',i:'ti-apple'},
+  {n:'Shampoo antipulgas 250ml',cat:'hig',icon:'ic-blu',i:'ti-sparkles'},
+];
+let activeCat = 'all';
+function catFilter(el, cat) {
+  filterChip(el);
+  activeCat = cat;
+  doSearch(document.getElementById('search-q').value);
+}
+function doSearch(q) {
+  const clear = document.getElementById('search-clear');
+  clear.style.display = q ? 'block' : 'none';
+  const res = document.getElementById('search-results');
+  const filtered = allProds.filter(p => {
+    const matchCat = activeCat === 'all' || p.cat === activeCat;
+    const matchQ = !q || p.n.toLowerCase().includes(q.toLowerCase());
+    return matchCat && matchQ;
+  });
+  if (filtered.length === 0) {
+    res.innerHTML = '<div style="padding:20px;text-align:center;color:var(--t3);font-size:13px">sin resultados para "'+q+'"</div>';
+    return;
+  }
+  res.innerHTML = filtered.map(p => `
+    <div class="search-result" onclick="addToRefill('${p.n}','${p.cat}')">
+      <div class="ico ${p.icon}" style="width:32px;height:32px;font-size:15px"><i class="ti ${p.i}"></i></div>
+      <div class="meta"><div class="mname">${p.n}</div><div class="msub">${p.cat}</div></div>
+      <button class="btn-xsp" onclick="event.stopPropagation();addToRefill('${p.n}','${p.cat}')">+ refill</button>
+    </div>`).join('');
+}
+function clearSearch() {
+  document.getElementById('search-q').value = '';
+  document.getElementById('search-clear').style.display = 'none';
+  doSearch('');
+}
+
+// ── REFILL ──
+let refillItems = [
+  {n:'Eutirox 50mcg x30', cat:'med'},
+  {n:'Royal Canin Medium 15kg', cat:'pet'}
+];
+function updateRefillCTA() {
+  const cta = document.getElementById('refill-cta');
+  const cnt = document.getElementById('refill-count');
+  if (refillItems.length > 0) {
+    cta.style.display = 'block';
+    cnt.textContent = refillItems.length + ' producto' + (refillItems.length !== 1 ? 's' : '') + ' agregado' + (refillItems.length !== 1 ? 's' : '');
+  } else {
+    cta.style.display = 'none';
+  }
+  renderRefillList();
+}
+function addToRefill(name, cat) {
+  if (refillItems.find(r => r.n === name)) {
+    toast('Ya está en tu refill');
+    return;
+  }
+  refillItems.push({n: name, cat: cat});
+  updateRefillCTA();
+  toast('✓ ' + name + ' agregado al refill');
+}
+function removeRefillItem(btn) {
+  const item = btn.closest('[data-name]');
+  const name = item.dataset.name;
+  refillItems = refillItems.filter(r => r.n !== name);
+  item.remove();
+  updateRefillCTA();
+  toast('Producto eliminado');
+}
+const iconMap = {med:'ic-cor',pet:'ic-amb',ali:'ic-gre',hig:'ic-blu'};
+const iMap    = {med:'ti-pill',pet:'ti-dog',ali:'ti-apple',hig:'ti-sparkles'};
+function renderRefillList() {
+  const list = document.getElementById('refill-list');
+  if (!list) return;
+  list.innerHTML = refillItems.length === 0
+    ? '<div style="text-align:center;padding:20px;color:var(--t3);font-size:13px;border:.5px dashed var(--border-md);border-radius:var(--r)">sin productos — busca y agrega</div>'
+    : refillItems.map(r => `
+      <div class="refill-item" data-name="${r.n}">
+        <div class="ico ${iconMap[r.cat]||'ic-pur'}" style="width:30px;height:30px;font-size:14px"><i class="ti ${iMap[r.cat]||'ti-package'}"></i></div>
+        <div class="meta"><div class="mname">${r.n}</div><div class="msub">precio ref. incluido</div></div>
+        <button class="btn-xsd" onclick="removeRefillItem(this)" style="font-size:12px;padding:4px 8px"><i class="ti ti-x"></i></button>
+      </div>`).join('');
+}
+function enviarRefill() {
+  if (refillItems.length === 0) { toast('Agrega al menos un producto'); return; }
+  go('s-refill-sent');
+}
+
+// ── INBOX / ACCEPT ──
+let vendorAceptado = 'FarmaExpress';
+let totalAceptado  = '$50.400';
+function aceptarOferta(vendor, total) {
+  vendorAceptado = vendor;
+  totalAceptado  = total;
+  // update resumen screen
+  document.getElementById('resumen-vendor').textContent = vendor;
+  document.getElementById('resumen-total').textContent  = total;
+  document.getElementById('pay-btn-total').textContent  = total;
+  const initials = vendor.substring(0,2).toUpperCase();
+  document.getElementById('resumen-av').textContent = initials;
+  go('s-resumen');
+}
+
+// ── PAY METHODS ──
+function selectPay(el) {
+  document.querySelectorAll('.pay-method').forEach(m => {
+    m.classList.remove('selected');
+    m.querySelector('.pay-radio').classList.remove('on');
+  });
+  el.classList.add('selected');
+  el.querySelector('.pay-radio').classList.add('on');
+}
+
+// ── CONFIRM PAGO ──
+function confirmarPago() {
+  document.getElementById('pago-total').textContent     = totalAceptado;
+  document.getElementById('pago-btn-total').textContent = totalAceptado;
+  go('s-pago-ok');
+}
+
+// ── CONSUMO: tabs Valentina / Rocky ──
+function switchConsumo(t) {
+  document.getElementById('consumo-yo').style.display  = t === 'yo'  ? 'block' : 'none';
+  document.getElementById('consumo-pet').style.display  = t === 'pet' ? 'block' : 'none';
+  document.getElementById('ctab-yo').className  = 'otab' + (t === 'yo'  ? ' on' : '');
+  document.getElementById('ctab-pet').className = 'otab' + (t === 'pet' ? ' on' : '');
+}
+function switchConsumoConfig(t) {
+  document.getElementById('cfg-consumo-yo').style.display  = t === 'yo'  ? 'block' : 'none';
+  document.getElementById('cfg-consumo-pet').style.display  = t === 'pet' ? 'block' : 'none';
+  document.getElementById('cctab-yo').className  = 'otab' + (t === 'yo'  ? ' on' : '');
+  document.getElementById('cctab-pet').className = 'otab' + (t === 'pet' ? ' on' : '');
+}
+function switchConsumoHist(t) {
+  document.getElementById('hist-consumo-yo').style.display  = t === 'yo'  ? 'block' : 'none';
+  document.getElementById('hist-consumo-pet').style.display  = t === 'pet' ? 'block' : 'none';
+  document.getElementById('chtab-yo').className  = 'otab' + (t === 'yo'  ? ' on' : '');
+  document.getElementById('chtab-pet').className = 'otab' + (t === 'pet' ? ' on' : '');
+}
+
+// ── CONSUMO: marcar dosis tomada / servida ──
+function marcarDosis(btn, cardId, badgeId, doneLabel) {
+  btn.classList.remove('no');
+  btn.classList.add('yes');
+  const card = document.getElementById(cardId);
+  const pending = card.querySelectorAll('.taken-btn.no');
+  if (pending.length === 0) {
+    card.classList.add('done');
+    const badge = document.getElementById(badgeId);
+    if (badge) {
+      badge.className = 'badge bd-grn';
+      badge.textContent = doneLabel || 'tomada';
+    }
+  }
+  toast('✓ dosis registrada');
+}
+
+// ── CONSUMO: frecuencia (persona) ──
+function showFreqDays(sel) {
+  document.getElementById('freq-dias-wrap').style.display = sel.value === 's' ? 'block' : 'none';
+}
+
+// ── CONSUMO: tipo de item mascota ──
+function selectPetType(t) {
+  ['ali','med','vac','spl'].forEach(k => {
+    const card = document.getElementById('tcard-' + k);
+    if (card) card.classList.toggle('on', k === t);
+  });
+  ['ali','med','vac'].forEach(k => {
+    const f = document.getElementById('petfields-' + k);
+    if (f) f.style.display = (k === t) ? 'block' : 'none';
+  });
+}
+</script>
+</body>
+</html>
