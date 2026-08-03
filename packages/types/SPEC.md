@@ -70,6 +70,31 @@ export interface ConsumptionLog {
   cantidad?: number
 }
 
+export type CatalogProductStatus = 'activo' | 'inactivo'
+
+export interface CatalogProduct {
+  id: string
+  nombre: string
+  categoria: string
+  marca?: string
+  presentacion?: string
+  imagenUrl?: string
+  status: CatalogProductStatus
+}
+
+export interface ProviderCatalogItem {
+  id: string
+  companyId: string
+  catalogProductId?: string // NULL por diseño (Q4, db-schema-catalogo) -- el proveedor puede no matchear contra el catálogo de referencia
+  nombre: string
+  categoria: string
+  precioBase: number
+  precioMaximo: number
+  stock: number
+  disponible: boolean
+  imagenUrl?: string
+}
+
 export interface RefillRequest {
   id: string
   userId: string
@@ -127,6 +152,8 @@ export interface Order {
 - `OfferItem.altNote` es obligatorio cuando `isAlt === true` — nunca se envía una presentación alternativa sin explicación
 - `UserConsumption.horarios` siempre tiene al menos 1 elemento
 - `ConsumptionLog` no expone `createdAt` (aunque la tabla física sí lo tiene) — mismo patrón que `Company`/`Profile`, que tampoco exponen sus columnas físicas `created_at`/`updated_at`: son metadata de auditoría, no campos de dominio que la app consuma. `tomadoAt` sí se expone porque es el dato de negocio (cuándo se tomó la dosis)
+- `ProviderCatalogItem.catalogProductId` es opcional a propósito (Q4, `db-schema-catalogo`): un proveedor puede cargar un producto que no matchea contra `catalog_products`, usando `nombre`/`categoria` para matching — nunca se fuerza a `NOT NULL`
+- `CatalogProduct` no filtra por `status` en el tipo: `'inactivo'` sigue siendo un valor válido y visible (Q6, no es soft-delete oculto al cliente autenticado)
 - `Offer.refillRequestId` presente siempre que `kind === 'reactiva'`, ausente cuando `kind === 'proactiva'`. Cuando está presente, `Offer.userId` DEBE coincidir con el `userId` de esa `RefillRequest` — invariante que vive en el caso de uso de `ofertas`, no en la DB
 - `OfferItem` siempre tiene exactamente uno de `refillItemId` (si la oferta es `reactiva`) o `providerCatalogItemId` (si es `proactiva`) — nunca ambos, nunca ninguno
 - `CompanyStatus` empieza siempre en `'pendiente'` al crear una empresa nueva

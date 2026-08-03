@@ -149,6 +149,47 @@ Migrado en `supabase/migrations/20260803120200_02_consumo.sql`.
 
 Owner-less by design (Q8, `db-schema-consumo`): sin columna de dueño propia. SELECT vía `EXISTS` contra `user_consumption.user_id` — mismo patrón único que `refill_items`/`offer_items`/`order_items` (`db-access-control`, "Owner-less child table read policy").
 
+## Columnas reales — lote `03` (`catalogo`)
+
+Migrado en `supabase/migrations/20260803120300_03_catalogo.sql`.
+
+### catalog_products
+
+| Columna | Tipo | Constraint |
+|---|---|---|
+| id | uuid | PK default `gen_random_uuid()` |
+| nombre | text | NOT NULL |
+| categoria | text | NOT NULL |
+| marca | text | NULL |
+| presentacion | text | NULL |
+| imagen_url | text | NULL |
+| status | catalog_product_status | NOT NULL DEFAULT `'activo'` |
+| created_at / updated_at | timestamptz | NOT NULL DEFAULT `now()` |
+| — | — | GIN trigram (`nombre`), GIN trigram (`categoria`) |
+
+`catalog_product_status`: `'activo' | 'inactivo'` (soft-delete only, la política SELECT no filtra por status).
+
+### provider_catalog
+
+| Columna | Tipo | Constraint |
+|---|---|---|
+| id | uuid | PK default `gen_random_uuid()` |
+| company_id | uuid | NOT NULL REFERENCES `companies(id)` |
+| catalog_product_id | uuid | NULL REFERENCES `catalog_products(id)` — nullable por diseño (Q4) |
+| nombre | text | NOT NULL (fallback denormalizado para matching) |
+| categoria | text | NOT NULL (fallback denormalizado) |
+| precio_base | numeric(12,2) | NOT NULL, CHECK (`precio_base >= 0`) |
+| precio_maximo | numeric(12,2) | NOT NULL, CHECK (`precio_maximo >= precio_base`) |
+| stock | integer | NOT NULL DEFAULT 0, CHECK (`stock >= 0`) |
+| disponible | boolean | NOT NULL DEFAULT `true` |
+| imagen_url | text | NULL |
+| created_at / updated_at | timestamptz | NOT NULL DEFAULT `now()` |
+| — | — | INDEX(`company_id`); GIN trigram (`nombre`), GIN trigram (`categoria`) |
+
+**Q6 — `catalog_products` es authenticated-only, sin política/grant `anon`**: acceso público sin sesión permitiría a scrapers extraer el catálogo de referencia completo. Ambas políticas de `provider_catalog` (público y dueño) también son `to authenticated` — tampoco hay lectura pública sin sesión para el marketplace view en este lote.
+
+Ninguna de las dos tablas tiene grant de `insert`/`update`/`delete` para el cliente: las mutaciones (`cargarProductoCatalogo`, etc.) van por core-api con service-role, mismo patrón que `companies`/`profiles` (lote `01a`) y `pets`/`user_consumption` (lote `02`).
+
 ## Bootstrap de administrador
 
 Runbook completo en `openspec/changes/backend-supabase-migrations/design.md` D-5 (no se duplica aquí). Dos archivos, propósitos distintos:
@@ -166,7 +207,8 @@ Runbook completo en `openspec/changes/backend-supabase-migrations/design.md` D-5
 | `pets`, `user_consumption` | (lote `02`, migrado) `authenticated` ve solo filas propias, `user_id = auth.uid()` — ni siquiera proveedores tienen acceso |
 | `consumption_logs` | (lote `02`, migrado) Sin columna de dueño propia (Q8) — SELECT vía `EXISTS` contra `user_consumption.user_id`, mismo patrón único que `refill_items`/`offer_items`/`order_items` (`db-access-control`) |
 | `refill_requests`, `refill_items` | Visibles para el usuario dueño; visibles (solo lectura) para proveedores cuyo catálogo coincide y están en zona de despacho |
-| `provider_catalog` | Editable solo por `profiles` con `companyId` correspondiente |
+| `catalog_products` | (lote `03`, migrado) `authenticated` ve todas las filas sin filtro de status (Q6) — **sin** política ni grant `anon`, para no exponer el catálogo de referencia a scrapers sin sesión |
+| `provider_catalog` | (lote `03`, migrado) **Conflicto con la prosa original de esta fila, no sobrescrita en silencio**: la regla real implementada es solo lectura, dos políticas `authenticated` — pública (`disponible = true`) y dueño (`EXISTS` sobre `profiles.company_id`, ve todo incl. `disponible = false`). No hay política de escritura para el cliente; `cargarProductoCatalogo` va por core-api con service-role, igual que `companies`/`profiles` |
 | `offers`, `offer_items` | El proveedor solo puede crear/editar sus propias ofertas; el usuario solo puede leer las ofertas dirigidas a sus solicitudes |
 | `orders`, `payments` | Visibles solo para el usuario y el proveedor involucrados en ese pedido |
 | `admin_roles` | (lote `01b`, migrado) Cero acceso de cliente — RLS habilitado + `revoke all` + cero políticas para `anon`/`authenticated` (los dos mecanismos de design.md D-2). Solo alcanzable vía `service role key` desde `admin-web`/core-api. Ver "Bootstrap de administrador" más arriba para cómo se crea la primera fila |
