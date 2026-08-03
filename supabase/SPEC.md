@@ -356,6 +356,19 @@ Migrado en `supabase/migrations/20260803120700_07_auditoria.sql`.
 
 **Grants append-only**: `grant insert, select on public.audit_log to service_role` + `revoke update, delete on public.audit_log from anon, authenticated, service_role` — `service_role` tiene `BYPASSRLS`, así que solo la ausencia del privilegio detiene un `UPDATE`/`DELETE`, incluso desde `core-api`. `anon`/`authenticated` sin ningún grant (RLS habilitado + `revoke all` + cero políticas = deny-all). Verificado con `supabase test db` (throws `42501` para lectura directa y para `UPDATE`/`DELETE` de `service_role`).
 
+## Storage — buckets y políticas (lote `08`)
+
+Migrado en `supabase/migrations/20260803120800_08_storage.sql`. `storage.buckets`/`storage.objects` no se crean en esta migración (propiedad de `supabase_storage_admin`, provistas por el servicio de Storage antes de que corran las migraciones de usuario) — el lote solo inserta filas de bucket y agrega políticas sobre `storage.objects`.
+
+| Bucket | Visibilidad | Políticas |
+|---|---|---|
+| `product-images` | Público (`public = true`) | `SELECT` público (`anon` + `authenticated`, bucket completo); `INSERT`/`UPDATE` solo dueño, vía prefijo de ruta `{company_id}/...` comparado contra `profiles.company_id` (EXISTS literal, mismo patrón que lotes `01a`/`03`/`05`, no `current_company_id()`) |
+| `provider-catalog-uploads` | Privado (`public = false`) | `SELECT`/`INSERT` solo dueño (mismo predicado de prefijo de ruta). **Sin política `UPDATE`**: un re-upload crea un objeto nuevo, no reemplaza uno existente |
+
+**Sin `DELETE` en ningún bucket, para ningún rol** (incl. `service_role`): `revoke delete on storage.objects from anon, authenticated` explícito, más el trigger `storage.protect_objects_delete` que ya trae el servicio de Storage (bloquea `DELETE` directo incondicionalmente salvo `storage.allow_delete_query`, incluso para roles con `BYPASSRLS`). Mismo principio de no-baja-física que toda tabla de este cambio.
+
+**Comprobantes explícitamente fuera de alcance (Q3)**: no existe bucket para comprobantes de pago ni fotos de entrega en este cambio — la pasarela de pago es el sistema de registro del comprobante de pago; el comprobante de entrega no tiene caso de uso de dominio hoy. Follow-up futuro con dueño en `pedidos-pagos/SPEC.md` (`orders.comprobante_url` nullable + su propio bucket), no una omisión silenciosa.
+
 ## Bootstrap de administrador
 
 Runbook completo en `openspec/changes/backend-supabase-migrations/design.md` D-5 (no se duplica aquí). Dos archivos, propósitos distintos:
