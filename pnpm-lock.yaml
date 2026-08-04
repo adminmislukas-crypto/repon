@@ -36,6 +36,8 @@ importers:
         specifier: ^8.66.0
         version: 8.66.0(eslint@10.8.0)(typescript@6.0.3)
 
+  packages/types: {}
+
 packages:
 
   '@emnapi/core@1.10.0':

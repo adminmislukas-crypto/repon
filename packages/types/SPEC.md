@@ -1,203 +1,42 @@
 # packages/types
 
-Tipos TypeScript compartidos entre `usuario-mobile`, `proveedor-mobile` y `admin-web`. Deben reflejar exactamente las tablas de `supabase/SPEC.md` — si un campo cambia en la base de datos, cambia aquí primero.
+Tipos TypeScript compartidos entre `usuario-mobile`, `proveedor-mobile`, `admin-web`, y el dominio de `core-api`.
 
-## Tipos base
+**Este archivo documenta el código en `packages/types/src/**` — ya no es la fuente ejecutable.** El `.ts` real es la fuente única de verdad de las formas de entidad (`shared-types-package` spec, Requirement "@repon/types is a real, importable workspace package"); si un campo cambia, cambia primero en `src/`, y este archivo se actualiza para reflejarlo. También deben reflejar exactamente las tablas de `supabase/SPEC.md` — si un campo cambia en la base de datos, cambia en `src/` primero.
 
-```ts
-export type Role = 'user' | 'provider' | 'admin'
-export type CompanyStatus = 'pendiente' | 'activo' | 'suspendido'
-export type OwnerType = 'self' | 'pet'
-export type ConsumptionKind = 'medicamento' | 'alimento' | 'vacuna' | 'suplemento'
-export type OfferKind = 'reactiva' | 'proactiva'
-export type OrderStatus = 'confirmado' | 'preparando' | 'en_camino' | 'entregado'
-export type AdminRole = 'super_admin' | 'soporte' | 'finanzas'
+## Organización del código
 
-export type ProfileStatus = 'activo' | 'suspendido'
+| Archivo | Exporta |
+|---|---|
+| `src/identidad.ts` | `Role`, `CompanyStatus`, `ProfileStatus`, `AdminRole`, `Company`, `CompanyDispatchZone`, `Profile` |
+| `src/consumo.ts` | `OwnerType`, `ConsumptionKind`, `Pet`, `UserConsumption`, `ConsumptionLog` |
+| `src/catalogo.ts` | `CatalogProductStatus`, `CatalogProduct`, `ProviderCatalogItem` |
+| `src/refill-matching.ts` | `RefillRequest`, `RefillItem` |
+| `src/ofertas.ts` | `OfferKind`, `OfferStatus`, `OfferItem` (+ variantes `OfferItemReactiva`/`OfferItemProactiva`/`OfferItemAlt`), `Offer` |
+| `src/pedidos-pagos.ts` | `OrderStatus`, `Order`, `OrderItem`, `PaymentStatus`, `Payment` |
+| `src/audit.ts` | `AuditLog` (infraestructura compartida, no es entidad de un dominio) |
+| `src/index.ts` | Barrel export — `import { ... } from '@repon/types'` |
 
-export interface Company {
-  id: string
-  razonSocial: string
-  rut: string
-  giro: string
-  status: CompanyStatus
-}
+**Regla de borde (D-A, no negociable)**: los tipos de fila generados por Kysely (`snake_case`, `services/core-api/src/shared/database/schema.ts`) NUNCA se exportan desde `@repon/types`. Este paquete solo expone formas `camelCase` de dominio — el cast vive únicamente en `shared/database` y `adapters/persistence` de `core-api`.
 
-export interface CompanyDispatchZone {
-  id: string
-  companyId: string
-  comuna: string
-  region: string
-}
-
-export interface Profile {
-  id: string
-  role: Role
-  status: ProfileStatus
-  nombre: string
-  email: string
-  telefono?: string
-  companyId?: string // solo si role === 'provider'
-}
-
-export interface Pet {
-  id: string
-  userId: string
-  nombre: string
-  especie: string
-  raza?: string
-  pesoKg?: number
-}
-
-export interface UserConsumption {
-  id: string
-  ownerType: OwnerType
-  petId?: string
-  kind: ConsumptionKind
-  nombre: string
-  dosisPorToma: number
-  unidad?: string
-  frecuenciaDias: number
-  horarios: string[] // "HH:mm"
-  stockActual: number
-  autoCrearRefill: boolean
-}
-
-export interface ConsumptionLog {
-  id: string
-  consumptionId: string
-  tomadoAt: string // ISO-8601
-  cantidad?: number
-}
-
-export type CatalogProductStatus = 'activo' | 'inactivo'
-
-export interface CatalogProduct {
-  id: string
-  nombre: string
-  categoria: string
-  marca?: string
-  presentacion?: string
-  imagenUrl?: string
-  status: CatalogProductStatus
-}
-
-export interface ProviderCatalogItem {
-  id: string
-  companyId: string
-  catalogProductId?: string // NULL por diseño (Q4, db-schema-catalogo) -- el proveedor puede no matchear contra el catálogo de referencia
-  nombre: string
-  categoria: string
-  precioBase: number
-  precioMaximo: number
-  stock: number
-  disponible: boolean
-  imagenUrl?: string
-}
-
-export interface RefillRequest {
-  id: string
-  userId: string
-  items: RefillItem[]
-  direccion: string
-  comuna: string
-  urgencia: 'lo_antes_posible' | 'hoy' | 'manana' | 'en_2_3_dias'
-  estado: 'abierta' | 'ofertada' | 'confirmada'
-}
-
-export interface RefillItem {
-  id: string
-  nombre: string
-  categoria: string
-  precioReferencia: number
-  catalogProductId?: string // NULL por diseño (Q4, db-schema-refill-matching) -- el usuario puede pedir un producto que no matchea contra el catálogo de referencia
-}
-
-export type OfferStatus = 'pendiente' | 'aceptada' | 'rechazada' | 'expirada'
-
-export interface Offer {
-  id: string
-  userId: string // destinatario; requerido siempre, incl. ofertas proactivas sin refillRequestId
-  refillRequestId?: string // ausente cuando kind === 'proactiva'
-  companyId: string
-  kind: OfferKind
-  status: OfferStatus
-  items: OfferItem[]
-  tiempoEntregaHoras: number
-  costoDespacho: number
-  total: number
-  mensaje?: string
-}
-
-export interface OfferItem {
-  refillItemId?: string          // presente solo si la Offer padre es kind === 'reactiva'
-  providerCatalogItemId?: string // presente solo si la Offer padre es kind === 'proactiva'
-  isAlt: boolean
-  altSize?: number   // ej. 25 (kg) o 15 (unidades)
-  altQty?: number     // ej. 1 saco, o 2 cajas
-  altNote?: string     // texto explicativo mostrado al usuario
-  precio: number
-}
-
-export interface Order {
-  id: string
-  offerId: string
-  userId: string
-  companyId: string
-  status: OrderStatus
-  total: number
-}
-
-export interface OrderItem {
-  id: string
-  offerItemId: string // solo procedencia -- ver order_items.offer_item_id comment on column (D-6), nunca fuente de precio/descripcion
-  nombre: string
-  cantidad: number
-  precioUnitario: number
-  subtotal: number
-  isAlt: boolean
-  altSize?: number
-  altQty?: number
-  altNote?: string
-}
-
-export type PaymentStatus = 'pendiente' | 'pagado' | 'fallido' | 'reembolsado'
-
-export interface Payment {
-  id: string
-  orderId: string
-  gateway: string // CHECK IN ('webpay','mercadopago') en la DB, no enum -- sumar un gateway no requiere cambiar este tipo
-  externalTransactionId: string
-  monto: number
-  moneda: string
-  estado: PaymentStatus
-  paidAt?: string
-  // raw_payload NO se expone: es interno de core-api, nunca viaja al cliente
-}
-
-export interface AuditLog {
-  id: string
-  actorProfileId: string
-  accion: string
-  entityType: string
-  entityId: string // polimórfico, sin FK -- ver audit_log.entity_id comment on column
-  cambios: Record<string, unknown>
-  motivo?: string
-  createdAt: string
-}
-```
+**Sin paso de build**: `package.json` apunta `exports`/`types` directo a `src/index.ts` — es un paquete de tipos puros, cero código en runtime. El único check en CI es `tsc --noEmit` (`typecheck`).
 
 ## Reglas de validación que deben vivir en el tipo, no solo en el formulario
 
-- `OfferItem.altNote` es obligatorio cuando `isAlt === true` — nunca se envía una presentación alternativa sin explicación
-- `UserConsumption.horarios` siempre tiene al menos 1 elemento
-- `ConsumptionLog` no expone `createdAt` (aunque la tabla física sí lo tiene) — mismo patrón que `Company`/`Profile`, que tampoco exponen sus columnas físicas `created_at`/`updated_at`: son metadata de auditoría, no campos de dominio que la app consuma. `tomadoAt` sí se expone porque es el dato de negocio (cuándo se tomó la dosis)
-- `ProviderCatalogItem.catalogProductId` es opcional a propósito (Q4, `db-schema-catalogo`): un proveedor puede cargar un producto que no matchea contra `catalog_products`, usando `nombre`/`categoria` para matching — nunca se fuerza a `NOT NULL`
-- `RefillItem.catalogProductId` es opcional por el mismo motivo (Q4, `db-schema-refill-matching`): el usuario puede pedir un producto que no está en `catalog_products`
-- `RefillRequest.comuna` es siempre requerido (Q2, `db-schema-refill-matching`): clave de join estructurada para matching de zona de despacho, separada de `direccion` (texto libre) — ni la Edge Function de matching ni RLS pueden operar sobre una dirección sin estructurar
-- `CatalogProduct` no filtra por `status` en el tipo: `'inactivo'` sigue siendo un valor válido y visible (Q6, no es soft-delete oculto al cliente autenticado)
-- `Offer.refillRequestId` presente siempre que `kind === 'reactiva'`, ausente cuando `kind === 'proactiva'`. Cuando está presente, `Offer.userId` DEBE coincidir con el `userId` de esa `RefillRequest` — invariante que vive en el caso de uso de `ofertas`, no en la DB
-- `OfferItem` siempre tiene exactamente uno de `refillItemId` (si la oferta es `reactiva`) o `providerCatalogItemId` (si es `proactiva`) — nunca ambos, nunca ninguno
-- `CompanyStatus` empieza siempre en `'pendiente'` al crear una empresa nueva
-- `ProfileStatus` empieza siempre en `'activo'` al crear un usuario nuevo; transiciona a `'suspendido'` vía `suspenderUsuario`/`suspenderEmpresa` (dominio `identidad`) — nunca se borra el registro
-- `OfferStatus` empieza siempre en `'pendiente'` al crearse (`enviarOferta`/`enviarOfertaProactiva`); transiciona a `'aceptada'` vía `aceptarOferta`. **Resuelto en `db-schema-ofertas` (lote 05)**: `aceptarOferta` transiciona la oferta elegida a `'aceptada'` Y, en la misma operación, transiciona todas las demás ofertas `'pendiente'` de la misma `refillRequestId` a `'rechazada'` (displacement) — ese es el único disparador de `'rechazada'` que existe hoy. `'expirada'` sigue soportada por el esquema pero sin caso de uso que la dispare (no hay job de expiración por tiempo en este cambio, ver `db-schema-ofertas` Scenario "expirada is schema-supported but not yet triggered by any use case")
+Estado real de cada regla en el código (`shared-types-package` spec, Requirement "Validation rules documented in SPEC.md live in the type/DTO, not only the form"):
+
+- **Enforced by un union type hoy** (`src/ofertas.ts`):
+  - `OfferItem.altNote` obligatorio cuando `isAlt === true` — `OfferItemAlt` discrimina en `isAlt`.
+  - `OfferItem` siempre tiene exactamente uno de `refillItemId`/`providerCatalogItemId`, nunca ambos, nunca ninguno — `OfferItemReactiva`/`OfferItemProactiva` usan `?: never` en el campo excluido.
+  - `Offer.refillRequestId` presente solo si `kind === 'reactiva'` — `Offer` es una unión discriminada en `kind`, con `items` acotado a la variante de `OfferItem` correspondiente.
+- **Enforced por un tuple type no-vacío hoy** (`src/consumo.ts`): `UserConsumption.horarios` tipado `[string, ...string[]]` — siempre al menos 1 elemento.
+- **Documentado, deliberadamente NO forzado a nivel estructural** (comentario TSDoc en el campo, valor original preservado — forzarlo cambiaría el significado del campo en lecturas ya existentes de filas en cualquier estado):
+  - `ConsumptionLog` no expone `createdAt` — mismo patrón que `Company`/`Profile`.
+  - `ProviderCatalogItem.catalogProductId` / `RefillItem.catalogProductId` opcionales a propósito (Q4).
+  - `RefillRequest.comuna` siempre requerido (Q2) — ya no-opcional en el tipo.
+  - `CatalogProduct` no filtra por `status` en el tipo (Q6).
+- **Diferido a la capa de dominio de `services/core-api` — no es trabajo de este paquete** (invariantes de creación/transición sobre valores que son válidos en reposo en cualquier estado; enforced por factories/casos de uso, Fase 4a/4b de `backend-core-api-foundation`, no construidos todavía):
+  - `CompanyStatus` empieza siempre en `'pendiente'` al crear una empresa.
+  - `ProfileStatus` empieza siempre en `'activo'`, transiciona a `'suspendido'` vía `suspenderUsuario`/`suspenderEmpresa` — nunca se borra el registro.
+  - `OfferStatus` empieza siempre en `'pendiente'`; transiciona a `'aceptada'` vía `aceptarOferta` (con displacement de las demás ofertas `'pendiente'` de la misma `refillRequestId` a `'rechazada'` — el único disparador de `'rechazada'` hoy, `db-schema-ofertas` lote `05`); `'expirada'` soportada por el esquema, sin caso de uso que la dispare todavía.
+  - `Offer.userId` debe coincidir con el `userId` de su `RefillRequest` cuando `refillRequestId` está presente — invariante cruzada entre entidades, vive en el caso de uso de `ofertas`, no expresable en un tipo estático (no hay dependent types en TS).
