@@ -7,6 +7,15 @@ allowBuilds:
   # required for the cross-domain import boundary rule in eslint.config.js to
   # actually resolve import specifiers to file paths. Approved deliberately,
   # not a supply-chain risk (well-known package, no unexpected postinstall).
+  # @scarf/scarf is swagger-ui-dist's (transitive via @nestjs/swagger, PR 3)
+  # anonymous-usage-telemetry postinstall script. Denied deliberately — we
+  # want swagger-ui-dist's static assets, not its phone-home script; blocking
+  # the build script doesn't affect swagger-ui functionality.
+  '@scarf/scarf': false
+  # esbuild is tsx's (PR 3, `start:dev`) and ts-jest's transitive native
+  # binary — its postinstall fetches the correct platform build. Required
+  # for both to function at all; not optional like the two entries above.
+  esbuild: true
   unrs-resolver: true
 minimumReleaseAgeExclude:
   - '@typescript-eslint/eslint-plugin@8.66.0'

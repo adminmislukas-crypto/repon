@@ -1,0 +1,132 @@
+# Tasks: `core-api` — fundación ejecutable (NestJS hexagonal + toolchain del monorepo)
+
+## Review Workload Forecast
+
+| Field | Value |
+|---|---|
+| Estimated changed lines | ~3,300-3,800 total across 9 chained PRs; per-PR range 180-700 |
+| 400-line budget risk | High overall — PR5 (kernel/auth), PR6 (4a), PR7 (4b), PR8 (4c) each individually risk exceeding 400 |
+| Chained PRs recommended | Yes — 9 sequential PRs, dependency-ordered (boot needs types, kernel needs boot, identidad needs kernel), cannot parallelize |
+| Suggested split | PR1 (0 toolchain) → PR2 (1 types) → PR3 (2 boot) → PR4 (3.1-3.5 kernel infra) → PR5 (3.6-3.9 kernel auth) → PR6 (4a identidad core) → PR7 (4b use cases) → PR8 (4c HTTP adapter) → PR9 (5 closure) |
+| Delivery strategy | auto-chain (cached this session) |
+| Chain strategy | stacked-to-main (consistent with `backend-supabase-migrations` precedent — each PR merges to `main` in dependency order, no unmerged parent branches) |
+
+```text
+Decision needed before apply: No
+Chained PRs recommended: Yes
+Chain strategy: stacked-to-main
+400-line budget risk: High
+```
+
+### Per-PR estimate
+
+| PR | Slice | Est. lines | Risk | Note |
+|---|---|---|---|---|
+| 1 | 0 toolchain | 200-250 | Low | Config only |
+| 2 | 1 `@repon/types` | 250-300 | Low-Medium | Mechanical, SPEC.md ts block is ~185 lines |
+| 3 | 2 boot | 280-320 | Medium | First runtime code, Node 24/Nest 11 compat check (R7) |
+| 4 | 3.1-3.5 kernel infra (db/supabase/event-bus/audit) | 300-350 | Medium | Includes opt-in DB-role integration test (D-A risk) |
+| 5 | 3.6-3.9 kernel auth (guards/verifiers/decorators) + notif/payment stubs | 450-550 | **High** | 11-branch guard matrix is non-negotiable (D7) — do not trim tests to fit budget; use `size:exception` if it can't shrink |
+| 6 | 4a identidad core + guard activation | 450-550 | **High** | Domain + 4 ports-out + 3 Kysely repos + actor adapter + `APP_GUARD` registration |
+| 7 | 4b use cases + tests | 600-750 | **High** | Largest PR. Fallback split if over budget: 7a `RegistrarUsuarioUseCase` (saga, D7's most critical test) / 7b other 5 use cases + tests |
+| 8 | 4c HTTP adapter | 450-500 | Medium-High | Mechanical (DTO/controller/mapper repeat pattern) — faster review despite line count |
+| 9 | 5 closure | 150-200 | Low | 5 placeholders + config flip |
+
+### Suggested Work Units
+
+| Unit | Goal | PR | Base | Notes |
+|---|---|---|---|---|
+| 1 | Toolchain | PR 1 | `main` | No dependency; blocks all others |
+| 2 | `@repon/types` | PR 2 | `main` | Depends on PR 1 |
+| 3 | Boot | PR 3 | `main` | Depends on PR 2 (`@repon/types` importable) |
+| 4 | Kernel infra | PR 4 | `main` | Depends on PR 3 |
+| 5 | Kernel auth | PR 5 | `main` | Depends on PR 4; watch budget, D7 tests non-negotiable |
+| 6 | Identidad 4a | PR 6 | `main` | Depends on PR 5; moves `APP_GUARD` here per design.md §7 |
+| 7 | Identidad 4b | PR 7 | `main` | Depends on PR 6; likely needs the 7a/7b fallback split above |
+| 8 | Identidad 4c | PR 8 | `main` | Depends on PR 7 |
+| 9 | Closure | PR 9 | `main` | Depends on PR 8; flips `strict_tdd: true` — LAST task of the change |
+
+---
+
+## Phase 0: Toolchain — Spec: `repo-toolchain`
+
+- [x] 0.1 Root `package.json` (pnpm workspaces `apps/*`,`services/*`,`packages/*`) + `pnpm-workspace.yaml`.
+- [x] 0.2 `tsconfig.base.json` (`strict: true`) at root; every package's `tsconfig.json` will `extend` it, never override `strict`.
+- [x] 0.3 `.nvmrc` (Node 24.x) + append `nodejs 24.x` line to `.tool-versions` (D4) — both resolve the same major.
+- [x] 0.4 ESLint config incl. `no-restricted-imports`/`import/no-restricted-paths` blocking cross-domain `ports-out/`, `adapters/persistence/`, `adapters/events/`, `domain/` imports (`core-api-hexagonal-layout`); Prettier config; both fail CI on violation.
+- [x] 0.5 `.env.example` covering every var from `core-api-bootstrap`'s env schema (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `AUTH_JWT_MODE`, `SUPABASE_JWT_SECRET`, `SUPABASE_JWKS_URL`, `AUTH_JWT_ISSUER`, `AUTH_JWT_AUDIENCE`).
+- [x] 0.6 `.github/workflows/ci.yml`: install → lint → typecheck → test → build, each step gates the next.
+- [x] 0.7 Confirm `openspec/config.yaml` stays `strict_tdd: false` (D7 — flip is Phase 5's last task, not a precondition).
+
+## Phase 1: `@repon/types` — Spec: `shared-types-package`
+
+- [x] 1.1 `packages/types/package.json` + `tsconfig.json` extending base.
+- [x] 1.2 `packages/types/src/*.ts`: promote every type/interface from `SPEC.md`'s ts block verbatim (camelCase), grouped by domain file + `index.ts` barrel export. Zero `schema.ts` row types re-exported (D-A boundary).
+- [x] 1.3 `packages/types/SPEC.md`: reframe intro as documentation of the code, not the executable source.
+- [x] 1.4 Verify `tsc --noEmit` in CI is the check (no dedicated unit tests needed — pure type declarations, no runtime logic).
+
+## Phase 2: Boot — Spec: `core-api-bootstrap`
+
+- [x] 2.1 `services/core-api/package.json`; install NestJS 11, `class-validator`/`class-transformer`, `@nestjs/swagger`, `jose`. (Resolved: `@nestjs/*@11.1.28`, `@nestjs/config@4.0.4`, `@nestjs/swagger@11.4.6`; also added `@nestjs/config` + `zod` per design.md D-D's env schema, not itemized in the original task text.)
+- [x] 2.2 `src/main.ts`: global `ValidationPipe` (whitelist+forbidNonWhitelisted), global exception filter skeleton, Swagger mount gated on `NODE_ENV !== 'production'` (D5). (Global exception filter skeleton deferred to PR 5/`shared/auth` per design.md D-E — "a global exception filter → `{statusCode, code, message}`" is scoped there, nothing in this PR throws a domain exception yet to justify one; ValidationPipe + Swagger gating are real and verified booted.)
+- [x] 2.3 `src/config/env.schema.ts`: fail-fast — `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`/`DATABASE_URL` unconditional; `AUTH_JWT_MODE` discriminated union (`hs256`⇒`SUPABASE_JWT_SECRET`, `jwks`⇒`SUPABASE_JWKS_URL`); `AUTH_JWT_ISSUER`/`AUTH_JWT_AUDIENCE` always required; exits non-zero pre-listen. (Zod `discriminatedUnion`, chosen over Joi for first-class TS inference; verified non-zero exit via a real boot with `SUPABASE_SERVICE_ROLE_KEY` unset — Nest's own default `abortOnError` triggers the exit, not a custom handler; see env.schema.ts's doc comment.)
+- [x] 2.4 `src/app.module.ts` (minimal: config module + health only — kernel doesn't exist yet); `src/health/health.controller.ts` — `@Public() GET /health` → 200. (`@Public()` deliberately NOT added: it doesn't exist until PR 5/`shared/auth`, and there is no global guard yet in this PR for it to bypass — the spec's "Health check is unauthenticated" requirement is satisfied because the route is unguarded by construction. Adding a stub decorator now would preempt PR 5's design.)
+- [x] 2.5 `jest.config.ts` + `test/jest-e2e.json`. (Used `package.json#jest` instead of a standalone `jest.config.ts` — the actual official NestJS CLI default, avoids an extra `ts-node` dependency just to load a `.ts` config file; `test/jest-e2e.json` is exactly as specified.)
+- [x] 2.6 `test/health.e2e-spec.ts`: `GET /health` → 200 unauthenticated. This is the regression detector for Phase 4a's guard activation (design.md §7). (Verified two ways: `Test.createTestingModule` + supertest in CI, AND a real `tsx src/main.ts` process hit with `curl` — both return `{"status":"ok"}` / 200.)
+- [x] 2.7 Unit tests: env schema rejects missing `SUPABASE_SERVICE_ROLE_KEY`; rejects `hs256` mode without `SUPABASE_JWT_SECRET`. (9 unit tests total, incl. jwks-without-URL, missing-mode, and out-of-union-mode cases beyond the two the task text names.)
+
+## Phase 3: Kernel — Spec: `core-api-bootstrap`, `shared-audit-log`, `core-api-auth-guard` (design.md order 3.1-3.6)
+
+- [ ] 3.1 `shared/database/`: `pool.provider.ts` (pg pool authenticated under `service_role` grants), `schema.ts` (Kysely row types, `snake_case`, never in `@repon/types`), `database.module.ts` (`DATABASE` token), `transaction.ts` (opaque `TransactionContext`, `TransactionManager.runInTransaction`, `TRANSACTION_MANAGER` token).
+- [ ] 3.2 Integration test (opt-in via local `supabase start`, excluded from CI): assert `UPDATE audit_log` is rejected under this connection's role — proves service-role grants, not table-owner privileges (D-A risk #1). Closes the open question on `SET ROLE` vs. dedicated login role.
+- [ ] 3.3 `shared/supabase/`: `supabase.module.ts` + `SUPABASE_CLIENT` token (Auth Admin + Storage only — no PostgREST business queries).
+- [ ] 3.4 `shared/event-bus/`: `EventBusModule` (EventEmitter2), `DomainEvent` base type, `EventPublisher` port + `EVENT_PUBLISHER` token.
+- [ ] 3.5 `shared/audit/`: `AuditLogPort`/`AUDIT_LOG_PORT` (write-only `record`, `cambios: {campo:{antes,despues}}` shape fixed) + Kysely-backed adapter + `audit.module.ts` + unit test asserting `tx` pass-through.
+- [ ] 3.6 `shared/auth/`: `ActorPort`/`ACTOR_PORT` + `AuthenticatedActor` (interface only, zero domain imports); `JwtVerifier` port + `Hs256`/`Jwks` verifiers via `jose`, selected once at boot by `AUTH_JWT_MODE`.
+- [ ] 3.7 `shared/auth/`: `AuthGuard` + `RolesGuard` + `@Public()`/`@Roles()`/`@AdminRoles()`/`@Actor()` decorators; `AuthModule` exports guard classes + `JWT_VERIFIER`, does **NOT** register `APP_GUARD` (design.md §7 — no `ACTOR_PORT` provider until Phase 4a); global exception filter → `{statusCode, code, message}`, no stack-trace leakage.
+- [ ] 3.8 Unit tests: full 11-branch `AuthGuard`/`RolesGuard` matrix (`@Public()` bypass, missing/malformed token, invalid signature/UUID, actor-backend throw→503, null→401, suspended→403, provider+suspended-company→pass, valid→next, no-metadata/role-mismatch/admin-missing/admin-not-allowed/allowed) — `ActorPort`+`JwtVerifier` mocked, no DB.
+- [ ] 3.9 `shared/notifications/` + `shared/payments/`: interface + token only (`NOTIFICATION_PORT`, `PAYMENT_GATEWAY_PORT`), no `useValue: {}`, no implementation.
+- [ ] 3.10 `app.module.ts`: import `SharedKernelModule` (`@Global()`) aggregating 3.1-3.9's providers.
+
+## Phase 4a: Identidad — domain, persistence, actor, guard activation — Spec: `core-api-identidad`, `core-api-auth-guard`, `core-api-hexagonal-layout`
+
+- [ ] 4a.1 `domains/identidad/domain/`: `Profile`/`Company`/`AdminRoleAssignment` entities/factories; invariant `role==='provider' ⇒ companyId != null`.
+- [ ] 4a.2 `domains/identidad/ports-out/*.port.ts`: `ProfileRepository` (`insertIfAbsent`+`update` split, corrected per spec), `CompanyRepository` (`save`), `AdminRoleRepository` (`upsert`+`findByProfileId`), `AuthProviderPort` (+`AuthProviderDeterministicError`/`AuthProviderAmbiguousError`) — every method carries trailing `tx?: TransactionContext` except `AuthProvider`/`EventPublisher`.
+- [ ] 4a.3 `adapters/persistence/kysely-*.repository.ts` for the 3 Kysely-backed ports.
+- [ ] 4a.4 `domains/identidad/contracts/identidad-actor.adapter.ts`: `IdentidadActorAdapter implements ActorPort`, single JOIN `profiles⋈admin_roles⋈companies`.
+- [ ] 4a.5 `identidad.module.ts`: bind the 3 repos + `{provide: ACTOR_PORT, useClass: IdentidadActorAdapter}`, `exports: [ACTOR_PORT]`.
+- [ ] 4a.6 `app.module.ts`: import `IdentidadModule`, register `AuthGuard`+`RolesGuard` as `APP_GUARD` — the ordering constraint design.md §7 fixes (only safe once `ACTOR_PORT` has a provider).
+- [ ] 4a.7 Unit tests: domain invariant rejection; `IdentidadActorAdapter` resolves with one query. E2e: protected route → 401 no token; `/health` still 200 (regression check from 2.6).
+
+## Phase 4b: Identidad — use cases + tests — Spec: `core-api-identidad`, `auth-provisioning`
+
+- [ ] 4b.1 `RegistrarUsuarioUseCase`: 3-step saga (`createAccount`→`insertIfAbsent`→`publish`), owning all compensation itself (`auth-provisioning` D-B — never the adapter).
+- [ ] 4b.2 Unit tests, `RegistrarUsuarioUseCase`: success path; deterministic profiles-failure→`deleteAccount`+503 no retry; ambiguous auth-failure→`findAccountByEmail`→forward-recovery, never delete; deterministic auth-failure (`email_taken`→409, other→502), zero compensation.
+- [ ] 4b.3 `RegistrarEmpresaUseCase`: single `companies` insert, never touches `profiles`, no audit write + unit test.
+- [ ] 4b.4 `AprobarEmpresaUseCase`/`SuspenderUsuarioUseCase`/`SuspenderEmpresaUseCase`: mutation + `AuditLogPort.record` inside one `runInTransaction`, event publishes post-commit + unit tests incl. rollback-removes-audit-entry.
+- [ ] 4b.5 `AsignarRolAdminUseCase(profileId, rol, adminId)`: `adminId`→`granted_by`; `AdminRoleRepository.upsert` + audit in same transaction + unit test (re-grant replaces, not duplicates).
+- [ ] 4b.6 Shared domain error types (`RegistroFallidoError`, etc.) used across the 6 use cases.
+
+## Phase 4c: Identidad — HTTP adapter — Spec: `core-api-identidad`, `core-api-hexagonal-layout`
+
+- [ ] 4c.1 6 DTOs (`class-validator`+`@ApiProperty`) under `adapters/http/dto/`.
+- [ ] 4c.2 `identidad.mapper.ts`: DTO↔command, entity↔response DTO.
+- [ ] 4c.3 `identidad.controller.ts`: 6 routes per design.md's table (`@Public()` on register-user/register-company; `@AdminRoles('super_admin','soporte')` on aprobación/suspensiones; `@AdminRoles('super_admin')` on rol-admin); controller passes scalars (`actor.profileId`) to use cases, never the `AuthenticatedActor` object.
+- [ ] 4c.4 `adapters/events/`: publish the 4 domain events (`UsuarioRegistrado`, `EmpresaAprobada`, etc.) via `EVENT_PUBLISHER`.
+- [ ] 4c.5 `identidad.module.ts`: wire the 6 use cases + controller into the module built in 4a.
+- [ ] 4c.6 E2e tests for the 6 routes: DTO rejection (extra field→400), guard interplay per route's `@AdminRoles`, happy path per use case.
+
+## Phase 5: Closure — Spec: `core-api-bootstrap`, `repo-toolchain`
+
+- [ ] 5.1 5 placeholder modules (`catalogo`,`consumo`,`refill-matching`,`ofertas`,`pedidos-pagos`): folder skeleton + real DI tokens from each domain's own `SPEC.md`, no `useValue: {}`, registered in `app.module.ts`.
+- [ ] 5.2 Confirm the app boots with all 7 modules resolved, zero unresolved provider.
+- [ ] 5.3 `services/core-api/SPEC.md` delta: folder convention, cross-domain import rule, testing policy.
+- [ ] 5.4 `services/core-api/domains/identidad/SPEC.md` delta: compensation ownership (D-B), `ProfileRepository` split, `AdminRoleRepository`, `tx?` on ports-out, `AuditLogPort` consumption.
+- [ ] 5.5 `packages/types/SPEC.md` delta: confirm `schema.ts` row types never live here (D-A).
+- [ ] 5.6 LAST TASK: `openspec/config.yaml` — `testing.status: configured`, real `test_command`/`build_command`/`lint_command`/`typecheck_command`, `strict_tdd: true` (D7) — only after `pnpm test` is verified green locally and in CI.
+
+---
+
+## Dependency Notes
+
+Slices are strictly sequential — each depends on the previous being merged (kernel needs boot's `env.schema.ts`; `identidad` needs kernel's `ACTOR_PORT` contract and `AuditLogPort`; closure needs all 6 domain tokens fixed). Per this project's DoD: implementation + its unit/e2e tests + the relevant `SPEC.md` delta land in the **same commit/PR** — never split code from its test. Phase 0 is a hard prerequisite for everything after it.

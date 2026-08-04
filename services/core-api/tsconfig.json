@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // tsconfig.base.json is deliberately bundler-agnostic (`module: "ESNext"`,
+    // `moduleResolution: "Bundler"`) — right for a types-only package like
+    // @repon/types, wrong for a NestJS process that Node executes directly.
+    // Both overrides below specialize the base for this one package (PR 3).
+    // "NodeNext" (not "Node10"/"node", deprecated as of TS 6 — TS5107) makes
+    // TS resolve modules exactly like Node.js does; since this package's own
+    // package.json sets `"type": "commonjs"`, that resolves to plain CJS
+    // `require()` semantics — no mandatory extensions on relative imports.
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    // NestJS's DI container reads constructor parameter types from emitted
+    // decorator metadata (`Reflect.getMetadata('design:paramtypes', ...)`).
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "declaration": false,
+    "sourceMap": true,
+    "types": ["node", "jest"]
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

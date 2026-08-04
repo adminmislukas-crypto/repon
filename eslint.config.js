@@ -109,6 +109,11 @@ export default tseslint.config(
       // classes of bugs); ESLint's job here is style + import boundaries,
       // not re-litigating what `tsc` already checks.
       '@typescript-eslint/no-explicit-any': 'warn',
+      // `ignoreRestSiblings`: `const { unwanted, ...rest } = obj` is the
+      // standard way to build a "valid object minus one property" test
+      // fixture (services/core-api's env.schema.spec.ts, PR 3) — `unwanted`
+      // is deliberately unused, that's the point of the pattern, not a bug.
+      '@typescript-eslint/no-unused-vars': ['error', { ignoreRestSiblings: true }],
     },
   },
   {
