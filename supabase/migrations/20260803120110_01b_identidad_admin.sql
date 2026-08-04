@@ -76,10 +76,23 @@ comment on view public.v_auth_orphans is
 -- ============================================================
 alter table public.admin_roles enable row level security;
 revoke all on public.admin_roles from anon, authenticated;
--- Sin grant de select/insert/update/delete: cero acceso de cliente
--- (db-schema-identidad Requirement "admin_roles has no client access").
--- admin-web lee/escribe vía service-role desde core-api, que hace bypass de
--- RLS (BYPASSRLS) y no necesita ningún grant explícito sobre esta tabla.
+-- Sin grant de select/insert/update/delete para anon/authenticated: cero
+-- acceso de cliente (db-schema-identidad Requirement "admin_roles has no
+-- client access").
+--
+-- CORREGIDO (comment-only, ver 20260804090000_09_grants_identidad_service_role.sql):
+-- esta nota afirmaba que admin-web/core-api podían leer/escribir vía
+-- service-role "que hace bypass de RLS (BYPASSRLS) y no necesita ningún
+-- grant explícito sobre esta tabla" -- eso es incorrecto. BYPASSRLS solo
+-- omite las *políticas* de row-level security; no tiene ningún efecto sobre
+-- los privilegios de objeto estándar (GRANT/REVOKE a nivel de tabla), que
+-- son un mecanismo de Postgres completamente distinto. Verificado
+-- empíricamente contra una instancia real de Postgres local
+-- (backend-core-api-foundation PR 4): conectar como service_role e
+-- intentar SELECT/UPDATE contra esta tabla devolvía "permission denied for
+-- table admin_roles" hasta que el lote 09 le otorgó
+-- select/insert/update explícitos. Este archivo no cambia (ya está
+-- aplicado); el grant real vive en el lote 09.
 
 -- ============================================================
 -- 7. RLS: políticas
