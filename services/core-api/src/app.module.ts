@@ -2,12 +2,22 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { validateEnv } from './config/env.schema';
 import { HealthController } from './health/health.controller';
+import { AuditModule } from './shared/audit/audit.module';
+import { DatabaseModule } from './shared/database/database.module';
+import { EventBusModule } from './shared/event-bus/event-bus.module';
+import { SupabaseModule } from './shared/supabase/supabase.module';
 
-// Minimal on purpose (core-api-bootstrap spec, "Module composition wires the
-// shared kernel and all 6 domains"): the shared kernel (`SharedKernelModule`,
-// `@Global()`) and the 7 domain modules (identidad + 5 placeholders) don't
-// exist until PR 4 onward. Today `AppModule` only wires env validation +
-// `/health`, which is exactly what this PR's scope is (Phase 2 in tasks.md).
+// core-api-bootstrap spec, "Module composition wires the shared kernel and
+// all 6 domains": this PR (tasks.md Phase 3.1-3.5) wires 4 of the shared
+// kernel's modules — Database (Kysely/pg), Supabase (Auth Admin + Storage),
+// EventBus, Audit. `shared/auth` (3.6-3.9: JwtVerifier/ActorPort/guards) and
+// the literal `SharedKernelModule` wrapper that aggregates all of 3.1-3.9
+// (task 3.10) land in PR 5, once 3.6-3.9 exist — see design.md "El registro
+// APP_GUARD NO va en el slice 3": `ACTOR_PORT` has no provider until
+// `IdentidadModule` (Phase 4a), so the app can't boot with a guard mounted
+// yet either way. The 5 placeholder domain modules (Phase 5) aren't wired
+// yet — each of these 4 modules is `@Global()` already, so no re-import is
+// needed once they land.
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -18,6 +28,10 @@ import { HealthController } from './health/health.controller';
       // itself, before `app.listen()` is ever reached (see env.schema.ts).
       validate: validateEnv,
     }),
+    DatabaseModule,
+    SupabaseModule,
+    EventBusModule,
+    AuditModule,
   ],
   controllers: [HealthController],
 })
