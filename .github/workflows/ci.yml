@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+# Gate order: install -> lint -> format -> typecheck -> test -> build, each step
+# gating the next (repo-toolchain spec: "A failing typecheck blocks a passing test
+# suite from turning the PR green").
+#
+# lint/format:check are real today — eslint.config.js + .prettierrc.json already
+# govern this repo's config/tooling files (verified locally: `pnpm run lint` and
+# `pnpm run format:check` both exit 0 against a clean tree and both exit non-zero
+# against a deliberately introduced violation).
+#
+# typecheck/test/build are `pnpm -r --if-present run <script>` aggregators: no
+# workspace package (apps/*, services/*, packages/*) defines those scripts yet
+# (everything under those dirs today is SPEC.md + mockups, no package.json). That
+# makes these three steps a verified no-op-but-green ("No projects matched the
+# filters", exit 0) until `@repon/types` (PR 2) and `core-api` (PR 3) land real
+# `typecheck`/`test`/`build` scripts — at which point these same aggregator
+# commands start doing real work with zero workflow changes required.
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Format check
+        run: pnpm run format:check
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Test
+        run: pnpm run test
+
+      - name: Build
+        run: pnpm run build

@@ -3,3 +3,7 @@
 # until then this is the authoritative version reference for `supabase init`/CLI usage.
 # Install: `brew install supabase` (Homebrew bottles the exact version below).
 supabase 2.111.0
+
+# Pinned by sdd-apply (backend-core-api-foundation, PR 1 — toolchain scaffolding, D4).
+# Mirrors .nvmrc at repo root — both MUST resolve to the same Node 24.x version.
+nodejs 24.19.0

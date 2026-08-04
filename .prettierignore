@@ -1,0 +1,13 @@
+# Pre-existing repo content that predates the toolchain (backend-core-api-foundation
+# PR 1). Reformatting hundreds of lines of pre-existing SPEC.md/mockup/SQL content as a
+# side effect of landing the toolchain is out of scope — each area opts in to
+# formatting once real source code lands there.
+**/*.md
+**/mockups/**
+**/*.sql
+supabase/**
+openspec/**
+docs/**
+.atl/**
+
+pnpm-lock.yaml
