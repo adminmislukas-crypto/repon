@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { GlobalExceptionFilter } from './shared/auth/global-exception.filter';
 
 async function bootstrap(): Promise<void> {
   // If `ConfigModule.forRoot`'s `validate` (env.schema.ts) throws — a
@@ -29,6 +30,11 @@ async function bootstrap(): Promise<void> {
       transform: true,
     }),
   );
+
+  // core-api-auth-guard spec, "A global exception filter emits stable error
+  // codes": every thrown exception becomes `{ statusCode, code, message }`,
+  // no stack trace or internal detail leaks into the response body.
+  app.useGlobalFilters(new GlobalExceptionFilter());
 
   const config = app.get(ConfigService);
   const nodeEnv = config.get<string>('NODE_ENV', 'development');
