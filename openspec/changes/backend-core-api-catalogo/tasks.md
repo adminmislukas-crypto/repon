@@ -89,15 +89,15 @@ Chain strategy: stacked-to-main, 13 PRs
 
 Depends on Phase 3a's entity.
 
-- [ ] 3b.1 RED: `adapters/persistence/kysely-catalog.repository.spec.ts` — `findMatching` applies the visibility anti-join (`NOT EXISTS ... catalog_hidden_companies ... oculto`); `findByCompany` does NOT (core-api-catalogo Scenarios "excluded from cross-tenant matching" / "own provider still reads their own catalog").
-- [ ] 3b.2 GREEN: `adapters/persistence/kysely-catalog.repository.ts` — `findById`, `findByCompany`, `findByCompanyAndCategoria`, `findMatching` (with anti-join), `precio_base`/`precio_maximo` string→number mapping.
-- [ ] 3b.3 RED: `adapters/persistence/kysely-catalog-query.adapter.spec.ts` — exact `catalogProductId` match OR trigram `categoria`+`nombre` match, unioned+deduped by `provider_catalog.id`, capped at `MAX_COINCIDENCIAS_POR_ITEM`, wraps any Kysely/pg error as `CatalogQueryUnavailableError`, applies the visibility filter (core-api-catalogo "A database failure surfaces as an explicit error" / "genuine zero-match result is distinguishable").
-- [ ] 3b.4 GREEN: `adapters/persistence/kysely-catalog-query.adapter.ts` implementing `CatalogQueryPort`.
-- [ ] 3b.5 RED: `ports-in/buscar-productos.use-case.spec.ts` — returns `CatalogProduct[]` from `catalog_products`, no company filter applied (core-api-catalogo Scenario "Happy path search").
-- [ ] 3b.6 GREEN: `ports-in/buscar-productos.use-case.ts`.
-- [ ] 3b.7 `adapters/http/dto/catalog-product-response.dto.ts` + `catalogo.mapper.ts` + `adapters/http/catalogo.controller.ts`: `GET /catalogo/productos?q=&categoria=` (authenticated, no `@Roles`, not `@Public()`).
-- [ ] 3b.8 `catalogo.module.ts`: bind `CATALOG_REPOSITORY`→`KyselyCatalogRepository`, `CATALOG_QUERY_PORT`→`KyselyCatalogQueryAdapter`, register `BuscarProductosUseCase` + controller; `exports: [CATALOG_QUERY_PORT]`.
-- [ ] 3b.9 E2e: `test/catalogo-buscar-productos.e2e-spec.ts` — happy path, 401 with no token.
+- [x] 3b.1 RED: `adapters/persistence/kysely-catalog.repository.spec.ts` — `findMatching` applies the visibility anti-join (`NOT EXISTS ... catalog_hidden_companies ... oculto`); `findByCompany` does NOT (core-api-catalogo Scenarios "excluded from cross-tenant matching" / "own provider still reads their own catalog").
+- [x] 3b.2 GREEN: `adapters/persistence/kysely-catalog.repository.ts` — `findById`, `findByCompany`, `findByCompanyAndCategoria`, `findMatching` (with anti-join), `precio_base`/`precio_maximo` string→number mapping.
+- [x] 3b.3 RED: `adapters/persistence/kysely-catalog-query.adapter.spec.ts` — exact `catalogProductId` match OR trigram `categoria`+`nombre` match, unioned+deduped by `provider_catalog.id`, capped at `MAX_COINCIDENCIAS_POR_ITEM`, wraps any Kysely/pg error as `CatalogQueryUnavailableError`, applies the visibility filter (core-api-catalogo "A database failure surfaces as an explicit error" / "genuine zero-match result is distinguishable").
+- [x] 3b.4 GREEN: `adapters/persistence/kysely-catalog-query.adapter.ts` implementing `CatalogQueryPort`.
+- [x] 3b.5 RED: `ports-in/buscar-productos.use-case.spec.ts` — returns `CatalogProduct[]` from `catalog_products`, no company filter applied (core-api-catalogo Scenario "Happy path search").
+- [x] 3b.6 GREEN: `ports-in/buscar-productos.use-case.ts`.
+- [x] 3b.7 `adapters/http/dto/catalog-product-response.dto.ts` + `catalogo.mapper.ts` + `adapters/http/catalogo.controller.ts`: `GET /catalogo/productos?q=&categoria=` (authenticated, no `@Roles`, not `@Public()`).
+- [x] 3b.8 `catalogo.module.ts`: bind `CATALOG_REPOSITORY`→`KyselyCatalogRepository`, `CATALOG_QUERY_PORT`→`KyselyCatalogQueryAdapter`, register `BuscarProductosUseCase` + controller; `exports: [CATALOG_QUERY_PORT]`.
+- [x] 3b.9 E2e: `test/catalogo-buscar-productos.e2e-spec.ts` — happy path, 401 with no token.
 
 ## Phase 4a: Unit writes — use cases + repository `save()` — Spec: `core-api-catalogo`
 

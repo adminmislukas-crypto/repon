@@ -223,15 +223,36 @@ feat(core-api): add ProviderCatalogItem entity with price invariant
 
 ---
 
-## What PR3b (next batch) Needs to Know
+## PR3b — Read side: persistence adapters + `buscarProductos` + controller
 
-- **Start here**: `## Phase 3b: Read side — persistence adapters + buscarProductos + controller` in `tasks.md` (tasks 3b.1–3b.9). Depends on PR3a's entity (done).
+**Status**: done. Implemented by a sub-agent that hit the session's monthly spend limit right after confirming all 5 gates were green, before it could commit — the orchestrator independently re-ran all 5 gates from scratch (lint/typecheck/test/build/format:check, all green: 140 unit + 19 e2e, up from 120/17), reviewed the two most novel files (`kysely-catalog.repository.ts`, `kysely-catalog-query.adapter.ts`) directly, and committed on the sub-agent's behalf.
+
+**Gap-fill, documented in-code**: design.md's port list only named `CatalogRepository` (all `ProviderCatalogItem`/`provider_catalog`-shaped) and `CatalogVisibilityProjection`, with no port for `buscarProductos`'s read of `catalog_products` (a structurally different table, no `company_id`, returns `CatalogProduct[]`). Rather than overloading `CatalogRepository`, the batch added a minimal `CatalogProductRepository` port (`ports-out/catalog-product-repository.port.ts`, `buscar(query, categoria?)`) + `KyselyCatalogProductRepository` adapter, mirroring the exact same pattern (interface+token in `ports-out/`, Kysely class in `adapters/persistence/`). Flagged inline in the port's own doc comment as a "gap-fill note," not silently introduced. **Must be added to the Phase 9 SPEC.md-delta list** (task 9.1) — it's a new port not named in the original design.md decision D1/D4/D7, small but real scope beyond what `sdd-design` enumerated.
+
+**`CatalogRepository.save`/`saveMany` are declared but throw named "not yet implemented" errors** pointing at PR4a/PR6 respectively — deliberate choice over a silent no-op stub, consistent with the placeholder-module precedent already set for `catalogo.module.ts` before this change started.
+
+**`findMatching`/`buscarCoincidencias` visibility anti-join**: both apply the exact D-A predicate against `catalog_hidden_companies`; both proven a no-op today via test fixtures (table is empty until PR8a). `findByCompany`/`findByCompanyAndCategoria` deliberately do NOT apply it (owner reads own catalog unfiltered, matches the corrected spec.md).
+
+**`buscarCoincidencias`'s per-item result cap** (C7) is implemented as one aggregate `LIMIT` (`MAX_COINCIDENCIAS_POR_ITEM * itemsSolicitados.length`) rather than N independent per-item caps — the trade-off that keeps C6's "one round trip, no UNION" property; documented inline as a deliberate choice, not a silent gap (no spec.md scenario claims a strict per-item cap).
+
+**Files** (13 files, ~1,063 lines — over the original 420-520 estimate, mostly test code: the two `.spec.ts` files are 234 and 215 lines): `adapters/persistence/{kysely-catalog.repository.ts,kysely-catalog-query.adapter.ts}` + their specs, `adapters/persistence/kysely-catalog-product.repository.ts`, `ports-out/catalog-product-repository.port.ts`, `ports-in/buscar-productos.use-case.ts` + spec, `adapters/http/{catalogo.controller.ts,catalogo.mapper.ts,dto/catalog-product-response.dto.ts}`, `catalogo.module.ts` (now binds real providers for the first time), `test/catalogo-buscar-productos.e2e-spec.ts`.
+
+**Commit**: `feat(core-api): add catalogo read-side adapters, buscarProductos, and visibility filter` (orchestrator-committed after independent gate re-verification).
+
+---
+
+## What PR4a (next batch) Needs to Know
+
+(Superseded PR3b handoff notes below, kept for the entity/port background — PR3b itself is now done, see section above.)
+
+- **Start here**: `## Phase 4a: Unit writes — use cases + repository save()` in `tasks.md` (tasks 4a.1–4a.8). Depends on PR3a's entity and PR3b's repository (both done).
 - **The entity is functional, not class-based**: `crear(input: CrearProviderCatalogItemInput): ProviderCatalogItem`, `actualizarPrecio(item, precioBase, precioMaximo): ProviderCatalogItem`, `aplicarPorcentaje(item, porcentaje): ProviderCatalogItem` — all pure, all return NEW objects, none mutate their input. Import from `domains/catalogo/domain/provider-catalog-item.entity.ts`.
-- **`crear()` does NOT validate nombre/categoria non-empty, finite prices, or stock >= 0 integer** — see "Deviations from Design" above. If PR3b's `KyselyCatalogRepository`/`KyselyCatalogQueryAdapter` work exposes a need for this (it shouldn't — 3b is read-only adapters + `buscarProductos`, no `crear()` call sites), it is NOT this PR3a's gap to backfill; it's PR4a/4b/5b's, whichever first calls `crear()` from a use case.
-- **`PrecioInvalidoError` lives in `domain/catalogo.errors.ts`** — append to this file, do not create a second errors file. Next classes expected here per design.md's error table: `CatalogItemNotFoundError`, `EmpresaNoActivaError` (PR4a), `ArchivoCargaInvalidoError` (PR5a), `PorcentajeInvalidoError` (PR6).
-- **`domain/` folder now has 3 files**: `catalogo.errors.ts`, `provider-catalog-item.entity.ts`, `provider-catalog-item.entity.spec.ts`. PR3b's `adapters/persistence/kysely-catalog.repository.ts` will need to map `ProviderCatalogTable` rows (`precio_base`/`precio_maximo: string`, from PR1) to/from `ProviderCatalogItem` (`precioBase`/`precioMaximo: number`) — that string→number conversion is the mapper's job, not the entity's; the entity only ever sees/returns `number`.
-- **`contracts/catalog-query.port.ts` is done and verified (from PR2)** — `CatalogQueryPort`, `CATALOG_QUERY_PORT`, `CatalogQueryUnavailableError`, `MAX_COINCIDENCIAS_POR_ITEM` all live in `domains/catalogo/contracts/`. PR3b is where `KyselyCatalogQueryAdapter implements CatalogQueryPort` gets written, in `adapters/persistence/`.
-- **`CatalogRepository` has 6 methods** (`save`, `saveMany`, `findById`, `findByCompany`, `findByCompanyAndCategoria`, `findMatching`) — all still just the interface, zero implementation. PR3b implements `findById`/`findByCompany`/`findByCompanyAndCategoria`/`findMatching`; PR4a implements `save`; PR6 implements `saveMany`.
+- **`crear()` does NOT validate nombre/categoria non-empty, finite prices, or stock >= 0 integer** — deferred to the DTO/type layer per `shared-types-package`'s own doc comment on `NuevoProductoProveedor` (PR2). This is PR4a/4b's use case + DTO validation to add, not the entity's.
+- **`PrecioInvalidoError` lives in `domain/catalogo.errors.ts`** — append to this file, do not create a second errors file. PR4a adds `CatalogItemNotFoundError`, `EmpresaNoActivaError` here.
+- **`CatalogRepository.save()` currently THROWS a named "not implemented, see PR4a" error** — task 4a.6/4a.7 (RED/GREEN on `save()`) replaces that throw with the real D-C upsert-bifurcation implementation (branch on `catalogProductId` presence, matching PR1's two partial unique indexes). `saveMany()` still throws until PR6 — do not implement it in PR4a.
+- **`mapProviderCatalogRow` is exported from `kysely-catalog.repository.ts`** — reuse it for `save()`'s reverse (entity→row) mapping if needed, or add a symmetric `toProviderCatalogRow` next to it; don't re-derive the column mapping from scratch.
+- **`contracts/catalog-query.port.ts` and `KyselyCatalogQueryAdapter` are done and verified (PR2/PR3b)** — not touched by PR4a.
+- **`CatalogProductRepository`/`KyselyCatalogProductRepository` are done and verified (PR3b, gap-fill not in original design.md)** — powers `buscarProductos` only; irrelevant to PR4a's mutating use cases.
 - **`CatalogVisibilityProjection` port exists but has zero implementation and zero consumers until PR8a.**
-- **`catalogo.module.ts` is UNCHANGED, still `@Module({})`** — PR3a did not touch it (pure domain, no wiring). Binding real providers starts in PR3b (`CATALOG_REPOSITORY`, `CATALOG_QUERY_PORT`).
+- **`catalogo.module.ts` now binds real providers** (`CATALOG_REPOSITORY`→`KyselyCatalogRepository`, `CATALOG_QUERY_PORT`→`KyselyCatalogQueryAdapter`, plus `BuscarProductosUseCase` + controller, `exports: [CATALOG_QUERY_PORT]`) — PR4a appends `CargarProductoCatalogoUseCase`/`ActualizarPrecioUseCase` registrations in its own task 4b (module wiring is actually task 4b.7 per `tasks.md`, not 4a — the use cases are registered together with their controller routes).
 - **ESLint zone verification method for future contracts/-adjacent work**: if a later PR needs to re-verify the boundary rule, the fastest check is a small Node script that imports `eslint.config.js` directly and inspects `buildCrossDomainZones()`'s output (used for task 2.7) — faster than writing a throwaway cross-domain import just to watch ESLint reject it, though that manual-violation approach also works and is more "black box."

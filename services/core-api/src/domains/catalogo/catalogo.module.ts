@@ -1,17 +1,32 @@
 import { Module } from '@nestjs/common';
+import { DatabaseModule } from '../../shared/database/database.module';
+import { KyselyCatalogProductRepository } from './adapters/persistence/kysely-catalog-product.repository';
+import { KyselyCatalogQueryAdapter } from './adapters/persistence/kysely-catalog-query.adapter';
+import { KyselyCatalogRepository } from './adapters/persistence/kysely-catalog.repository';
+import { CatalogoController } from './adapters/http/catalogo.controller';
+import { CATALOG_QUERY_PORT } from './contracts/catalog-query.port';
+import { BuscarProductosUseCase } from './ports-in/buscar-productos.use-case';
+import { CATALOG_PRODUCT_REPOSITORY } from './ports-out/catalog-product-repository.port';
+import { CATALOG_REPOSITORY } from './ports-out/catalog-repository.port';
 
 /**
- * Thin placeholder module (exploration.md D2). `ports-out/` declares this
- * domain's tokens/interfaces (`CATALOG_REPOSITORY`, `CATALOG_QUERY_PORT`)
- * but this module binds NEITHER — design.md, "Los 5 módulos placeholder
- * declaran tokens e interfaces pero NO los bindean. Nada los inyecta
- * todavía, así que un token sin proveedor es correcto. Prohibido
- * `useValue: {}`: un stub que no-opea en silencio es peor que un proveedor
- * faltante, que falla ruidosamente al boot." An empty `@Module({})` is the
- * literal expression of that rule — zero fake providers, nothing to throw
- * at DI-resolution time, and `AppModule` can import it today so a future
- * `catalogo` SDD change only has to add providers here, never touch
- * `app.module.ts` again.
+ * design.md "Wiring de módulos y tokens" (Phase 3b slice): binds the
+ * read-side providers only. `KyselyCatalogRepository.save`/`saveMany`
+ * still throw ("not yet available") until PR 4a/6 — correct today because
+ * nothing in this module's provider graph calls them yet.
+ * `exports: [CATALOG_QUERY_PORT]` — the ONLY artifact this domain exposes
+ * across its boundary (core-api-hexagonal-layout: "Only contracts/ is
+ * importable across a domain boundary").
  */
-@Module({})
+@Module({
+  imports: [DatabaseModule],
+  controllers: [CatalogoController],
+  providers: [
+    { provide: CATALOG_REPOSITORY, useClass: KyselyCatalogRepository },
+    { provide: CATALOG_QUERY_PORT, useClass: KyselyCatalogQueryAdapter },
+    { provide: CATALOG_PRODUCT_REPOSITORY, useClass: KyselyCatalogProductRepository },
+    BuscarProductosUseCase,
+  ],
+  exports: [CATALOG_QUERY_PORT],
+})
 export class CatalogoModule {}
