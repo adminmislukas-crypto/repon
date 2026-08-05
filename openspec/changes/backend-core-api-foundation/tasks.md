@@ -92,13 +92,13 @@ Chain strategy: stacked-to-main
 
 ## Phase 4a: Identidad — domain, persistence, actor, guard activation — Spec: `core-api-identidad`, `core-api-auth-guard`, `core-api-hexagonal-layout`
 
-- [ ] 4a.1 `domains/identidad/domain/`: `Profile`/`Company`/`AdminRoleAssignment` entities/factories; invariant `role==='provider' ⇒ companyId != null`.
-- [ ] 4a.2 `domains/identidad/ports-out/*.port.ts`: `ProfileRepository` (`insertIfAbsent`+`update` split, corrected per spec), `CompanyRepository` (`save`), `AdminRoleRepository` (`upsert`+`findByProfileId`), `AuthProviderPort` (+`AuthProviderDeterministicError`/`AuthProviderAmbiguousError`) — every method carries trailing `tx?: TransactionContext` except `AuthProvider`/`EventPublisher`.
-- [ ] 4a.3 `adapters/persistence/kysely-*.repository.ts` for the 3 Kysely-backed ports.
-- [ ] 4a.4 `domains/identidad/contracts/identidad-actor.adapter.ts`: `IdentidadActorAdapter implements ActorPort`, single JOIN `profiles⋈admin_roles⋈companies`.
-- [ ] 4a.5 `identidad.module.ts`: bind the 3 repos + `{provide: ACTOR_PORT, useClass: IdentidadActorAdapter}`, `exports: [ACTOR_PORT]`.
-- [ ] 4a.6 `app.module.ts`: import `IdentidadModule`, register `AuthGuard`+`RolesGuard` as `APP_GUARD` — the ordering constraint design.md §7 fixes (only safe once `ACTOR_PORT` has a provider).
-- [ ] 4a.7 Unit tests: domain invariant rejection; `IdentidadActorAdapter` resolves with one query. E2e: protected route → 401 no token; `/health` still 200 (regression check from 2.6).
+- [x] 4a.1 `domains/identidad/domain/`: `Profile`/`Company`/`AdminRoleAssignment` entities/factories; invariant `role==='provider' ⇒ companyId != null`. (`createProfile`/`createCompany` factories; `AdminRoleAssignment` is a plain interface with no invariant, per corrected spec's disambiguation from the `AdminRole` sub-role enum.)
+- [x] 4a.2 `domains/identidad/ports-out/*.port.ts`: `ProfileRepository` (`insertIfAbsent`+`update` split, corrected per spec), `CompanyRepository` (`save`), `AdminRoleRepository` (`upsert`+`findByProfileId`), `AuthProviderPort` (+`AuthProviderDeterministicError`/`AuthProviderAmbiguousError`) — every method carries trailing `tx?: TransactionContext` except `AuthProvider`/`EventPublisher`. (`AuthProviderPort` interface declared, deliberately unbound — no provider until Phase 4b's `SupabaseAuthProvider`.)
+- [x] 4a.3 `adapters/persistence/kysely-*.repository.ts` for the 3 Kysely-backed ports. (`KyselyProfileRepository`/`KyselyCompanyRepository`/`KyselyAdminRoleRepository`, each with a `private executor(tx?)` helper selecting the shared `db` vs. the caller's unwrapped `tx`.)
+- [x] 4a.4 `domains/identidad/contracts/identidad-actor.adapter.ts`: `IdentidadActorAdapter implements ActorPort`, single JOIN `profiles⋈admin_roles⋈companies`.
+- [x] 4a.5 `identidad.module.ts`: bind the 3 repos + `{provide: ACTOR_PORT, useClass: IdentidadActorAdapter}`, `exports: [ACTOR_PORT]`.
+- [x] 4a.6 `app.module.ts`: import `IdentidadModule`, register `AuthGuard`+`RolesGuard` as `APP_GUARD` — the ordering constraint design.md §7 fixes (only safe once `ACTOR_PORT` has a provider). (Verified live: real app boots with `IdentidadModule` resolved, `GET /health` → 200, unmapped routes → 404 pre-guard as expected.)
+- [x] 4a.7 Unit tests: domain invariant rejection (`profile.entity.spec.ts`); `IdentidadActorAdapter` resolves with one query (`identidad-actor.adapter.spec.ts`, mocked Kysely chain). E2e: protected route → 401 `MISSING_BEARER_TOKEN` no token (`auth-guard-activation.e2e-spec.ts`, via a testing-module-only `ProbeController` — Phase 4c ships the first real protected route); `/health` still 200 (regression check from 2.6). Also added (beyond this task's literal scope, opt-in, excluded from CI): `test/identidad-actor.integration-spec.ts` — `IdentidadActorAdapter` resolves the real seeded `super_admin` row against local Supabase, proving the JOIN's actual SQL against `service_role`'s grants, not just a mocked chain.
 
 ## Phase 4b: Identidad — use cases + tests — Spec: `core-api-identidad`, `auth-provisioning`
 

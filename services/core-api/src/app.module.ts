@@ -1,18 +1,20 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
 import { validateEnv } from './config/env.schema';
+import { IdentidadModule } from './domains/identidad/identidad.module';
 import { HealthController } from './health/health.controller';
+import { AuthGuard } from './shared/auth/guards/auth.guard';
+import { RolesGuard } from './shared/auth/guards/roles.guard';
 import { SharedKernelModule } from './shared/shared-kernel.module';
 
 // core-api-bootstrap spec, "Module composition wires the shared kernel and
-// all 6 domains": this PR (tasks.md task 3.10) collapses the 4 direct
-// module imports PR 4 left here into the single `SharedKernelModule`
-// wrapper, now that `shared/auth` (3.6-3.9) exists for it to aggregate too.
-// `AuthGuard`/`RolesGuard` are exported by `SharedKernelModule` but NOT yet
-// registered as `APP_GUARD` here — `ACTOR_PORT` has no provider until
-// `IdentidadModule` (Phase 4a / PR 6), so the app can't boot with a global
-// guard mounted yet (design.md, "El registro APP_GUARD NO va en el slice
-// 3"). The 5 placeholder domain modules (Phase 5) aren't wired yet.
+// all 6 domains": as of this PR (tasks.md 4a.6 / design.md §7), imports
+// `IdentidadModule` and registers `AuthGuard`+`RolesGuard` as `APP_GUARD`
+// here — only safe now that `IdentidadModule` gives `ACTOR_PORT` a real
+// provider. Registering it inside `AuthModule` instead would make
+// `AuthModule` <-> `IdentidadModule` circular. `AuthGuard` runs first,
+// `RolesGuard` second (Nest applies multiple `APP_GUARD`s in order).
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -24,7 +26,12 @@ import { SharedKernelModule } from './shared/shared-kernel.module';
       validate: validateEnv,
     }),
     SharedKernelModule,
+    IdentidadModule,
   ],
   controllers: [HealthController],
+  providers: [
+    { provide: APP_GUARD, useClass: AuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
+  ],
 })
 export class AppModule {}
