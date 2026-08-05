@@ -2,11 +2,11 @@
 
 **Artifact store**: hybrid (this file + Engram `sdd/backend-core-api-catalogo/apply-progress`)
 **Strict TDD Mode**: active (`test_command: pnpm test`)
-**Last updated**: 2026-08-05T16:20:00Z — PR2 batch (merged with PR1; PR1 unchanged below)
+**Last updated**: 2026-08-05T18:10:00Z — PR3a batch (merged with PR1+PR2; both unchanged below)
 
-## Status: 7/7 tasks complete for PR1 (Phase 1: DB foundation). 7/7 tasks complete for PR2 (Phase 2: Seams). 14/~90 tasks complete overall across all 13 planned PRs.
+## Status: 7/7 tasks complete for PR1 (Phase 1: DB foundation). 7/7 tasks complete for PR2 (Phase 2: Seams). 3/3 tasks complete for PR3a (Phase 3a: Read side — domain entity + invariant). 17/~90 tasks complete overall across all 13 planned PRs.
 
-**Engram note**: no `mem_*` tools were exposed in this batch's tool set either (same as PR1) — this file remains the authoritative record. If Engram becomes available in a later batch, the topic key to upsert is `sdd/backend-core-api-catalogo/apply-progress`, content = this full file merged.
+**Engram note**: no `mem_*` tools were exposed in this batch's tool set either (same as PR1/PR2) — this file remains the authoritative record. If Engram becomes available in a later batch, the topic key to upsert is `sdd/backend-core-api-catalogo/apply-progress`, content = this full file merged.
 
 ---
 
@@ -162,13 +162,76 @@ feat(core-api): move CatalogQueryPort to contracts/, extend catalogo ports-out
 
 ---
 
-## What PR3a (next batch) Needs to Know
+## PR3a · Phase 3a: Read side — domain entity + invariant — Spec: `core-api-catalogo`
 
-- **Start here**: `## Phase 3a: Read side — domain entity + invariant` in `tasks.md` (tasks 3a.1–3a.3) — pure domain, no adapters, no DB. Depends only on PR2's `@repon/types` (`ProviderCatalogItem` already existed; PR3a's entity wraps it).
-- **`contracts/catalog-query.port.ts` is done and verified** — `CatalogQueryPort`, `CATALOG_QUERY_PORT`, `CatalogQueryUnavailableError`, `MAX_COINCIDENCIAS_POR_ITEM` all live in `domains/catalogo/contracts/`. PR3a does not touch this file. PR3b (not PR3a) is where `KyselyCatalogQueryAdapter implements CatalogQueryPort` gets written, in `adapters/persistence/`.
-- **`CatalogRepository` now has 6 methods** (`save`, `saveMany`, `findById`, `findByCompany`, `findByCompanyAndCategoria`, `findMatching`) — all still just the interface, zero implementation. PR3b implements `findById`/`findByCompany`/`findByCompanyAndCategoria`/`findMatching`; PR4a implements `save`; PR6 implements `saveMany`. PR3a itself needs none of this — the entity has zero repository dependency.
-- **`CatalogVisibilityProjection` port exists but has zero implementation and zero consumers until PR8a.** Don't be surprised it's unused after this batch — that's expected until the listener lands.
-- **`catalogo.module.ts` is UNCHANGED, still `@Module({})`** — PR2 did not touch it per the batch's explicit "what NOT to do." Binding real providers starts in PR3b (`CATALOG_REPOSITORY`, `CATALOG_QUERY_PORT`) and continues through PR4a/5b/6/8a.
-- **Row types from PR1 are ready for PR3a's mapper concerns in PR3b**, not PR3a itself: `precio_base`/`precio_maximo` are `string` at the DB row level (D-C numeric-as-string gotcha). PR3a's entity (`ProviderCatalogItem.crear()`/`actualizarPrecio()`/`aplicarPorcentaje()`) operates on `number` (the `@repon/types` shape) and must round to 2 decimals + validate `precioMaximo >= precioBase` **in the entity**, never relying on the DB `CHECK` as the validator (D5). The `string ⇄ number` conversion itself is PR3b's mapper concern, not PR3a's.
-- **`NuevoProductoProveedor`/`ArchivoCarga`/`FilaCarga`/`ResultadoCargaMasiva` are declared but have zero consumers yet** — PR3a doesn't need them (it's read-side entity work); they start getting consumed in PR4a (`cargarProductoCatalogo` takes `NuevoProductoProveedor`) and PR5a/5b (`ArchivoCarga`/`ResultadoCargaMasiva`).
+| # | Task | Status |
+|---|---|---|
+| 3a.1 | RED: `domain/provider-catalog-item.entity.spec.ts` — `crear()` rejects `precioMaximo < precioBase`; prices round to 2 decimals; `aplicarPorcentaje` scales both bounds by the same factor (D5); `porcentaje <= -100` rejected before any other computation | [x] Done |
+| 3a.2 | GREEN: `domain/provider-catalog-item.entity.ts` — `crear()`, `actualizarPrecio()`, `aplicarPorcentaje()`, invariant enforced in the entity (never the DB CHECK) | [x] Done |
+| 3a.3 | `domain/catalogo.errors.ts`: declare `PrecioInvalidoError` (used by the entity's invariant) | [x] Done |
+
+### TDD Cycle Evidence (PR3a)
+
+| Task | RED | GREEN | REFACTOR |
+|---|---|---|---|
+| 3a.1/3a.2/3a.3 | Wrote `provider-catalog-item.entity.spec.ts` (8 tests: `crear()` rejects `precioMaximo < precioBase`, rounds to 2 decimals, builds the full shape; `actualizarPrecio()` rejects an invalid new pair without mutating the original and rounds+validates a valid new pair; `aplicarPorcentaje()` scales both bounds proportionally per spec.md's exact "Both bounds scale proportionally" scenario (1000/1500 @10% → 1100/1650), rejects `porcentaje <= -100` and `< -100`, and preserves the invariant by construction for a positive porcentaje) against not-yet-existing `./catalogo.errors` and `./provider-catalog-item.entity` → ran `pnpm exec jest --testPathPatterns=provider-catalog-item` → **failed** (`Cannot find module './catalogo.errors'`, suite failed to run — confirms RED before any implementation existed) | Created `catalogo.errors.ts` (`PrecioInvalidoError`) and `provider-catalog-item.entity.ts` (`redondear` + `assertPrecioValido` private helpers, `crear`/`actualizarPrecio`/`aplicarPorcentaje` exported, all pure functions returning new objects — no entity classes, matching `identidad`'s `company.entity.ts`/`profile.entity.ts` plain-factory-function convention exactly, since this is the first entity in `catalogo`) → re-ran same command → **8/8 passed** | None needed — file split (errors vs entity) already matched the target shape from the first GREEN pass; no further restructuring required |
+
+### Commands Run (PR3a batch)
+
+| Command | Result |
+|---|---|
+| `pnpm exec jest --testPathPatterns=provider-catalog-item` (RED, before implementation) | Suite failed to run — `Cannot find module './catalogo.errors'` |
+| `pnpm exec jest --testPathPatterns=provider-catalog-item` (GREEN, after implementation) | 8/8 passed |
+| `pnpm lint` | Clean (only the pre-existing unrelated Node engine version WARN) |
+| `pnpm typecheck` | Clean — `packages/types` + `services/core-api` both `Done` |
+| `pnpm test` (root — unit + e2e) | `core-api`: 21 suites / **120** unit tests passed (was 112 before this batch — +8 is the new `provider-catalog-item.entity.spec.ts`), 3 suites / 17 e2e tests passed. Zero regressions |
+| `pnpm build` | Clean — `services/core-api` `tsc -p tsconfig.build.json` `Done` |
+| `pnpm format:check` | Failed once (`provider-catalog-item.entity.ts` not Prettier-formatted — a JSDoc-adjacent long line in `aplicarPorcentaje`) → ran `pnpm exec prettier --write` on that one file → re-ran `pnpm format:check` → clean |
+| Full re-run of `lint`/`typecheck`/`test`/`build` after the Prettier fix | All green again, same counts (120 unit + 17 e2e) |
+
+All 5 gate commands (`lint`, `typecheck`, `test`, `build`, `format:check`) are green as of the final run.
+
+### Deviations from Design (PR3a)
+
+**One deliberate scope narrowing, not a silent deviation**: design.md's Diagram 1 (step 2a) describes `crear()` as also validating "nombre/categoria no vacíos; precios finitos y >= 0; ... stock entero >= 0" for the bulk-load row-validation path. This batch's `crear()` implements ONLY the price invariant (`precioMaximo >= precioBase`) and rounding — the two invariants task 3a.3 scoped an error class for (`PrecioInvalidoError`) and the only ones D14's own "Estrategia de testing" table lists as entity-level unit tests ("Entidad: invariante precioMaximo >= precioBase, redondeo a 2 decimales, porcentaje <= -100 rechazado, escalado proporcional de D5" — nombre/categoria/stock are not in that list). Reason: no test or error class for those broader checks was in this batch's assigned scope (tasks 3a.1–3a.3), and adding unrequested validation without a driving RED test would violate strict TDD. **Flagged for whichever PR actually exercises row-level validation** (PR4b's `cargarProductoCatalogo` DTO for the single-item path, and/or PR5b's `cargarCatalogoMasivo` for the per-row bulk path, per spec.md's "Partial failure is reported per row" scenario, e.g. "negative price") — that PR must either extend `crear()` with these checks (new RED tests + likely a reused or new error class) or implement them at the DTO/use-case layer. Not resolved here; explicitly not silently dropped.
+
+Everything else matches design.md verbatim: `redondear` is `Math.round(x * 100) / 100` exactly as D-C specifies; rounding happens before invariant validation in all three functions; `aplicarPorcentaje`'s `porcentaje <= -100` guard runs before any scaling/rounding, exactly as the spec.md scenario requires (and the "0 >= 0 would trivially pass" reasoning documented in the code comment is why the guard can't be replaced by the invariant check alone).
+
+### Issues Found (PR3a)
+
+None blocking. Implementation style choice made explicit for the record: `identidad`'s two existing domain entities (`company.entity.ts`, `profile.entity.ts`) are plain interfaces + standalone factory functions — no classes, no methods on the data shape itself. `provider-catalog-item.entity.ts` follows the exact same convention (`crear`/`actualizarPrecio`/`aplicarPorcentaje` are module-level functions returning new `ProviderCatalogItem` objects, never mutating their input) even though design.md's prose/diagrams write call sites as `item.actualizarPrecio(...)` / `ProviderCatalogItem.crear(...)` (dot-notation, reads like instance/static methods). Treated that as design.md's narrative shorthand, not a literal class-based API mandate — `crear(input)` and `actualizarPrecio(item, precioBase, precioMaximo)` are the free-function equivalents, and matching the established repo convention (per this batch's explicit instruction to look at `identidad/domain/` as "the reference pattern... since this is the first entity in catalogo") took priority over diagram notation literalism.
+
+### Files Changed (PR3a)
+
+| File | Action | What Was Done |
+|---|---|---|
+| `services/core-api/src/domains/catalogo/domain/catalogo.errors.ts` | Created | `PrecioInvalidoError` — zero framework imports, matches `identidad.errors.ts`'s doc-comment-per-class convention |
+| `services/core-api/src/domains/catalogo/domain/provider-catalog-item.entity.ts` | Created | `crear()`, `actualizarPrecio()`, `aplicarPorcentaje()` — pure functions, price invariant enforced in the entity, rounding before validation (D-C) |
+| `services/core-api/src/domains/catalogo/domain/provider-catalog-item.entity.spec.ts` | Created | RED→GREEN, 8 tests covering the invariant, rounding, proportional scaling (exact spec.md numbers), and the `porcentaje <= -100` guard-ordering scenario |
+| `openspec/changes/backend-core-api-catalogo/tasks.md` | Modified | Marked tasks 3a.1–3a.3 `[x]` |
+| `openspec/changes/backend-core-api-catalogo/apply-progress.md` | Modified | Merged PR3a section into PR1+PR2's file (this file) |
+
+### Commit (PR3a)
+
+One commit created for this PR3a batch:
+
+```
+feat(core-api): add ProviderCatalogItem entity with price invariant
+```
+
+(Working tree was clean before this batch except the same pre-existing untracked `openspec/changes/backend-core-api-catalogo/{design.md,exploration.md,proposal.md,specs/}` noted in PR2 — left untouched/untracked, out of this batch's scope; commit hash recorded in the return envelope to the orchestrator.)
+
+---
+
+## What PR3b (next batch) Needs to Know
+
+- **Start here**: `## Phase 3b: Read side — persistence adapters + buscarProductos + controller` in `tasks.md` (tasks 3b.1–3b.9). Depends on PR3a's entity (done).
+- **The entity is functional, not class-based**: `crear(input: CrearProviderCatalogItemInput): ProviderCatalogItem`, `actualizarPrecio(item, precioBase, precioMaximo): ProviderCatalogItem`, `aplicarPorcentaje(item, porcentaje): ProviderCatalogItem` — all pure, all return NEW objects, none mutate their input. Import from `domains/catalogo/domain/provider-catalog-item.entity.ts`.
+- **`crear()` does NOT validate nombre/categoria non-empty, finite prices, or stock >= 0 integer** — see "Deviations from Design" above. If PR3b's `KyselyCatalogRepository`/`KyselyCatalogQueryAdapter` work exposes a need for this (it shouldn't — 3b is read-only adapters + `buscarProductos`, no `crear()` call sites), it is NOT this PR3a's gap to backfill; it's PR4a/4b/5b's, whichever first calls `crear()` from a use case.
+- **`PrecioInvalidoError` lives in `domain/catalogo.errors.ts`** — append to this file, do not create a second errors file. Next classes expected here per design.md's error table: `CatalogItemNotFoundError`, `EmpresaNoActivaError` (PR4a), `ArchivoCargaInvalidoError` (PR5a), `PorcentajeInvalidoError` (PR6).
+- **`domain/` folder now has 3 files**: `catalogo.errors.ts`, `provider-catalog-item.entity.ts`, `provider-catalog-item.entity.spec.ts`. PR3b's `adapters/persistence/kysely-catalog.repository.ts` will need to map `ProviderCatalogTable` rows (`precio_base`/`precio_maximo: string`, from PR1) to/from `ProviderCatalogItem` (`precioBase`/`precioMaximo: number`) — that string→number conversion is the mapper's job, not the entity's; the entity only ever sees/returns `number`.
+- **`contracts/catalog-query.port.ts` is done and verified (from PR2)** — `CatalogQueryPort`, `CATALOG_QUERY_PORT`, `CatalogQueryUnavailableError`, `MAX_COINCIDENCIAS_POR_ITEM` all live in `domains/catalogo/contracts/`. PR3b is where `KyselyCatalogQueryAdapter implements CatalogQueryPort` gets written, in `adapters/persistence/`.
+- **`CatalogRepository` has 6 methods** (`save`, `saveMany`, `findById`, `findByCompany`, `findByCompanyAndCategoria`, `findMatching`) — all still just the interface, zero implementation. PR3b implements `findById`/`findByCompany`/`findByCompanyAndCategoria`/`findMatching`; PR4a implements `save`; PR6 implements `saveMany`.
+- **`CatalogVisibilityProjection` port exists but has zero implementation and zero consumers until PR8a.**
+- **`catalogo.module.ts` is UNCHANGED, still `@Module({})`** — PR3a did not touch it (pure domain, no wiring). Binding real providers starts in PR3b (`CATALOG_REPOSITORY`, `CATALOG_QUERY_PORT`).
 - **ESLint zone verification method for future contracts/-adjacent work**: if a later PR needs to re-verify the boundary rule, the fastest check is a small Node script that imports `eslint.config.js` directly and inspects `buildCrossDomainZones()`'s output (used for task 2.7) — faster than writing a throwaway cross-domain import just to watch ESLint reject it, though that manual-violation approach also works and is more "black box."

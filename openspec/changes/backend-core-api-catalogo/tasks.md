@@ -81,9 +81,9 @@ Chain strategy: stacked-to-main, 13 PRs
 
 ## Phase 3a: Read side — domain entity + invariant — Spec: `core-api-catalogo`
 
-- [ ] 3a.1 RED: `domain/provider-catalog-item.entity.spec.ts` — `crear()` rejects `precioMaximo < precioBase`; prices round to 2 decimals; `aplicarPorcentaje` scales both bounds by the same factor (D5).
-- [ ] 3a.2 GREEN: `domain/provider-catalog-item.entity.ts` — `crear()`, `actualizarPrecio()`, `aplicarPorcentaje()`, invariant enforced in the entity (never the DB CHECK).
-- [ ] 3a.3 `domain/catalogo.errors.ts`: declare `PrecioInvalidoError` (used by the entity's invariant).
+- [x] 3a.1 RED: `domain/provider-catalog-item.entity.spec.ts` — `crear()` rejects `precioMaximo < precioBase`; prices round to 2 decimals; `aplicarPorcentaje` scales both bounds by the same factor (D5).
+- [x] 3a.2 GREEN: `domain/provider-catalog-item.entity.ts` — `crear()`, `actualizarPrecio()`, `aplicarPorcentaje()`, invariant enforced in the entity (never the DB CHECK).
+- [x] 3a.3 `domain/catalogo.errors.ts`: declare `PrecioInvalidoError` (used by the entity's invariant).
 
 ## Phase 3b: Read side — persistence adapters + `buscarProductos` + controller — Spec: `core-api-catalogo`, `core-api-hexagonal-layout`
 
