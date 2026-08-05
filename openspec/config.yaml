@@ -7,27 +7,36 @@ context: |
   Architecture: hexagonal per domain (identidad, catalogo, consumo, refill-matching,
   ofertas, pedidos-pagos), event-driven via EventEmitter2 today, extractable to
   microservices per-domain later without touching business rules.
-  Testing: NOT YET CONFIGURED — no package.json/test runner/CI anywhere in the repo.
-  Project is in spec + HTML-mockup phase, pre-implementation.
+  Testing: CONFIGURED (`backend-core-api-foundation`, PRs 1-9) — pnpm workspaces +
+  TypeScript strict + ESLint (incl. a cross-domain import boundary rule) + Jest
+  (unit/e2e/opt-in-integration) + GitHub Actions CI, exercised across 9 PRs;
+  `services/core-api` is the only workspace project with real runtime code so far
+  (`identidad` fully implemented, 5 domains as thin placeholder modules per D2).
+  `apps/*` are still HTML mockups, pre-implementation — this testing setup does not
+  yet cover them.
   Style: every app/domain/package already has a product-level SPEC.md (pre-existing
   convention, NOT SDD-generated); docs/ARCHITECTURE.md + docs/DATA_MODEL.md at root are
   the canonical references and MUST be read before touching data model or service
   boundaries.
 
-strict_tdd: false
+strict_tdd: true
 
 testing:
-  status: not_configured
+  status: configured
   reason: >-
-    No package.json, test runner, linter, type checker, formatter, or CI config
-    detected anywhere in the repo (root, apps/*, services/*, packages/*). Confirmed via
-    direct file inspection, not inferred. Project is pre-implementation: only SPEC.md
-    files, docs/, and one HTML mockup per app exist so far.
-  test_command: ""
-  build_command: ""
-  lint_command: ""
-  typecheck_command: ""
-  format_command: ""
+    `backend-core-api-foundation` (D7, tasks.md 5.6) stood up a real toolchain and
+    verified it green locally across 9 PRs: pnpm workspace root scripts fan out to
+    every package via `pnpm -r --if-present`, `services/core-api` runs Jest (111 unit +
+    17 e2e tests, PR 9 snapshot) via `ts-jest`, and `.github/workflows/ci.yml` gates
+    install -> lint -> typecheck -> test -> build on every step passing (PR 1). Coverage
+    reporting exists (`collectCoverageFrom`) but no threshold is enforced yet — left at
+    0 deliberately, not silently omitted; raising it is a future call, not implied by
+    "testing is configured".
+  test_command: "pnpm test"
+  build_command: "pnpm build"
+  lint_command: "pnpm lint"
+  typecheck_command: "pnpm typecheck"
+  format_command: "pnpm format:check"
   coverage_threshold: 0
 
 rules:
@@ -47,15 +56,15 @@ rules:
   tasks:
     - Group by phase, use hierarchical numbering
     - Keep tasks completable in one session
-    - Because no test runner exists yet, the FIRST tasks that introduce real code for a sub-project MUST include scaffolding an appropriate test runner (Jest/Vitest for NestJS or Next.js, Jest + RNTL for the Expo apps) before or alongside the feature code
+    - `services/core-api` has a real test runner now (Jest, `backend-core-api-foundation`); for every OTHER sub-project still without one (`apps/*`, `packages/ui`), the FIRST tasks that introduce real code MUST include scaffolding an appropriate test runner (Jest/Vitest for Next.js, Jest + RNTL for the Expo apps) before or alongside the feature code
   apply:
     - Follow existing SPEC.md naming and domain language (Spanish entity/event names, e.g. RefillRequest, OfertaAceptada)
     - Never implement a physical DELETE on usuarios/empresas/productos — use the `status` field (soft delete) per docs/ARCHITECTURE.md "Principio de dar de baja"
-    tdd: false
-    test_command: ""
+    tdd: true
+    test_command: "pnpm test"
   verify:
-    test_command: ""
-    build_command: ""
+    test_command: "pnpm test"
+    build_command: "pnpm build"
     coverage_threshold: 0
   archive:
     - Warn before merging destructive deltas
