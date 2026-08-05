@@ -51,6 +51,11 @@ async function bootstrap(): Promise<void> {
           'Repón — backend de dominio (monolito modular, arquitectura hexagonal por dominio)',
         )
         .setVersion('0.0.0')
+        // Enables Swagger UI's "Authorize" (bearer token) button for routes
+        // marked `@ApiBearerAuth()` (PR 8, `IdentidadController` — the first
+        // controller with non-@Public() routes). Documentation-only: does
+        // not affect `AuthGuard`'s own verification.
+        .addBearerAuth()
         .build(),
     );
     SwaggerModule.setup('api/docs', app, document);
