@@ -24,7 +24,10 @@ export class EmailYaRegistradoError extends Error {
 
 /** Maps to 502 in `adapters/http/` — `AuthProviderDeterministicError` with any reason other than `email_taken`. */
 export class AuthProviderError extends Error {
-  constructor(message = 'El proveedor de autenticación rechazó la operación.', options?: ErrorOptions) {
+  constructor(
+    message = 'El proveedor de autenticación rechazó la operación.',
+    options?: ErrorOptions,
+  ) {
     super(message, options);
     this.name = 'AuthProviderError';
   }

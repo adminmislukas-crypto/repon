@@ -1,4 +1,10 @@
-import { Inject, Injectable, Optional, type CanActivate, type ExecutionContext } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Optional,
+  type CanActivate,
+  type ExecutionContext,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { AuthenticatedRequest } from '../authenticated-request';
 import { AuthError } from '../auth.errors';
@@ -90,7 +96,11 @@ export class AuthGuard implements CanActivate {
 
     if (actor === null) {
       // A valid token with no known identity is not a permissions failure.
-      throw new AuthError(401, 'PROFILE_NOT_PROVISIONED', 'No profile is provisioned for this subject');
+      throw new AuthError(
+        401,
+        'PROFILE_NOT_PROVISIONED',
+        'No profile is provisioned for this subject',
+      );
     }
 
     if (actor.status === 'suspendido') {

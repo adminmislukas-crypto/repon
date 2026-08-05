@@ -13,12 +13,21 @@ function buildDeps() {
     save: jest.fn().mockResolvedValue(undefined),
     findById: jest.fn(),
   };
-  const auditLogPort: jest.Mocked<AuditLogPort> = { record: jest.fn().mockResolvedValue(undefined) };
-  const eventPublisher: jest.Mocked<EventPublisher> = { publish: jest.fn().mockResolvedValue(undefined) };
+  const auditLogPort: jest.Mocked<AuditLogPort> = {
+    record: jest.fn().mockResolvedValue(undefined),
+  };
+  const eventPublisher: jest.Mocked<EventPublisher> = {
+    publish: jest.fn().mockResolvedValue(undefined),
+  };
   const transactionManager: jest.Mocked<TransactionManager> = {
     runInTransaction: jest.fn().mockImplementation((work) => work(fakeTx)),
   };
-  const useCase = new SuspenderEmpresaUseCase(companyRepository, auditLogPort, eventPublisher, transactionManager);
+  const useCase = new SuspenderEmpresaUseCase(
+    companyRepository,
+    auditLogPort,
+    eventPublisher,
+    transactionManager,
+  );
   return { companyRepository, auditLogPort, eventPublisher, transactionManager, useCase };
 }
 
@@ -37,7 +46,10 @@ describe('SuspenderEmpresaUseCase', () => {
 
     await useCase.execute('company-2', 'admin-1', 'Reporte de fraude');
 
-    expect(companyRepository.save).toHaveBeenCalledWith({ ...activeCompany, status: 'suspendido' }, fakeTx);
+    expect(companyRepository.save).toHaveBeenCalledWith(
+      { ...activeCompany, status: 'suspendido' },
+      fakeTx,
+    );
     expect(auditLogPort.record).toHaveBeenCalledWith(
       {
         actorProfileId: 'admin-1',
@@ -50,7 +62,11 @@ describe('SuspenderEmpresaUseCase', () => {
       fakeTx,
     );
     expect(eventPublisher.publish).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'empresa.suspendida', companyId: 'company-2', motivo: 'Reporte de fraude' }),
+      expect.objectContaining({
+        type: 'empresa.suspendida',
+        companyId: 'company-2',
+        motivo: 'Reporte de fraude',
+      }),
     );
   });
 
@@ -58,7 +74,9 @@ describe('SuspenderEmpresaUseCase', () => {
     const { companyRepository, auditLogPort, eventPublisher, useCase } = buildDeps();
     companyRepository.findById.mockResolvedValue(null);
 
-    await expect(useCase.execute('missing', 'admin-1', 'motivo')).rejects.toThrow(CompanyNotFoundError);
+    await expect(useCase.execute('missing', 'admin-1', 'motivo')).rejects.toThrow(
+      CompanyNotFoundError,
+    );
 
     expect(companyRepository.save).not.toHaveBeenCalled();
     expect(auditLogPort.record).not.toHaveBeenCalled();
@@ -70,7 +88,9 @@ describe('SuspenderEmpresaUseCase', () => {
     companyRepository.findById.mockResolvedValue(activeCompany);
     companyRepository.save.mockRejectedValue(new Error('UPDATE companies failed'));
 
-    await expect(useCase.execute('company-2', 'admin-1', 'motivo')).rejects.toThrow('UPDATE companies failed');
+    await expect(useCase.execute('company-2', 'admin-1', 'motivo')).rejects.toThrow(
+      'UPDATE companies failed',
+    );
 
     expect(auditLogPort.record).not.toHaveBeenCalled();
     expect(eventPublisher.publish).not.toHaveBeenCalled();

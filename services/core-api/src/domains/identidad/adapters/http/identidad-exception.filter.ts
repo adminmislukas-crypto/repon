@@ -1,4 +1,10 @@
-import { Catch, HttpStatus, Logger, type ArgumentsHost, type ExceptionFilter } from '@nestjs/common';
+import {
+  Catch,
+  HttpStatus,
+  Logger,
+  type ArgumentsHost,
+  type ExceptionFilter,
+} from '@nestjs/common';
 import {
   AuthProviderError,
   CompanyNotFoundError,
@@ -61,7 +67,9 @@ export class IdentidadExceptionFilter implements ExceptionFilter {
     const response = host.switchToHttp().getResponse<ResponseLike>();
     // Defensive fallback only — every class named in @Catch() above has a
     // map entry; this can't actually miss in practice.
-    const { statusCode, code } = ERROR_STATUS_MAP.get(exception.constructor as ErrorConstructor) ?? {
+    const { statusCode, code } = ERROR_STATUS_MAP.get(
+      exception.constructor as ErrorConstructor,
+    ) ?? {
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
       code: 'INTERNAL_SERVER_ERROR',
     };

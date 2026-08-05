@@ -11,7 +11,9 @@ function buildDeps() {
     upsert: jest.fn().mockResolvedValue(undefined),
     findByProfileId: jest.fn(),
   };
-  const auditLogPort: jest.Mocked<AuditLogPort> = { record: jest.fn().mockResolvedValue(undefined) };
+  const auditLogPort: jest.Mocked<AuditLogPort> = {
+    record: jest.fn().mockResolvedValue(undefined),
+  };
   const transactionManager: jest.Mocked<TransactionManager> = {
     runInTransaction: jest.fn().mockImplementation((work) => work(fakeTx)),
   };

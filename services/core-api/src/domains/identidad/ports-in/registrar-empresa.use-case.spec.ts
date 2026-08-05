@@ -1,6 +1,9 @@
 import type { CompanyRepository } from '../ports-out/company-repository.port';
 import type { EventPublisher } from '../../../shared/event-bus/event-publisher.port';
-import { RegistrarEmpresaUseCase, type RegistrarEmpresaCommand } from './registrar-empresa.use-case';
+import {
+  RegistrarEmpresaUseCase,
+  type RegistrarEmpresaCommand,
+} from './registrar-empresa.use-case';
 
 const command: RegistrarEmpresaCommand = {
   razonSocial: 'Proveedora SPA',

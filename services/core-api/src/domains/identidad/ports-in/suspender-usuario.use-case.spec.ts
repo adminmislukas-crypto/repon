@@ -14,12 +14,21 @@ function buildDeps() {
     update: jest.fn().mockResolvedValue(undefined),
     findById: jest.fn(),
   };
-  const auditLogPort: jest.Mocked<AuditLogPort> = { record: jest.fn().mockResolvedValue(undefined) };
-  const eventPublisher: jest.Mocked<EventPublisher> = { publish: jest.fn().mockResolvedValue(undefined) };
+  const auditLogPort: jest.Mocked<AuditLogPort> = {
+    record: jest.fn().mockResolvedValue(undefined),
+  };
+  const eventPublisher: jest.Mocked<EventPublisher> = {
+    publish: jest.fn().mockResolvedValue(undefined),
+  };
   const transactionManager: jest.Mocked<TransactionManager> = {
     runInTransaction: jest.fn().mockImplementation((work) => work(fakeTx)),
   };
-  const useCase = new SuspenderUsuarioUseCase(profileRepository, auditLogPort, eventPublisher, transactionManager);
+  const useCase = new SuspenderUsuarioUseCase(
+    profileRepository,
+    auditLogPort,
+    eventPublisher,
+    transactionManager,
+  );
   return { profileRepository, auditLogPort, eventPublisher, transactionManager, useCase };
 }
 
@@ -38,7 +47,10 @@ describe('SuspenderUsuarioUseCase', () => {
 
     await useCase.execute('profile-1', 'admin-1', 'Fraude reportado');
 
-    expect(profileRepository.update).toHaveBeenCalledWith({ ...activeProfile, status: 'suspendido' }, fakeTx);
+    expect(profileRepository.update).toHaveBeenCalledWith(
+      { ...activeProfile, status: 'suspendido' },
+      fakeTx,
+    );
     expect(auditLogPort.record).toHaveBeenCalledWith(
       {
         actorProfileId: 'admin-1',
@@ -51,7 +63,11 @@ describe('SuspenderUsuarioUseCase', () => {
       fakeTx,
     );
     expect(eventPublisher.publish).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'usuario.suspendido', profileId: 'profile-1', motivo: 'Fraude reportado' }),
+      expect.objectContaining({
+        type: 'usuario.suspendido',
+        profileId: 'profile-1',
+        motivo: 'Fraude reportado',
+      }),
     );
   });
 
@@ -59,7 +75,9 @@ describe('SuspenderUsuarioUseCase', () => {
     const { profileRepository, auditLogPort, eventPublisher, useCase } = buildDeps();
     profileRepository.findById.mockResolvedValue(null);
 
-    await expect(useCase.execute('missing', 'admin-1', 'motivo')).rejects.toThrow(ProfileNotFoundError);
+    await expect(useCase.execute('missing', 'admin-1', 'motivo')).rejects.toThrow(
+      ProfileNotFoundError,
+    );
 
     expect(profileRepository.update).not.toHaveBeenCalled();
     expect(auditLogPort.record).not.toHaveBeenCalled();
@@ -71,7 +89,9 @@ describe('SuspenderUsuarioUseCase', () => {
     profileRepository.findById.mockResolvedValue(activeProfile);
     profileRepository.update.mockRejectedValue(new Error('UPDATE profiles failed'));
 
-    await expect(useCase.execute('profile-1', 'admin-1', 'motivo')).rejects.toThrow('UPDATE profiles failed');
+    await expect(useCase.execute('profile-1', 'admin-1', 'motivo')).rejects.toThrow(
+      'UPDATE profiles failed',
+    );
 
     expect(auditLogPort.record).not.toHaveBeenCalled();
     expect(eventPublisher.publish).not.toHaveBeenCalled();

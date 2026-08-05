@@ -55,7 +55,11 @@ describe('identidad.mapper', () => {
 
   it('toRegistrarEmpresaCommand carries every DTO field through', () => {
     const dto = new RegistrarEmpresaDto();
-    Object.assign(dto, { razonSocial: 'Proveedora SPA', rut: '76.123.456-7', giro: 'Distribución' });
+    Object.assign(dto, {
+      razonSocial: 'Proveedora SPA',
+      rut: '76.123.456-7',
+      giro: 'Distribución',
+    });
 
     expect(toRegistrarEmpresaCommand(dto)).toEqual({
       razonSocial: 'Proveedora SPA',

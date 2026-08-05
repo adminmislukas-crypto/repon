@@ -54,7 +54,12 @@ function activeActor(overrides: Partial<AuthenticatedActor> = {}): Authenticated
 }
 
 /** Sync counterpart of auth.guard.spec.ts's `expectAuthError` — `RolesGuard.canActivate` is not async. */
-function expectRoleAuthError(guard: RolesGuard, context: ExecutionContext, statusCode: number, code: string): void {
+function expectRoleAuthError(
+  guard: RolesGuard,
+  context: ExecutionContext,
+  statusCode: number,
+  code: string,
+): void {
   expect(() => guard.canActivate(context)).toThrow(AuthError);
   try {
     guard.canActivate(context);

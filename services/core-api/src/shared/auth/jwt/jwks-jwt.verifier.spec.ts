@@ -20,7 +20,9 @@ jest.mock('jose', () => {
   return { ...actual, createRemoteJWKSet: jest.fn() };
 });
 
-const mockedCreateRemoteJWKSet = createRemoteJWKSet as jest.MockedFunction<typeof createRemoteJWKSet>;
+const mockedCreateRemoteJWKSet = createRemoteJWKSet as jest.MockedFunction<
+  typeof createRemoteJWKSet
+>;
 
 const ISSUER = 'https://issuer.test';
 const AUDIENCE = 'core-api';
@@ -34,7 +36,9 @@ beforeAll(async () => {
   const pair = await generateKeyPair('RS256');
   privateKey = pair.privateKey;
   const publicJwk = await exportJWK(pair.publicKey);
-  mockedCreateRemoteJWKSet.mockReturnValue(createLocalJWKSet({ keys: [{ ...publicJwk, kid: KID, alg: 'RS256' }] }));
+  mockedCreateRemoteJWKSet.mockReturnValue(
+    createLocalJWKSet({ keys: [{ ...publicJwk, kid: KID, alg: 'RS256' }] }),
+  );
 });
 
 function buildVerifier(): JwksJwtVerifier {
@@ -75,7 +79,10 @@ describe('JwksJwtVerifier', () => {
 
   it('throws InvalidTokenError for a token signed with an unknown key (kid not in the JWKS)', async () => {
     const otherPair = await generateKeyPair('RS256');
-    const token = await sign({}, { subject: SUBJECT, key: otherPair.privateKey, kid: 'not-in-the-jwks' });
+    const token = await sign(
+      {},
+      { subject: SUBJECT, key: otherPair.privateKey, kid: 'not-in-the-jwks' },
+    );
 
     await expect(buildVerifier().verify(token)).rejects.toBeInstanceOf(InvalidTokenError);
   });

@@ -6,8 +6,15 @@ import {
 } from '../ports-out/auth-provider.port';
 import type { ProfileRepository } from '../ports-out/profile-repository.port';
 import type { EventPublisher } from '../../../shared/event-bus/event-publisher.port';
-import { EmailYaRegistradoError, AuthProviderError, RegistroFallidoError } from '../domain/identidad.errors';
-import { RegistrarUsuarioUseCase, type RegistrarUsuarioCommand } from './registrar-usuario.use-case';
+import {
+  EmailYaRegistradoError,
+  AuthProviderError,
+  RegistroFallidoError,
+} from '../domain/identidad.errors';
+import {
+  RegistrarUsuarioUseCase,
+  type RegistrarUsuarioCommand,
+} from './registrar-usuario.use-case';
 
 // `auth-provisioning` spec's two required scenarios (deterministic-delete,
 // ambiguous-forward-recovery) plus `core-api-identidad` spec's full branch
@@ -69,7 +76,9 @@ describe('RegistrarUsuarioUseCase', () => {
   it('rejects a provider command with no companyId before ever calling AuthProvider', async () => {
     const { authProvider, useCase } = buildDeps();
 
-    await expect(useCase.execute({ ...command, role: 'provider' })).rejects.toThrow(InvalidProfileError);
+    await expect(useCase.execute({ ...command, role: 'provider' })).rejects.toThrow(
+      InvalidProfileError,
+    );
 
     expect(authProvider.createAccount).not.toHaveBeenCalled();
   });
@@ -77,7 +86,9 @@ describe('RegistrarUsuarioUseCase', () => {
   it('deterministic profiles-insert failure compensates with deleteAccount and throws RegistroFallidoError, no retry', async () => {
     const { authProvider, profileRepository, eventPublisher, useCase } = buildDeps();
     authProvider.createAccount.mockResolvedValue('uid-2');
-    profileRepository.insertIfAbsent.mockRejectedValue(new Error('duplicate key value violates constraint'));
+    profileRepository.insertIfAbsent.mockRejectedValue(
+      new Error('duplicate key value violates constraint'),
+    );
     authProvider.deleteAccount.mockResolvedValue(undefined);
 
     await expect(useCase.execute(command)).rejects.toThrow(RegistroFallidoError);

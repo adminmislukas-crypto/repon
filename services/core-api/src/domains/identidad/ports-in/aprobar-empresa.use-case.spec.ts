@@ -13,12 +13,21 @@ function buildDeps() {
     save: jest.fn().mockResolvedValue(undefined),
     findById: jest.fn(),
   };
-  const auditLogPort: jest.Mocked<AuditLogPort> = { record: jest.fn().mockResolvedValue(undefined) };
-  const eventPublisher: jest.Mocked<EventPublisher> = { publish: jest.fn().mockResolvedValue(undefined) };
+  const auditLogPort: jest.Mocked<AuditLogPort> = {
+    record: jest.fn().mockResolvedValue(undefined),
+  };
+  const eventPublisher: jest.Mocked<EventPublisher> = {
+    publish: jest.fn().mockResolvedValue(undefined),
+  };
   const transactionManager: jest.Mocked<TransactionManager> = {
     runInTransaction: jest.fn().mockImplementation((work) => work(fakeTx)),
   };
-  const useCase = new AprobarEmpresaUseCase(companyRepository, auditLogPort, eventPublisher, transactionManager);
+  const useCase = new AprobarEmpresaUseCase(
+    companyRepository,
+    auditLogPort,
+    eventPublisher,
+    transactionManager,
+  );
   return { companyRepository, auditLogPort, eventPublisher, transactionManager, useCase };
 }
 
@@ -74,11 +83,14 @@ describe('AprobarEmpresaUseCase', () => {
   });
 
   it('a mutation failure rolls back before any audit entry is written and never publishes', async () => {
-    const { companyRepository, auditLogPort, eventPublisher, transactionManager, useCase } = buildDeps();
+    const { companyRepository, auditLogPort, eventPublisher, transactionManager, useCase } =
+      buildDeps();
     companyRepository.findById.mockResolvedValue(pendingCompany);
     companyRepository.save.mockRejectedValue(new Error('UPDATE companies failed'));
 
-    await expect(useCase.execute('company-1', 'admin-1')).rejects.toThrow('UPDATE companies failed');
+    await expect(useCase.execute('company-1', 'admin-1')).rejects.toThrow(
+      'UPDATE companies failed',
+    );
 
     expect(transactionManager.runInTransaction).toHaveBeenCalledTimes(1);
     expect(auditLogPort.record).not.toHaveBeenCalled();

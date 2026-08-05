@@ -21,6 +21,14 @@ export interface JwtVerifierFactoryParams {
  */
 export function selectJwtVerifier(params: JwtVerifierFactoryParams): JwtVerifier {
   return params.mode === 'jwks'
-    ? new JwksJwtVerifier({ jwksUrl: params.jwksUrl, issuer: params.issuer, audience: params.audience })
-    : new Hs256JwtVerifier({ secret: params.hs256Secret, issuer: params.issuer, audience: params.audience });
+    ? new JwksJwtVerifier({
+        jwksUrl: params.jwksUrl,
+        issuer: params.issuer,
+        audience: params.audience,
+      })
+    : new Hs256JwtVerifier({
+        secret: params.hs256Secret,
+        issuer: params.issuer,
+        audience: params.audience,
+      });
 }

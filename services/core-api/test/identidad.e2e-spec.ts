@@ -5,15 +5,35 @@ import type { Company, Profile } from '@repon/types';
 import { SignJWT } from 'jose';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
-import { ADMIN_ROLE_REPOSITORY, type AdminRoleRepository } from '../src/domains/identidad/ports-out/admin-role-repository.port';
-import { AUTH_PROVIDER, type AuthProvider } from '../src/domains/identidad/ports-out/auth-provider.port';
-import { COMPANY_REPOSITORY, type CompanyRepository } from '../src/domains/identidad/ports-out/company-repository.port';
-import { PROFILE_REPOSITORY, type ProfileRepository } from '../src/domains/identidad/ports-out/profile-repository.port';
+import {
+  ADMIN_ROLE_REPOSITORY,
+  type AdminRoleRepository,
+} from '../src/domains/identidad/ports-out/admin-role-repository.port';
+import {
+  AUTH_PROVIDER,
+  type AuthProvider,
+} from '../src/domains/identidad/ports-out/auth-provider.port';
+import {
+  COMPANY_REPOSITORY,
+  type CompanyRepository,
+} from '../src/domains/identidad/ports-out/company-repository.port';
+import {
+  PROFILE_REPOSITORY,
+  type ProfileRepository,
+} from '../src/domains/identidad/ports-out/profile-repository.port';
 import { AuthProviderDeterministicError } from '../src/domains/identidad/ports-out/auth-provider.port';
 import { AUDIT_LOG_PORT, type AuditLogPort } from '../src/shared/audit/audit-log.port';
-import { TRANSACTION_MANAGER, type TransactionContext, type TransactionManager } from '../src/shared/database/transaction';
+import {
+  TRANSACTION_MANAGER,
+  type TransactionContext,
+  type TransactionManager,
+} from '../src/shared/database/transaction';
 import { EVENT_PUBLISHER, type EventPublisher } from '../src/shared/event-bus/event-publisher.port';
-import { ACTOR_PORT, type ActorPort, type AuthenticatedActor } from '../src/shared/auth/ports/actor.port';
+import {
+  ACTOR_PORT,
+  type ActorPort,
+  type AuthenticatedActor,
+} from '../src/shared/auth/ports/actor.port';
 import { GlobalExceptionFilter } from '../src/shared/auth/global-exception.filter';
 
 // `core-api-auth-guard` spec, "Controller passes scalars...": this e2e
@@ -42,7 +62,9 @@ async function signToken(sub: string): Promise<string> {
     .sign(key);
 }
 
-function buildActor(overrides: Partial<AuthenticatedActor> & { profileId: string }): AuthenticatedActor {
+function buildActor(
+  overrides: Partial<AuthenticatedActor> & { profileId: string },
+): AuthenticatedActor {
   return {
     role: 'user',
     status: 'activo',
@@ -68,7 +90,11 @@ describe('Identidad HTTP adapter (e2e)', () => {
     companyRepository = { save: jest.fn(), findById: jest.fn() };
     profileRepository = { insertIfAbsent: jest.fn(), update: jest.fn(), findById: jest.fn() };
     adminRoleRepository = { upsert: jest.fn(), findByProfileId: jest.fn() };
-    authProvider = { createAccount: jest.fn(), deleteAccount: jest.fn(), findAccountByEmail: jest.fn() };
+    authProvider = {
+      createAccount: jest.fn(),
+      deleteAccount: jest.fn(),
+      findAccountByEmail: jest.fn(),
+    };
     auditLogPort = { record: jest.fn().mockResolvedValue(undefined) };
     eventPublisher = { publish: jest.fn().mockResolvedValue(undefined) };
     const fakeTx = {} as TransactionContext;
@@ -98,7 +124,9 @@ describe('Identidad HTTP adapter (e2e)', () => {
     app = moduleRef.createNestApplication();
     // Mirrors main.ts's real bootstrap wiring — this test builds AppModule
     // directly, so nothing else applies these.
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    );
     app.useGlobalFilters(new GlobalExceptionFilter());
     await app.init();
   });
@@ -110,17 +138,32 @@ describe('Identidad HTTP adapter (e2e)', () => {
   });
 
   describe('POST /identidad/usuarios (@Public)', () => {
-    const validBody = { email: 'ana@proveedora.cl', password: 'super-secret-1', nombre: 'Ana Pérez', role: 'user' };
+    const validBody = {
+      email: 'ana@proveedora.cl',
+      password: 'super-secret-1',
+      nombre: 'Ana Pérez',
+      role: 'user',
+    };
 
     it('creates a profile with no Authorization header (public route works unauthenticated)', async () => {
       const uid = randomUUID();
       authProvider.createAccount.mockResolvedValueOnce(uid);
       profileRepository.insertIfAbsent.mockResolvedValueOnce(undefined);
 
-      const res = await request(app.getHttpServer()).post('/identidad/usuarios').send(validBody).expect(201);
+      const res = await request(app.getHttpServer())
+        .post('/identidad/usuarios')
+        .send(validBody)
+        .expect(201);
 
-      expect(res.body).toMatchObject({ id: uid, role: 'user', status: 'activo', nombre: 'Ana Pérez' });
-      expect(eventPublisher.publish).toHaveBeenCalledWith(expect.objectContaining({ type: 'usuario.registrado' }));
+      expect(res.body).toMatchObject({
+        id: uid,
+        role: 'user',
+        status: 'activo',
+        nombre: 'Ana Pérez',
+      });
+      expect(eventPublisher.publish).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'usuario.registrado' }),
+      );
     });
 
     it('rejects an unknown extra field with 400 (forbidNonWhitelisted)', () => {
@@ -138,24 +181,38 @@ describe('Identidad HTTP adapter (e2e)', () => {
     });
 
     it('maps a deterministic email_taken Auth failure to 409 EMAIL_YA_REGISTRADO', async () => {
-      authProvider.createAccount.mockRejectedValueOnce(new AuthProviderDeterministicError('email_taken'));
+      authProvider.createAccount.mockRejectedValueOnce(
+        new AuthProviderDeterministicError('email_taken'),
+      );
 
-      const res = await request(app.getHttpServer()).post('/identidad/usuarios').send(validBody).expect(409);
+      const res = await request(app.getHttpServer())
+        .post('/identidad/usuarios')
+        .send(validBody)
+        .expect(409);
 
       expect(res.body).toMatchObject({ statusCode: 409, code: 'EMAIL_YA_REGISTRADO' });
     });
   });
 
   describe('POST /identidad/empresas (@Public)', () => {
-    const validBody = { razonSocial: 'Proveedora SPA', rut: '76.123.456-7', giro: 'Distribución de agua' };
+    const validBody = {
+      razonSocial: 'Proveedora SPA',
+      rut: '76.123.456-7',
+      giro: 'Distribución de agua',
+    };
 
     it('creates a company with no Authorization header (public route works unauthenticated)', async () => {
       companyRepository.save.mockResolvedValueOnce(undefined);
 
-      const res = await request(app.getHttpServer()).post('/identidad/empresas').send(validBody).expect(201);
+      const res = await request(app.getHttpServer())
+        .post('/identidad/empresas')
+        .send(validBody)
+        .expect(201);
 
       expect(res.body).toMatchObject({ ...validBody, status: 'pendiente' });
-      expect(eventPublisher.publish).toHaveBeenCalledWith(expect.objectContaining({ type: 'empresa.registrada' }));
+      expect(eventPublisher.publish).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'empresa.registrada' }),
+      );
     });
 
     it('rejects a missing required field with 400', () => {
@@ -194,7 +251,13 @@ describe('Identidad HTTP adapter (e2e)', () => {
         buildActor({ profileId, role: 'admin', adminRole: 'soporte' }),
       );
       const token = await signToken(profileId);
-      const company: Company = { id: companyId, razonSocial: 'X', rut: 'Y', giro: 'Z', status: 'pendiente' };
+      const company: Company = {
+        id: companyId,
+        razonSocial: 'X',
+        rut: 'Y',
+        giro: 'Z',
+        status: 'pendiente',
+      };
       companyRepository.findById.mockResolvedValueOnce(company);
       companyRepository.save.mockResolvedValueOnce(undefined);
 
@@ -207,7 +270,9 @@ describe('Identidad HTTP adapter (e2e)', () => {
         expect.objectContaining({ accion: 'aprobar_empresa' }),
         expect.anything(),
       );
-      expect(eventPublisher.publish).toHaveBeenCalledWith(expect.objectContaining({ type: 'empresa.aprobada' }));
+      expect(eventPublisher.publish).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'empresa.aprobada' }),
+      );
     });
 
     it('maps a missing company to 404 COMPANY_NOT_FOUND', async () => {
@@ -230,7 +295,9 @@ describe('Identidad HTTP adapter (e2e)', () => {
   describe('POST /identidad/empresas/:id/suspension (@AdminRoles(super_admin, soporte))', () => {
     it('rejects an admin actor with no sub-role assigned with 403 ADMIN_SUBROLE_MISSING', async () => {
       const profileId = randomUUID();
-      actorPort.findActorById.mockResolvedValueOnce(buildActor({ profileId, role: 'admin', adminRole: null }));
+      actorPort.findActorById.mockResolvedValueOnce(
+        buildActor({ profileId, role: 'admin', adminRole: null }),
+      );
       const token = await signToken(profileId);
 
       const res = await request(app.getHttpServer())
@@ -251,7 +318,13 @@ describe('Identidad HTTP adapter (e2e)', () => {
         buildActor({ profileId: adminId, role: 'admin', adminRole: 'super_admin' }),
       );
       const token = await signToken(adminId);
-      const profile: Profile = { id: targetId, role: 'user', status: 'activo', nombre: 'X', email: 'x@y.cl' };
+      const profile: Profile = {
+        id: targetId,
+        role: 'user',
+        status: 'activo',
+        nombre: 'X',
+        email: 'x@y.cl',
+      };
       profileRepository.findById.mockResolvedValueOnce(profile);
       profileRepository.update.mockResolvedValueOnce(undefined);
 
@@ -261,7 +334,9 @@ describe('Identidad HTTP adapter (e2e)', () => {
         .send({ motivo: 'Incumplimiento' })
         .expect(204);
 
-      expect(eventPublisher.publish).toHaveBeenCalledWith(expect.objectContaining({ type: 'usuario.suspendido' }));
+      expect(eventPublisher.publish).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'usuario.suspendido' }),
+      );
     });
   });
 

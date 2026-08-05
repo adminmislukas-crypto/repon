@@ -1,6 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Profile, Role } from '@repon/types';
-import { AuthProviderError, EmailYaRegistradoError, RegistroFallidoError } from '../domain/identidad.errors';
+import {
+  AuthProviderError,
+  EmailYaRegistradoError,
+  RegistroFallidoError,
+} from '../domain/identidad.errors';
 import { assertProviderHasCompany, createProfile } from '../domain/profile.entity';
 import { UsuarioRegistrado } from '../events/usuario-registrado.event';
 import {
@@ -10,7 +14,10 @@ import {
   type AuthProvider,
 } from '../ports-out/auth-provider.port';
 import { PROFILE_REPOSITORY, type ProfileRepository } from '../ports-out/profile-repository.port';
-import { EVENT_PUBLISHER, type EventPublisher } from '../../../shared/event-bus/event-publisher.port';
+import {
+  EVENT_PUBLISHER,
+  type EventPublisher,
+} from '../../../shared/event-bus/event-publisher.port';
 
 export interface RegistrarUsuarioCommand {
   email: string;

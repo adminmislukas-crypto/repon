@@ -15,7 +15,9 @@ const AUDIENCE = 'core-api';
 const SECRET = 'unit-test-hs256-secret-value-not-used-anywhere-real';
 const SUBJECT = '11111111-1111-1111-1111-111111111111';
 
-function buildVerifier(overrides: Partial<{ secret: string; issuer: string; audience: string }> = {}) {
+function buildVerifier(
+  overrides: Partial<{ secret: string; issuer: string; audience: string }> = {},
+) {
   return new Hs256JwtVerifier({ secret: SECRET, issuer: ISSUER, audience: AUDIENCE, ...overrides });
 }
 

@@ -3,7 +3,10 @@ import { CompanyNotFoundError } from '../domain/identidad.errors';
 import { EmpresaAprobada } from '../events/empresa-aprobada.event';
 import { COMPANY_REPOSITORY, type CompanyRepository } from '../ports-out/company-repository.port';
 import { AUDIT_LOG_PORT, type AuditLogPort } from '../../../shared/audit/audit-log.port';
-import { EVENT_PUBLISHER, type EventPublisher } from '../../../shared/event-bus/event-publisher.port';
+import {
+  EVENT_PUBLISHER,
+  type EventPublisher,
+} from '../../../shared/event-bus/event-publisher.port';
 import { TRANSACTION_MANAGER, type TransactionManager } from '../../../shared/database/transaction';
 
 /**

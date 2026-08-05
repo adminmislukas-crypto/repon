@@ -10,7 +10,13 @@ import {
 import type { CompanyRepository } from '../../ports-out/company-repository.port';
 
 function toDomain(row: Selectable<CompaniesTable>): Company {
-  return { id: row.id, razonSocial: row.razon_social, rut: row.rut, giro: row.giro, status: row.status };
+  return {
+    id: row.id,
+    razonSocial: row.razon_social,
+    rut: row.rut,
+    giro: row.giro,
+    status: row.status,
+  };
 }
 
 /**

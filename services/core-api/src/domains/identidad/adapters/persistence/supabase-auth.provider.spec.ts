@@ -1,16 +1,27 @@
 import type { AuthError, SupabaseClient } from '@supabase/supabase-js';
-import { AuthProviderAmbiguousError, AuthProviderDeterministicError } from '../../ports-out/auth-provider.port';
+import {
+  AuthProviderAmbiguousError,
+  AuthProviderDeterministicError,
+} from '../../ports-out/auth-provider.port';
 import { SupabaseAuthProvider } from './supabase-auth.provider';
 
 function authError(overrides: Partial<AuthError>): AuthError {
-  return { name: 'AuthApiError', message: 'boom', status: undefined, code: undefined, ...overrides } as AuthError;
+  return {
+    name: 'AuthApiError',
+    message: 'boom',
+    status: undefined,
+    code: undefined,
+    ...overrides,
+  } as AuthError;
 }
 
 function buildSupabase() {
   const createUser = jest.fn();
   const deleteUser = jest.fn();
   const listUsers = jest.fn();
-  const supabase = { auth: { admin: { createUser, deleteUser, listUsers } } } as unknown as SupabaseClient;
+  const supabase = {
+    auth: { admin: { createUser, deleteUser, listUsers } },
+  } as unknown as SupabaseClient;
   return { supabase, createUser, deleteUser, listUsers };
 }
 
@@ -65,7 +76,9 @@ describe('SupabaseAuthProvider', () => {
       });
       const provider = new SupabaseAuthProvider(supabase);
 
-      await expect(provider.createAccount('a@example.com', 'secret')).rejects.toMatchObject({ reason: 'other' });
+      await expect(provider.createAccount('a@example.com', 'secret')).rejects.toMatchObject({
+        reason: 'other',
+      });
     });
 
     it('classifies a 5xx error as ambiguous', async () => {
@@ -80,7 +93,10 @@ describe('SupabaseAuthProvider', () => {
 
     it('classifies a network failure (no status) as ambiguous', async () => {
       const { supabase, createUser } = buildSupabase();
-      createUser.mockResolvedValue({ data: { user: null }, error: authError({ status: undefined }) });
+      createUser.mockResolvedValue({
+        data: { user: null },
+        error: authError({ status: undefined }),
+      });
       const provider = new SupabaseAuthProvider(supabase);
 
       await expect(provider.createAccount('a@example.com', 'secret')).rejects.toBeInstanceOf(
@@ -117,7 +133,9 @@ describe('SupabaseAuthProvider', () => {
       });
       const provider = new SupabaseAuthProvider(supabase);
 
-      await expect(provider.findAccountByEmail('match@example.com')).resolves.toEqual({ id: 'uid-2' });
+      await expect(provider.findAccountByEmail('match@example.com')).resolves.toEqual({
+        id: 'uid-2',
+      });
     });
 
     it('returns null when no user matches', async () => {

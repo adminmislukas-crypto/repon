@@ -4,7 +4,10 @@ import type { Company } from '@repon/types';
 import { createCompany } from '../domain/company.entity';
 import { EmpresaRegistrada } from '../events/empresa-registrada.event';
 import { COMPANY_REPOSITORY, type CompanyRepository } from '../ports-out/company-repository.port';
-import { EVENT_PUBLISHER, type EventPublisher } from '../../../shared/event-bus/event-publisher.port';
+import {
+  EVENT_PUBLISHER,
+  type EventPublisher,
+} from '../../../shared/event-bus/event-publisher.port';
 
 export interface RegistrarEmpresaCommand {
   razonSocial: string;

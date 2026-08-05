@@ -2,7 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import type { AdminRole } from '@repon/types';
 import type { AdminRoleAssignment } from '../domain/admin-role-assignment.entity';
-import { ADMIN_ROLE_REPOSITORY, type AdminRoleRepository } from '../ports-out/admin-role-repository.port';
+import {
+  ADMIN_ROLE_REPOSITORY,
+  type AdminRoleRepository,
+} from '../ports-out/admin-role-repository.port';
 import { AUDIT_LOG_PORT, type AuditLogPort } from '../../../shared/audit/audit-log.port';
 import { TRANSACTION_MANAGER, type TransactionManager } from '../../../shared/database/transaction';
 
