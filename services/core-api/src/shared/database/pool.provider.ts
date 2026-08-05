@@ -39,7 +39,19 @@ const logger = new Logger('DatabasePool');
  * this PR's return report for the explicit risk callout.
  */
 export function createDatabasePool(connectionString: string): Pool {
-  const pool = new Pool({ connectionString });
+  const pool = new Pool({
+    connectionString,
+    // design.md D-B ("Un timeout finito es parte del contrato, no un
+    // detalle operativo"): today's defaults wait forever on both pool
+    // exhaustion and a slow query — the exact failure mode that would make
+    // `CatalogQueryPort.buscarCoincidencias` "throw on infra failure"
+    // (D-B's contract) meaningless, since an infinite hang never reaches
+    // the throw. Applies process-wide, not just to catalogo's new query
+    // path — it also corrects the same peligroso default identidad already
+    // runs on.
+    connectionTimeoutMillis: 2_000, // pool exhaustion -> error, never hang
+    options: '-c statement_timeout=5000', // slow query -> error, never hang
+  });
 
   // A `pg.Pool` is lazy — it opens a physical connection on first use, not
   // at construction. This hook fires once per NEW physical connection

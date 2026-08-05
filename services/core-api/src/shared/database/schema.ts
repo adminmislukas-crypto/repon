@@ -2,21 +2,26 @@ import type { Generated } from 'kysely';
 
 // Kysely row types (`snake_case`, matches Postgres columns 1:1) for the
 // tables this change's scope touches — `profiles`/`companies`/`admin_roles`
-// (identidad's first three tables) plus `audit_log` (shared kernel).
+// (identidad's first three tables), `audit_log` (shared kernel), plus
+// `catalog_products`/`provider_catalog`/`catalog_hidden_companies`
+// (catalogo, backend-core-api-catalogo PR 1).
 //
 // design.md D-A's non-negotiable boundary: these row types never cross into
 // `@repon/types` (which stays `camelCase`, domain-shaped) and never leave
 // `shared/database/` + `adapters/persistence/` — the only two places
 // allowed to know what a Postgres row actually looks like. The remaining
-// 13 tables (`catalogo`/`consumo`/`refill-matching`/`ofertas`/
-// `pedidos-pagos`) get typed here as their owning domain change lands
-// (Phase 4a onward, tasks.md), not upfront.
+// 10 tables (`consumo`/`refill-matching`/`ofertas`/`pedidos-pagos`) get
+// typed here as their owning domain change lands, not upfront.
 //
 // Source of truth for every column below:
 // supabase/migrations/20260803120100_01a_identidad_core.sql (companies,
 // profiles), .../20260803120110_01b_identidad_admin.sql (admin_roles),
 // .../20260803120700_07_auditoria.sql (audit_log) — from the archived
-// `backend-supabase-migrations` change.
+// `backend-supabase-migrations` change; .../20260803120300_03_catalogo.sql
+// (catalog_products, provider_catalog) and
+// .../20260805120100_12_catalogo_hidden_companies.sql
+// (catalog_hidden_companies) — from this change's own PR 1
+// (backend-core-api-catalogo design.md D-A/D-C).
 
 export type CompanyStatusRow = 'pendiente' | 'activo' | 'suspendido';
 export type RoleRow = 'user' | 'provider' | 'admin';
@@ -73,9 +78,56 @@ export interface AuditLogTable {
   created_at: Generated<string>;
 }
 
+export type CatalogProductStatusRow = 'activo' | 'inactivo';
+
+export interface CatalogProductsTable {
+  id: Generated<string>;
+  nombre: string;
+  categoria: string;
+  marca: string | null;
+  presentacion: string | null;
+  imagen_url: string | null;
+  status: Generated<CatalogProductStatusRow>;
+  created_at: Generated<string>;
+  updated_at: Generated<string>;
+}
+
+export interface ProviderCatalogTable {
+  id: Generated<string>;
+  company_id: string;
+  catalog_product_id: string | null;
+  nombre: string;
+  categoria: string;
+  // node-postgres returns `numeric` as `string` (OID 1700 default parser,
+  // to avoid float precision loss) — design.md D-C's gotcha. These are the
+  // schema's first non-integer numeric columns, so there is no prior
+  // precedent to copy: converting to `number` happens in the persistence
+  // adapter's mapper, never here.
+  precio_base: string;
+  precio_maximo: string;
+  stock: Generated<number>;
+  disponible: Generated<boolean>;
+  imagen_url: string | null;
+  created_at: Generated<string>;
+  updated_at: Generated<string>;
+}
+
+export interface CatalogHiddenCompaniesTable {
+  // No `Generated<>`: caller-supplied (the listener writes the suspended
+  // company's id), never a DB-generated default.
+  company_id: string;
+  oculto: Generated<boolean>;
+  motivo: string | null;
+  created_at: Generated<string>;
+  updated_at: Generated<string>;
+}
+
 export interface DB {
   companies: CompaniesTable;
   profiles: ProfilesTable;
   admin_roles: AdminRolesTable;
   audit_log: AuditLogTable;
+  catalog_products: CatalogProductsTable;
+  provider_catalog: ProviderCatalogTable;
+  catalog_hidden_companies: CatalogHiddenCompaniesTable;
 }
