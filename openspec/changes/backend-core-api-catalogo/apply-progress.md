@@ -2,9 +2,11 @@
 
 **Artifact store**: hybrid (this file + Engram `sdd/backend-core-api-catalogo/apply-progress`)
 **Strict TDD Mode**: active (`test_command: pnpm test`)
-**Last updated**: 2026-08-05T15:41:33Z — PR1 batch (first batch, no prior progress existed)
+**Last updated**: 2026-08-05T16:20:00Z — PR2 batch (merged with PR1; PR1 unchanged below)
 
-## Status: 7/7 tasks complete for PR1 (Phase 1: DB foundation). 0/~90 tasks complete overall across all 13 planned PRs.
+## Status: 7/7 tasks complete for PR1 (Phase 1: DB foundation). 7/7 tasks complete for PR2 (Phase 2: Seams). 14/~90 tasks complete overall across all 13 planned PRs.
+
+**Engram note**: no `mem_*` tools were exposed in this batch's tool set either (same as PR1) — this file remains the authoritative record. If Engram becomes available in a later batch, the topic key to upsert is `sdd/backend-core-api-catalogo/apply-progress`, content = this full file merged.
 
 ---
 
@@ -93,11 +95,80 @@ feat(core-api): add catalogo DB foundation — migrations, row types, pool timeo
 
 ---
 
-## What PR2 (next batch) Needs to Know
+## PR2 · Phase 2: Seams — Spec: `shared-types-package`, `core-api-hexagonal-layout`, `core-api-catalogo`
 
-- **Start here**: `## Phase 2: Seams` in `tasks.md` (tasks 2.1–2.7) — `packages/types/src/catalogo.ts` additions, `contracts/catalog-query.port.ts` (moved from `ports-out/`), extended `CatalogRepository` port, new `CatalogVisibilityProjection` port.
-- **Do NOT touch** `catalogo.module.ts` or anything under `domains/catalogo/{domain,ports-in,ports-out,contracts,adapters}/` was explicitly out of scope for PR1 and untouched — confirmed via `git status`, nothing under `services/core-api/src/domains/catalogo/` appears in this batch's diff.
-- **Row types are ready**: `DB['catalog_products']`, `DB['provider_catalog']`, `DB['catalog_hidden_companies']` all exist and typecheck. `precio_base`/`precio_maximo` are `string` — any PR2+ code that does arithmetic on them (the entity's `crear()`/`actualizarPrecio()`/`aplicarPorcentaje()` in Phase 3a) must convert via `Number(...)` in the persistence adapter's mapper, never compare/operate on the raw row string, per design.md D-C.
-- **Pool timeouts are live process-wide now** (`connectionTimeoutMillis: 2000`, `statement_timeout: 5000` via `-c` option) — this already affects `identidad`'s existing queries too, not just future `catalogo` code. All 112 unit + 17 e2e + 10 opt-in-integration tests passed with this change in place, so no existing code path depends on the old "wait forever" defaults.
-- **Migration timestamp window used**: `20260805120000`/`20260805120100` (own window, does not collide with `20260803120000-...0800` or `20260804090000`/`20260804090500`). PR2 introduces no new migrations (per design.md's 9-PR sequence, migrations only land in PR1), so this is informational only, not a constraint PR2 needs to extend.
-- **The opt-in integration test's cleanup gap** (no DELETE grant, so tests rely on fresh random identities rather than teardown) is a pattern PR2+ opt-in integration tests should probably follow too, if any are added — flagging so it's a deliberate choice repeated, not silently copied.
+| # | Task | Status |
+|---|---|---|
+| 2.1 | `packages/types/src/catalogo.ts` — added `NuevoProductoProveedor`, `FilaCarga`, `ArchivoCarga`, `ResultadoCargaMasiva` (D12); already re-exported via barrel's `export * from './catalogo.js'` (no barrel edit needed) | [x] Done |
+| 2.2 | `pnpm typecheck` (packages/types `tsc --noEmit`) — green, no dedicated unit tests (pure declarations, existing convention) | [x] Done |
+| 2.3 | `domains/catalogo/contracts/catalog-query.port.ts` created — `CatalogQueryPort`, `CATALOG_QUERY_PORT`, `CatalogQueryUnavailableError`, `MAX_COINCIDENCIAS_POR_ITEM = 50`, no `tx?` (C1), verbatim from design.md D-B | [x] Done |
+| 2.4 | Old `domains/catalogo/ports-out/catalog-query.port.ts` deleted — confirmed zero real consumers first (`grep` found only 3 prose-comment mentions of `CatalogQueryPort`/`CATALOG_QUERY_PORT`, no actual `import` statements) | [x] Done |
+| 2.5 | `domains/catalogo/ports-out/catalog-repository.port.ts` extended — added `saveMany`, `findById`, `findByCompanyAndCategoria`, all with trailing `tx?: TransactionContext` | [x] Done |
+| 2.6 | `domains/catalogo/ports-out/catalog-visibility-projection.port.ts` created — `CatalogVisibilityProjection` (`ocultarEmpresa`, `mostrarEmpresa`) + `CATALOG_VISIBILITY_PROJECTION` token | [x] Done |
+| 2.7 | ESLint boundary rule verified — inspected `buildCrossDomainZones()` output directly (Node script importing `eslint.config.js`): a zone exists for `catalogo/ports-out/**/*` (blocked cross-domain) but **no zone exists for `catalogo/contracts/**/*`** — confirms `contracts/` is the only cross-domain-importable path. `pnpm lint` also green (zero consumers today, so nothing to violate yet) | [x] Done |
+
+### TDD Cycle Evidence (PR2)
+
+| Task | RED | GREEN | REFACTOR |
+|---|---|---|---|
+| 2.1–2.7 (all) | N/A — this PR is declared "cero comportamiento, solo costuras" in design.md's own PR table (row **2**: *"Cero comportamiento, solo costuras. La regla de borde de ESLint valida el movimiento con cero consumidores"*). Every task is a type/interface declaration, a file move, or a port extension with zero runtime logic to fail-first against. `tasks.md` itself does not label any PR2 task RED/GREEN (only Phase 1's 1.5/1.6/1.7 and later phases' `ports-in`/`adapters` tasks carry that label) | N/A | N/A |
+
+Verification method used instead of RED/GREEN (consistent with PR1's precedent for non-behavioral tasks): `pnpm typecheck` (all new/changed interfaces compile against every existing call site — zero today, since nothing consumes them yet), `pnpm lint` (ESLint boundary rule + the rest of the flat config), and a direct inspection of the generated ESLint zone config (task 2.7's own verification method, per design.md's explicit framing that the ESLint rule itself **is** the check, not a Jest test). No test file was invented for pure type declarations — matches PR1's documented convention and this repo's existing pattern (`packages/types/src/*.ts` has zero spec files).
+
+### Commands Run (PR2 batch)
+
+| Command | Result |
+|---|---|
+| `grep -rn "ports-out/catalog-query" ...` + `grep -rln "CatalogQueryPort\|CATALOG_QUERY_PORT" ...` | Confirmed zero real `import` consumers of the old `ports-out/catalog-query.port.ts` before deleting it — only 3 files with prose-comment mentions (`refill-repository.port.ts`, `catalogo.module.ts`, `pool.provider.ts`), none of them an actual import |
+| `pnpm --filter @repon/types typecheck` | `Done` — green after adding the 4 new types |
+| `pnpm lint` (root) | Clean (only the pre-existing unrelated Node engine version WARN) |
+| Node script importing `eslint.config.js` directly, filtering `buildCrossDomainZones()` output for `catalogo` | Confirmed: zones exist for `catalogo/ports-out`, `catalogo/adapters/persistence`, `catalogo/adapters/events`, `catalogo/domain` (all blocked cross-domain) — **no zone for `catalogo/contracts`**, proving it's the only importable path (task 2.7's verification) |
+| `pnpm typecheck` (root) | `packages/types` + `services/core-api` both `Done` |
+| `pnpm test` (root) | `core-api`: 20 suites / **112** unit tests passed (unchanged from PR1 — PR2 added zero test files, as expected for a costuras-only PR), 3 suites / 17 e2e tests passed. Zero regressions |
+| `pnpm build` | Clean — `services/core-api` `tsc -p tsconfig.build.json` `Done` |
+| `pnpm format:check` | Clean on first run — no manual Prettier fix needed this batch |
+
+All 5 gate commands from the batch instructions (`lint`, `typecheck`, `test`, `build`, `format:check`) are green.
+
+### Deviations from Design (PR2)
+
+None. `contracts/catalog-query.port.ts`'s interface/token/error-class/constant match design.md's D-B code block verbatim; only additive JSDoc (the C1–C8 clause table, already present in design.md's own prose) was added around the verbatim code, not inside it. `catalog-repository.port.ts` and `catalog-visibility-projection.port.ts` match design.md's "Puertos extendidos" block verbatim (method signatures, token names).
+
+### Issues Found (PR2)
+
+None blocking. One observation carried forward for PR3a, not a PR2 defect: `NuevoProductoProveedor`/`FilaCarga`/`ArchivoCarga`/`ResultadoCargaMasiva` are declared as plain TypeScript interfaces with zero validation decorators, matching this file's existing `CatalogProduct`/`ProviderCatalogItem` style and `shared-types-package`'s explicit delta ("validation rules... enforced at the type/DTO layer in `core-api`'s `adapters/http/`... never here"). PR3a/5a's DTOs are where `class-validator` decorators (or branded types) actually land — confirmed this is by design, not an oversight, by re-reading the delta spec before writing the types.
+
+### Files Changed (PR2)
+
+| File | Action | What Was Done |
+|---|---|---|
+| `packages/types/src/catalogo.ts` | Modified | Added `NuevoProductoProveedor`, `FilaCarga`, `ArchivoCarga`, `ResultadoCargaMasiva` (D12) |
+| `services/core-api/src/domains/catalogo/contracts/catalog-query.port.ts` | Created | `CatalogQueryPort` interface, `CATALOG_QUERY_PORT` token, `CatalogQueryUnavailableError`, `MAX_COINCIDENCIAS_POR_ITEM` — moved out of `ports-out/` per D1/D-B |
+| `services/core-api/src/domains/catalogo/ports-out/catalog-query.port.ts` | Deleted | Old placeholder location — zero consumers, pure move |
+| `services/core-api/src/domains/catalogo/ports-out/catalog-repository.port.ts` | Modified | Added `saveMany`, `findById`, `findByCompanyAndCategoria` |
+| `services/core-api/src/domains/catalogo/ports-out/catalog-visibility-projection.port.ts` | Created | `CatalogVisibilityProjection` (`ocultarEmpresa`, `mostrarEmpresa`) + `CATALOG_VISIBILITY_PROJECTION` token |
+| `openspec/changes/backend-core-api-catalogo/tasks.md` | Modified | Marked tasks 2.1–2.7 `[x]` |
+| `openspec/changes/backend-core-api-catalogo/apply-progress.md` | Modified | Merged PR2 section into PR1's file (this file) |
+
+### Commit (PR2)
+
+One commit created for this PR2 batch:
+
+```
+feat(core-api): move CatalogQueryPort to contracts/, extend catalogo ports-out
+```
+
+(Working tree was clean before this batch except for pre-existing untracked `openspec/changes/backend-core-api-catalogo/{design.md,exploration.md,proposal.md,specs/}` — left untouched/untracked, out of this batch's scope; commit hash recorded in the return envelope to the orchestrator.)
+
+---
+
+## What PR3a (next batch) Needs to Know
+
+- **Start here**: `## Phase 3a: Read side — domain entity + invariant` in `tasks.md` (tasks 3a.1–3a.3) — pure domain, no adapters, no DB. Depends only on PR2's `@repon/types` (`ProviderCatalogItem` already existed; PR3a's entity wraps it).
+- **`contracts/catalog-query.port.ts` is done and verified** — `CatalogQueryPort`, `CATALOG_QUERY_PORT`, `CatalogQueryUnavailableError`, `MAX_COINCIDENCIAS_POR_ITEM` all live in `domains/catalogo/contracts/`. PR3a does not touch this file. PR3b (not PR3a) is where `KyselyCatalogQueryAdapter implements CatalogQueryPort` gets written, in `adapters/persistence/`.
+- **`CatalogRepository` now has 6 methods** (`save`, `saveMany`, `findById`, `findByCompany`, `findByCompanyAndCategoria`, `findMatching`) — all still just the interface, zero implementation. PR3b implements `findById`/`findByCompany`/`findByCompanyAndCategoria`/`findMatching`; PR4a implements `save`; PR6 implements `saveMany`. PR3a itself needs none of this — the entity has zero repository dependency.
+- **`CatalogVisibilityProjection` port exists but has zero implementation and zero consumers until PR8a.** Don't be surprised it's unused after this batch — that's expected until the listener lands.
+- **`catalogo.module.ts` is UNCHANGED, still `@Module({})`** — PR2 did not touch it per the batch's explicit "what NOT to do." Binding real providers starts in PR3b (`CATALOG_REPOSITORY`, `CATALOG_QUERY_PORT`) and continues through PR4a/5b/6/8a.
+- **Row types from PR1 are ready for PR3a's mapper concerns in PR3b**, not PR3a itself: `precio_base`/`precio_maximo` are `string` at the DB row level (D-C numeric-as-string gotcha). PR3a's entity (`ProviderCatalogItem.crear()`/`actualizarPrecio()`/`aplicarPorcentaje()`) operates on `number` (the `@repon/types` shape) and must round to 2 decimals + validate `precioMaximo >= precioBase` **in the entity**, never relying on the DB `CHECK` as the validator (D5). The `string ⇄ number` conversion itself is PR3b's mapper concern, not PR3a's.
+- **`NuevoProductoProveedor`/`ArchivoCarga`/`FilaCarga`/`ResultadoCargaMasiva` are declared but have zero consumers yet** — PR3a doesn't need them (it's read-side entity work); they start getting consumed in PR4a (`cargarProductoCatalogo` takes `NuevoProductoProveedor`) and PR5a/5b (`ArchivoCarga`/`ResultadoCargaMasiva`).
+- **ESLint zone verification method for future contracts/-adjacent work**: if a later PR needs to re-verify the boundary rule, the fastest check is a small Node script that imports `eslint.config.js` directly and inspects `buildCrossDomainZones()`'s output (used for task 2.7) — faster than writing a throwaway cross-domain import just to watch ESLint reject it, though that manual-violation approach also works and is more "black box."

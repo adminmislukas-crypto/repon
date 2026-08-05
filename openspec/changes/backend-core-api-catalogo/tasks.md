@@ -71,13 +71,13 @@ Chain strategy: stacked-to-main, 13 PRs
 
 ## Phase 2: Seams — Spec: `shared-types-package`, `core-api-hexagonal-layout`, `core-api-catalogo`
 
-- [ ] 2.1 `packages/types/src/catalogo.ts`: add `ArchivoCarga`, `FilaCarga`, `ResultadoCargaMasiva`, `NuevoProductoProveedor` (D12); export from barrel `index.ts` (shared-types-package Scenario "catalogo imports without re-declaring").
-- [ ] 2.2 Verify `tsc --noEmit` passes for `packages/types` (no dedicated unit tests — pure declarations, per existing convention).
-- [ ] 2.3 Create `domains/catalogo/contracts/catalog-query.port.ts`: `CatalogQueryPort` interface, `CATALOG_QUERY_PORT` token, `CatalogQueryUnavailableError`, `MAX_COINCIDENCIAS_POR_ITEM = 50` — no `tx?` param, deliberately (C1).
-- [ ] 2.4 Delete `domains/catalogo/ports-out/catalog-query.port.ts` (old placeholder location, zero consumers exist — pure move, core-api-catalogo Scenario "A future consumer only imports the contract").
-- [ ] 2.5 Extend `domains/catalogo/ports-out/catalog-repository.port.ts`: add `saveMany`, `findById`, `findByCompanyAndCategoria`, all with trailing `tx?: TransactionContext`.
-- [ ] 2.6 Create `domains/catalogo/ports-out/catalog-visibility-projection.port.ts`: `CatalogVisibilityProjection` (`ocultarEmpresa`, `mostrarEmpresa`) + `CATALOG_VISIBILITY_PROJECTION` token.
-- [ ] 2.7 Run the ESLint boundary rule (`import-x/no-restricted-paths`) — confirm `contracts/` is the only cross-domain-importable path for the new file (core-api-hexagonal-layout Scenario "A domain query port is consumed correctly").
+- [x] 2.1 `packages/types/src/catalogo.ts`: add `ArchivoCarga`, `FilaCarga`, `ResultadoCargaMasiva`, `NuevoProductoProveedor` (D12); export from barrel `index.ts` (shared-types-package Scenario "catalogo imports without re-declaring").
+- [x] 2.2 Verify `tsc --noEmit` passes for `packages/types` (no dedicated unit tests — pure declarations, per existing convention).
+- [x] 2.3 Create `domains/catalogo/contracts/catalog-query.port.ts`: `CatalogQueryPort` interface, `CATALOG_QUERY_PORT` token, `CatalogQueryUnavailableError`, `MAX_COINCIDENCIAS_POR_ITEM = 50` — no `tx?` param, deliberately (C1).
+- [x] 2.4 Delete `domains/catalogo/ports-out/catalog-query.port.ts` (old placeholder location, zero consumers exist — pure move, core-api-catalogo Scenario "A future consumer only imports the contract").
+- [x] 2.5 Extend `domains/catalogo/ports-out/catalog-repository.port.ts`: add `saveMany`, `findById`, `findByCompanyAndCategoria`, all with trailing `tx?: TransactionContext`.
+- [x] 2.6 Create `domains/catalogo/ports-out/catalog-visibility-projection.port.ts`: `CatalogVisibilityProjection` (`ocultarEmpresa`, `mostrarEmpresa`) + `CATALOG_VISIBILITY_PROJECTION` token.
+- [x] 2.7 Run the ESLint boundary rule (`import-x/no-restricted-paths`) — confirm `contracts/` is the only cross-domain-importable path for the new file (core-api-hexagonal-layout Scenario "A domain query port is consumed correctly").
 
 ## Phase 3a: Read side — domain entity + invariant — Spec: `core-api-catalogo`
 
