@@ -135,13 +135,13 @@ Depends on Phase 4a's use cases.
 
 Depends on Phase 5a's parser and PR 1's unique index for a real `ON CONFLICT` target.
 
-- [ ] 5b.1 RED: `ports-in/cargar-catalogo-masivo.use-case.spec.ts` — N rows/M invalid → `totalCargados = N-M`, `fallos` with correct `numero`s, rows independent (core-api-catalogo "Partial failure is reported per row"); duplicate identity within one file → 2nd occurrence reported as failure, not merged ("Two rows identifying the same product... rejected as a duplicate"); exactly one `CatalogoCargaMasivaCompletada` regardless of count; constructor never injects `TRANSACTION_MANAGER` (D2); `companyId` from actor only.
-- [ ] 5b.2 GREEN: `ports-in/cargar-catalogo-masivo.use-case.ts`.
-- [ ] 5b.3 `events/catalogo-carga-masiva-completada.event.ts`.
-- [ ] 5b.4 `adapters/http/dto/carga-masiva.dto.ts` (multipart envelope) + `adapters/http/dto/resultado-carga-masiva-response.dto.ts`.
-- [ ] 5b.5 `adapters/http/catalogo.controller.ts`: `POST /catalogo/mi-catalogo/carga-masiva` (200, `@Roles('provider')`, `EmpresaNoActivaError` gate).
-- [ ] 5b.6 E2e: `test/catalogo-carga-masiva.e2e-spec.ts` — partial failure report, re-upload updates not duplicates (relies on PR1's index), oversized/malformed file → 400.
-- [ ] 5b.7 `catalogo.module.ts`: register `CargarCatalogoMasivoUseCase`.
+- [x] 5b.1 RED: `ports-in/cargar-catalogo-masivo.use-case.spec.ts` — N rows/M invalid → `totalCargados = N-M`, `fallos` with correct `numero`s, rows independent (core-api-catalogo "Partial failure is reported per row"); duplicate identity within one file → 2nd occurrence reported as failure, not merged ("Two rows identifying the same product... rejected as a duplicate"); exactly one `CatalogoCargaMasivaCompletada` regardless of count; constructor never injects `TRANSACTION_MANAGER` (D2); `companyId` from actor only.
+- [x] 5b.2 GREEN: `ports-in/cargar-catalogo-masivo.use-case.ts`.
+- [x] 5b.3 `events/catalogo-carga-masiva-completada.event.ts`.
+- [x] 5b.4 `adapters/http/dto/carga-masiva.dto.ts` (multipart envelope) + `adapters/http/dto/resultado-carga-masiva-response.dto.ts`.
+- [x] 5b.5 `adapters/http/catalogo.controller.ts`: `POST /catalogo/mi-catalogo/carga-masiva` (200, `@Roles('provider')`, `EmpresaNoActivaError` gate).
+- [x] 5b.6 E2e: `test/catalogo-carga-masiva.e2e-spec.ts` — partial failure report, duplicate-within-file rejection, oversized/malformed file → 400. ("Re-upload updates not duplicates" proven at the repository layer already — PR1's opt-in integration test + PR4a's `save()` unit tests — not re-tested here since `CATALOG_REPOSITORY` is mocked at this e2e layer, same precedent as `catalogo-mi-catalogo.e2e-spec.ts`.)
+- [x] 5b.7 `catalogo.module.ts`: register `CargarCatalogoMasivoUseCase`.
 
 ## Phase 6: Category adjustment — Spec: `core-api-catalogo`
 

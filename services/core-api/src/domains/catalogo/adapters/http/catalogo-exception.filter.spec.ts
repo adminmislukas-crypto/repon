@@ -1,8 +1,10 @@
 import type { ArgumentsHost } from '@nestjs/common';
 import {
+  ArchivoCargaInvalidoError,
   CatalogItemNotFoundError,
   EmpresaNoActivaError,
   PrecioInvalidoError,
+  ProductoInvalidoError,
 } from '../../domain/catalogo.errors';
 import { CatalogoExceptionFilter } from './catalogo-exception.filter';
 
@@ -28,6 +30,8 @@ describe.each([
     400,
     'PRECIO_INVALIDO',
   ],
+  [new ArchivoCargaInvalidoError('Tipo de archivo inválido.'), 400, 'ARCHIVO_CARGA_INVALIDO'],
+  [new ProductoInvalidoError('nombre no puede estar vacío.'), 400, 'PRODUCTO_INVALIDO'],
 ] as const)('CatalogoExceptionFilter — %#', (exception, statusCode, code) => {
   it(`maps ${exception.constructor.name} to ${statusCode} ${code}`, () => {
     const filter = new CatalogoExceptionFilter();

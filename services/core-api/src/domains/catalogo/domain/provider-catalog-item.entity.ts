@@ -1,5 +1,5 @@
 import type { NuevoProductoProveedor, ProviderCatalogItem } from '@repon/types';
-import { PrecioInvalidoError } from './catalogo.errors';
+import { PrecioInvalidoError, ProductoInvalidoError } from './catalogo.errors';
 
 export type { ProviderCatalogItem };
 
@@ -28,6 +28,45 @@ function assertPrecioValido(precioBase: number, precioMaximo: number): void {
   }
 }
 
+/**
+ * design.md Diagram 1, step 2a: "nombre/categoria no vacíos; precios
+ * finitos y >= 0; ... stock entero >= 0" — the per-row validation
+ * `cargarCatalogoMasivoUseCase` (Phase 5b) relies on to turn a malformed
+ * row into a `fallos` entry instead of a crash or a silently-persisted bad
+ * row. Deliberately checked BEFORE rounding: `redondear(NaN)` is still
+ * `NaN`, and `NaN < x`/`x < NaN` are always `false`, so
+ * `assertPrecioValido` alone can never catch a non-finite price — this
+ * guard is what does.
+ *
+ * PR 3a's `crear()` originally validated ONLY the price invariant (see that
+ * batch's own "Deviations from Design" note, which explicitly named this
+ * exact gap and flagged it for whichever PR first needed it). PR 5b closes
+ * it here, in the entity — matching the diagram's literal attribution of
+ * this validation to `ProviderCatalogItem.crear()` — rather than
+ * duplicating the same checks a second time inside the use case.
+ */
+function assertProductoValido(producto: NuevoProductoProveedor): void {
+  if (producto.nombre.trim() === '') {
+    throw new ProductoInvalidoError('nombre no puede estar vacío.');
+  }
+  if (producto.categoria.trim() === '') {
+    throw new ProductoInvalidoError('categoria no puede estar vacía.');
+  }
+  if (!Number.isFinite(producto.precioBase) || producto.precioBase < 0) {
+    throw new ProductoInvalidoError(
+      `precioBase (${producto.precioBase}) debe ser un número finito >= 0.`,
+    );
+  }
+  if (!Number.isFinite(producto.precioMaximo) || producto.precioMaximo < 0) {
+    throw new ProductoInvalidoError(
+      `precioMaximo (${producto.precioMaximo}) debe ser un número finito >= 0.`,
+    );
+  }
+  if (!Number.isInteger(producto.stock) || producto.stock < 0) {
+    throw new ProductoInvalidoError(`stock (${producto.stock}) debe ser un entero >= 0.`);
+  }
+}
+
 export interface CrearProviderCatalogItemInput {
   id: string;
   companyId: string;
@@ -35,11 +74,14 @@ export interface CrearProviderCatalogItemInput {
 }
 
 /**
- * Factory (design.md Diagram 1, step 2a). Rounds `precioBase`/`precioMaximo`
- * to 2 decimals and validates the price invariant on the ROUNDED values
- * before returning — never on the raw input.
+ * Factory (design.md Diagram 1, step 2a). Validates field-level shape
+ * first (`assertProductoValido`, on the RAW input), then rounds
+ * `precioBase`/`precioMaximo` to 2 decimals and validates the cross-field
+ * price invariant on the ROUNDED values — never on the raw input.
  */
 export function crear(input: CrearProviderCatalogItemInput): ProviderCatalogItem {
+  assertProductoValido(input.producto);
+
   const precioBase = redondear(input.producto.precioBase);
   const precioMaximo = redondear(input.producto.precioMaximo);
   assertPrecioValido(precioBase, precioMaximo);

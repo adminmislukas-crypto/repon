@@ -1,7 +1,13 @@
-import type { CatalogProduct, NuevoProductoProveedor, ProviderCatalogItem } from '@repon/types';
+import type {
+  CatalogProduct,
+  NuevoProductoProveedor,
+  ProviderCatalogItem,
+  ResultadoCargaMasiva,
+} from '@repon/types';
 import type { CatalogProductResponseDto } from './dto/catalog-product-response.dto';
 import type { NuevoProductoDto } from './dto/nuevo-producto.dto';
 import type { ProviderCatalogItemResponseDto } from './dto/provider-catalog-item-response.dto';
+import type { ResultadoCargaMasivaResponseDto } from './dto/resultado-carga-masiva-response.dto';
 
 /**
  * `core-api-hexagonal-layout` spec, "DTOs and framework decorators stay in
@@ -54,6 +60,24 @@ export function toProviderCatalogItemResponseDto(
     stock: item.stock,
     disponible: item.disponible,
     imagenUrl: item.imagenUrl,
+  };
+}
+
+/**
+ * Response shape for `cargarCatalogoMasivo` (200) — `ResultadoCargaMasiva`
+ * and `ResultadoCargaMasivaResponseDto` are already field-for-field
+ * identical (D12), so this is a literal passthrough; kept as an explicit
+ * mapper function anyway, matching every other route's convention of never
+ * returning a domain/`ports-in` shape directly from the controller.
+ */
+export function toResultadoCargaMasivaResponseDto(
+  resultado: ResultadoCargaMasiva,
+): ResultadoCargaMasivaResponseDto {
+  return {
+    totalFilas: resultado.totalFilas,
+    totalCargados: resultado.totalCargados,
+    totalFallidos: resultado.totalFallidos,
+    fallos: resultado.fallos.map((falla) => ({ numero: falla.numero, motivo: falla.motivo })),
   };
 }
 

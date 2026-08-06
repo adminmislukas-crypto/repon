@@ -8,7 +8,8 @@
  * table). More classes are appended here as later phases need them
  * (`CatalogItemNotFoundError`/`EmpresaNoActivaError` in Phase 4a,
  * `PorcentajeInvalidoError` in Phase 6, `ArchivoCargaInvalidoError` in Phase
- * 5a) — this file is never edited destructively, only appended to.
+ * 5a, `ProductoInvalidoError` in Phase 5b) — this file is never edited
+ * destructively, only appended to.
  */
 
 /**
@@ -88,5 +89,36 @@ export class ArchivoCargaInvalidoError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = 'ArchivoCargaInvalidoError';
+  }
+}
+
+/**
+ * Maps to 400 `PRODUCTO_INVALIDO` in `adapters/http/` (design.md's error
+ * table, Phase 5b). Thrown by `provider-catalog-item.entity.ts`'s `crear()`
+ * when `nombre`/`categoria` is empty, `precioBase`/`precioMaximo` is not a
+ * finite number >= 0 (BEFORE rounding — a `NaN`/`Infinity` value can reach
+ * `crear()` from `carga-masiva.parser.ts`'s deliberately permissive
+ * `Number()` cast, per D2's "cero validación de valores" during parsing), or
+ * `stock` is not a non-negative integer (design.md Diagram 1, step 2a: "
+ * nombre/categoria no vacíos; precios finitos y >= 0; ... stock entero >=
+ * 0"). Distinct from `PrecioInvalidoError`, which is only the cross-field
+ * `precioMaximo >= precioBase` invariant on already-well-formed numbers —
+ * `ProductoInvalidoError` is field-level malformation, checked first.
+ *
+ * `cargarCatalogoMasivoUseCase` (Phase 5b) is this error's primary
+ * consumer: it catches this per row and reports it in
+ * `ResultadoCargaMasiva.fallos`, never letting it escape as an HTTP
+ * response — a single malformed row must never invalidate the whole file
+ * (D2). The `adapters/http/` mapping below exists as defense-in-depth for
+ * `cargarProductoCatalogo`'s single-item path (Phase 4a/4b), whose
+ * `NuevoProductoDto` already rejects the same malformed shapes via
+ * `class-validator` before `crear()` ever runs — this error class is not
+ * expected to surface there in practice, only if that DTO-level defense is
+ * ever bypassed.
+ */
+export class ProductoInvalidoError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ProductoInvalidoError';
   }
 }

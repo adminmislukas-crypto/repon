@@ -1,5 +1,5 @@
 import type { NuevoProductoProveedor, ProviderCatalogItem } from '@repon/types';
-import { PrecioInvalidoError } from './catalogo.errors';
+import { PrecioInvalidoError, ProductoInvalidoError } from './catalogo.errors';
 import { actualizarPrecio, aplicarPorcentaje, crear } from './provider-catalog-item.entity';
 
 const COMPANY_ID = '11111111-1111-1111-1111-111111111111';
@@ -72,6 +72,64 @@ describe('crear', () => {
       stock: 7,
       disponible: true,
     });
+  });
+
+  // design.md Diagram 1, step 2a (`cargarCatalogoMasivo`'s per-row
+  // validation): "nombre/categoria no vacíos; precios finitos y >= 0; ...
+  // stock entero >= 0". PR 3a deliberately narrowed `crear()` to only the
+  // price invariant (see this file's own git history / PR 3a apply-progress
+  // notes); PR 5b closes that gap HERE, in the entity, matching the
+  // diagram's literal attribution rather than re-implementing the same
+  // checks a second time inside `cargarCatalogoMasivoUseCase`. A malformed
+  // row (e.g. `NaN` from `carga-masiva.parser.ts`'s deliberately permissive
+  // `Number()` cast) must become a `ProductoInvalidoError`, not silently
+  // produce a `NaN`-carrying `ProviderCatalogItem` — `NaN < x` is always
+  // `false`, so without this guard `assertPrecioValido` alone would never
+  // catch it.
+  it('rejects an empty nombre', () => {
+    expect(() =>
+      crear({ id: ITEM_ID, companyId: COMPANY_ID, producto: nuevoProducto({ nombre: '' }) }),
+    ).toThrow(ProductoInvalidoError);
+  });
+
+  it('rejects a whitespace-only categoria', () => {
+    expect(() =>
+      crear({ id: ITEM_ID, companyId: COMPANY_ID, producto: nuevoProducto({ categoria: '   ' }) }),
+    ).toThrow(ProductoInvalidoError);
+  });
+
+  it('rejects a non-finite precioBase (NaN, e.g. from a malformed CSV cell)', () => {
+    expect(() =>
+      crear({ id: ITEM_ID, companyId: COMPANY_ID, producto: nuevoProducto({ precioBase: NaN }) }),
+    ).toThrow(ProductoInvalidoError);
+  });
+
+  it('rejects a non-finite precioMaximo (Infinity)', () => {
+    expect(() =>
+      crear({
+        id: ITEM_ID,
+        companyId: COMPANY_ID,
+        producto: nuevoProducto({ precioMaximo: Infinity }),
+      }),
+    ).toThrow(ProductoInvalidoError);
+  });
+
+  it('rejects a negative precioBase', () => {
+    expect(() =>
+      crear({ id: ITEM_ID, companyId: COMPANY_ID, producto: nuevoProducto({ precioBase: -1 }) }),
+    ).toThrow(ProductoInvalidoError);
+  });
+
+  it('rejects a non-integer stock', () => {
+    expect(() =>
+      crear({ id: ITEM_ID, companyId: COMPANY_ID, producto: nuevoProducto({ stock: 1.5 }) }),
+    ).toThrow(ProductoInvalidoError);
+  });
+
+  it('rejects a negative stock', () => {
+    expect(() =>
+      crear({ id: ITEM_ID, companyId: COMPANY_ID, producto: nuevoProducto({ stock: -1 }) }),
+    ).toThrow(ProductoInvalidoError);
   });
 });
 
