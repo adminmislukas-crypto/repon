@@ -2,9 +2,9 @@
 
 **Artifact store**: hybrid (this file + Engram `sdd/backend-core-api-catalogo/apply-progress`)
 **Strict TDD Mode**: active (`test_command: pnpm test`)
-**Last updated**: 2026-08-05T18:10:00Z — PR3a batch (merged with PR1+PR2; both unchanged below)
+**Last updated**: 2026-08-06T19:04:00Z — PR4a batch (merged with PR1+PR2+PR3a+PR3b; all unchanged below)
 
-## Status: 7/7 tasks complete for PR1 (Phase 1: DB foundation). 7/7 tasks complete for PR2 (Phase 2: Seams). 3/3 tasks complete for PR3a (Phase 3a: Read side — domain entity + invariant). 17/~90 tasks complete overall across all 13 planned PRs.
+## Status: 7/7 tasks complete for PR1 (Phase 1: DB foundation). 7/7 tasks complete for PR2 (Phase 2: Seams). 3/3 tasks complete for PR3a (Phase 3a: Read side — domain entity + invariant). 9/9 tasks complete for PR3b (Phase 3b: Read side — persistence adapters + buscarProductos + controller). 8/8 tasks complete for PR4a (Phase 4a: Unit writes — use cases + repository save()). 34/~90 tasks complete overall across all 13 planned PRs.
 
 **Engram note**: no `mem_*` tools were exposed in this batch's tool set either (same as PR1/PR2) — this file remains the authoritative record. If Engram becomes available in a later batch, the topic key to upsert is `sdd/backend-core-api-catalogo/apply-progress`, content = this full file merged.
 
@@ -241,18 +241,115 @@ feat(core-api): add ProviderCatalogItem entity with price invariant
 
 ---
 
-## What PR4a (next batch) Needs to Know
+## PR4a · Phase 4a: Unit writes — use cases + repository `save()` — Spec: `core-api-catalogo`
 
-(Superseded PR3b handoff notes below, kept for the entity/port background — PR3b itself is now done, see section above.)
+**Status**: done. R1 (cross-tenant mutation) closes in this PR.
 
-- **Start here**: `## Phase 4a: Unit writes — use cases + repository save()` in `tasks.md` (tasks 4a.1–4a.8). Depends on PR3a's entity and PR3b's repository (both done).
-- **The entity is functional, not class-based**: `crear(input: CrearProviderCatalogItemInput): ProviderCatalogItem`, `actualizarPrecio(item, precioBase, precioMaximo): ProviderCatalogItem`, `aplicarPorcentaje(item, porcentaje): ProviderCatalogItem` — all pure, all return NEW objects, none mutate their input. Import from `domains/catalogo/domain/provider-catalog-item.entity.ts`.
-- **`crear()` does NOT validate nombre/categoria non-empty, finite prices, or stock >= 0 integer** — deferred to the DTO/type layer per `shared-types-package`'s own doc comment on `NuevoProductoProveedor` (PR2). This is PR4a/4b's use case + DTO validation to add, not the entity's.
-- **`PrecioInvalidoError` lives in `domain/catalogo.errors.ts`** — append to this file, do not create a second errors file. PR4a adds `CatalogItemNotFoundError`, `EmpresaNoActivaError` here.
-- **`CatalogRepository.save()` currently THROWS a named "not implemented, see PR4a" error** — task 4a.6/4a.7 (RED/GREEN on `save()`) replaces that throw with the real D-C upsert-bifurcation implementation (branch on `catalogProductId` presence, matching PR1's two partial unique indexes). `saveMany()` still throws until PR6 — do not implement it in PR4a.
-- **`mapProviderCatalogRow` is exported from `kysely-catalog.repository.ts`** — reuse it for `save()`'s reverse (entity→row) mapping if needed, or add a symmetric `toProviderCatalogRow` next to it; don't re-derive the column mapping from scratch.
-- **`contracts/catalog-query.port.ts` and `KyselyCatalogQueryAdapter` are done and verified (PR2/PR3b)** — not touched by PR4a.
-- **`CatalogProductRepository`/`KyselyCatalogProductRepository` are done and verified (PR3b, gap-fill not in original design.md)** — powers `buscarProductos` only; irrelevant to PR4a's mutating use cases.
-- **`CatalogVisibilityProjection` port exists but has zero implementation and zero consumers until PR8a.**
-- **`catalogo.module.ts` now binds real providers** (`CATALOG_REPOSITORY`→`KyselyCatalogRepository`, `CATALOG_QUERY_PORT`→`KyselyCatalogQueryAdapter`, plus `BuscarProductosUseCase` + controller, `exports: [CATALOG_QUERY_PORT]`) — PR4a appends `CargarProductoCatalogoUseCase`/`ActualizarPrecioUseCase` registrations in its own task 4b (module wiring is actually task 4b.7 per `tasks.md`, not 4a — the use cases are registered together with their controller routes).
+| # | Task | Status |
+|---|---|---|
+| 4a.1 | RED: `ports-in/cargar-producto-catalogo.use-case.spec.ts` | [x] Done |
+| 4a.2 | GREEN: `ports-in/cargar-producto-catalogo.use-case.ts` | [x] Done |
+| 4a.3 | RED (test negativo primero): `ports-in/actualizar-precio.use-case.spec.ts` — cross-tenant/not-found byte-identical rejection | [x] Done |
+| 4a.4 | RED: happy-path, `EmpresaNoActivaError`, price-invariant-delegates-to-entity cases | [x] Done |
+| 4a.5 | GREEN: `ports-in/actualizar-precio.use-case.ts` | [x] Done |
+| 4a.6 | RED: extend `kysely-catalog.repository.spec.ts` — `save()` D-C bifurcation | [x] Done |
+| 4a.7 | GREEN: implement `save()` on `KyselyCatalogRepository` | [x] Done |
+| 4a.8 | `domain/catalogo.errors.ts`: append `CatalogItemNotFoundError`, `EmpresaNoActivaError` | [x] Done |
+
+### TDD Cycle Evidence (PR4a)
+
+| Task | RED | GREEN | REFACTOR |
+|---|---|---|---|
+| 4a.1/4a.2 (`CargarProductoCatalogoUseCase`) | Wrote `cargar-producto-catalogo.use-case.spec.ts` (4 tests: happy path creates+saves+publishes exactly one `ProductoAgregado`; `companyId` derives from the explicit param, never `producto`; `EmpresaNoActivaError` before any repo call for both `suspendido` and `pendiente`) against a not-yet-existing `./cargar-producto-catalogo.use-case` → `pnpm exec jest --testPathPatterns=cargar-producto-catalogo` → **failed** (`Cannot find module './cargar-producto-catalogo.use-case'`) | Created `cargar-producto-catalogo.use-case.ts` (`EmpresaNoActivaError` gate first, then `crear()` from the entity, `save()`, `publish(ProductoAgregado)`) and, as a natural dependency, `events/producto-agregado.event.ts` (didn't exist yet — needed to compile/publish) → re-ran same command → **4/4 passed** | None needed |
+| 4a.3/4a.4/4a.5 (`ActualizarPrecioUseCase`) | Wrote `actualizar-precio.use-case.spec.ts` test-negativo-first (per design.md Diagram 3): cross-tenant item and missing item both throw `CatalogItemNotFoundError`, byte-identical (`constructor`/`message` equality asserted directly), never call `save`; then added `EmpresaNoActivaError` gate, happy path, and price-invariant-delegation cases (6 tests total) against a not-yet-existing `./actualizar-precio.use-case` and not-yet-existing `CatalogItemNotFoundError`/`EmpresaNoActivaError` → ran → **failed** (`Cannot find module './actualizar-precio.use-case'`) | Appended `CatalogItemNotFoundError`/`EmpresaNoActivaError` to `domain/catalogo.errors.ts`, created `actualizar-precio.use-case.ts` (`EmpresaNoActivaError` gate → `findById` → `!item \|\| item.companyId !== companyId` → `CatalogItemNotFoundError` (same throw, both branches) → `actualizarPrecio()` from the entity → `save`) → re-ran → **6/6 passed** | `typecheck` caught a `.catch((e: unknown) => e as Error)` union-type issue in the byte-identical-error test (the promise's resolved type `ProviderCatalogItem` leaked into the union) — refactored to a `try/catch`-based `captureError` helper instead; re-ran `pnpm exec jest` to confirm the refactor didn't change test outcomes (still 6/6) before moving on |
+| 4a.6/4a.7 (`KyselyCatalogRepository.save()`) | Extended `kysely-catalog.repository.spec.ts` with a new `buildInsertDb()` fake (observes `insertInto().values().onConflict(oc => ...)` calls, mirroring the file's existing `buildDb()`/fake-`eb` convention for reads) and 4 new tests: branch 1 conflict target is `columns(['company_id','catalog_product_id'])` + `where('catalog_product_id','is not',null)`; branch 2 conflict target is `.expression(sql\`company_id, lower(btrim(nombre)), lower(btrim(categoria))\`)` (asserted by compiling the captured `RawBuilder` via its own `.toOperationNode().sqlFragments`) + `where('catalog_product_id','is',null)`; `DO UPDATE SET` never contains `catalog_product_id`/`company_id` in either branch; `precioBase`/`precioMaximo` round-trip as 2-decimal strings → ran against the still-throwing placeholder `save()` → **failed** (4 failures, each `KyselyCatalogRepository.save(...) is implemented in PR 4a ... not yet available`) | Replaced the placeholder throw with the real D-C bifurcation (branch on `item.catalogProductId`, `oc.columns([...])` for branch 1 vs `oc.expression(sql\`...\`)` for branch 2 — Kysely's documented mechanism for a conflict target on an expression/partial index), added a `toProviderCatalogValues()` reverse mapper next to `mapProviderCatalogRow` → re-ran → **12/12 passed** (8 pre-existing + 4 new) | None needed |
+
+### Commands Run (PR4a batch)
+
+| Command | Result |
+|---|---|
+| `pnpm exec jest --testPathPatterns=cargar-producto-catalogo` (RED, before impl) | Suite failed to run — module not found |
+| `pnpm exec jest --testPathPatterns=cargar-producto-catalogo` (GREEN) | 4/4 passed |
+| `pnpm exec jest --testPathPatterns=actualizar-precio.use-case` (RED, before impl) | Suite failed to run — module not found |
+| `pnpm exec jest --testPathPatterns=actualizar-precio.use-case` (GREEN) | 6/6 passed |
+| `pnpm exec jest --testPathPatterns=kysely-catalog.repository` (RED, before `save()` impl) | 4 failed / 8 passed (the 4 new `save()` tests failed against the placeholder throw; the 8 pre-existing read-side tests were untouched and green) |
+| `pnpm exec jest --testPathPatterns=kysely-catalog.repository` (GREEN, after `save()` impl) | 12/12 passed |
+| `pnpm typecheck` (root) | Failed once — `actualizar-precio.use-case.spec.ts`'s `.catch()`-based error capture produced a `ProviderCatalogItem \| Error` union `TS2339` on `.message` — fixed with a `try/catch` helper, re-ran → `packages/types` + `services/core-api` both `Done` |
+| `pnpm lint` (root) | Clean (only the pre-existing unrelated Node engine version WARN) |
+| `pnpm test` (root — unit + e2e) | `core-api`: 26 suites / **153** unit tests passed (was 140 before this batch — +13: 4 + 6 + net 3 on the repository spec, since 2 old "not implemented" tests were replaced by 5 new ones), 4 suites / 19 e2e tests passed. Zero regressions |
+| `pnpm build` | Clean — `services/core-api` `tsc -p tsconfig.build.json` `Done` |
+| `pnpm format:check` | Failed once (`actualizar-precio.use-case.ts` + its `.spec.ts` not Prettier-formatted after the `try/catch` refactor) → ran `pnpm exec prettier --write` on both files → re-ran `pnpm format:check` → clean |
+| Full re-run of `lint`/`typecheck`/`test`/`build`/`format:check` after the Prettier fix | All green again, same counts (153 unit + 19 e2e) |
+
+All 5 gate commands (`lint`, `typecheck`, `test`, `build`, `format:check`) are green as of the final run.
+
+### How the R1 cross-tenant rejection works (this PR's central claim, stated explicitly for review)
+
+`ActualizarPrecioUseCase.execute(companyId, companyStatus, itemId, precioBase, precioMaximo)`:
+
+1. `companyStatus !== 'activo'` → `EmpresaNoActivaError` (403), before any repository call. Same gate, same order, as `CargarProductoCatalogoUseCase`.
+2. `catalogRepository.findById(itemId)` — one lookup, no company filter in the query itself.
+3. `if (!item || item.companyId !== companyId) throw new CatalogItemNotFoundError(itemId)` — **one `if`, one `throw`, one error class, for both the "doesn't exist" and "exists but isn't yours" cases.** There is no `else if` branch, no second error class, no conditional message. The constructor call is textually identical regardless of which half of the `||` was true.
+4. `CatalogItemNotFoundError`'s message is `` `Ítem de catálogo ${itemId} no encontrado.` `` — the only variable in it is `itemId`, which the caller already supplied in the request; nothing about company B's existence, name, or any other attribute ever reaches the message.
+5. A dedicated test (`'both branches produce byte-identical errors'`) proves this by capturing both rejections independently and asserting `notFoundError.constructor === crossTenantError.constructor` AND `notFoundError.message === crossTenantError.message` — not just "both are 404-mappable," but literally indistinguishable at the `Error` level. Since HTTP status mapping (Phase 4b's exception filter) is keyed by constructor, byte-identical constructor + message guarantees byte-identical HTTP response body too.
+6. Happy path (`item.companyId === companyId`) is a separate, later branch: `actualizarPrecioEnLaEntidad(item, precioBase, precioMaximo)` (the existing PR3a entity function — rounds to 2 decimals, validates `precioMaximo >= precioBase` in the domain) → `save(actualizado)`.
+
+No transaction wraps `findById`+`save` (matches design.md Diagram 3's explicit rationale: `company_id` never changes so the ownership check can't go stale mid-request, no `DELETE` grant exists on this schema so the row can't vanish between the two calls, and concurrent same-tenant updates are both intentional with last-write-wins as the expected semantic) — this PR did not need to add anything here; it's a property of the existing schema/grants (PR1) plus this use case's own structure, not a new mechanism.
+
+### Deviations from Design (PR4a)
+
+**One scope decision, not a silent deviation**: `ActualizarPrecioUseCase` in this PR does **not** publish `PrecioActualizado`. Task 4a.5's own GREEN description (`tasks.md`) lists the flow as `findById → ownership check → item.actualizarPrecio() → save` — no publish step — while task 4a.1 for `CargarProductoCatalogoUseCase` explicitly required testing "publishes exactly one `ProductoAgregado`." This asymmetry is deliberate at the task-breakdown level: `ProductoAgregado`'s publish is covered by an explicit spec.md scenario cited in 4a.1's own task text ("Provider loads their own product" — "...and `ProductoAgregado` is published"), while no scenario assigned to 4a.3/4a.4 makes the same claim for `PrecioActualizado`. `events/precio-actualizado.event.ts` and the publish call are Phase 4b's task 4b.1/4b.3 scope — consistent with this exact change's own precedent (PR3b left `save`/`saveMany` throwing "not yet implemented" for PR4a/PR6 to finish; a chained-PR sequence is allowed to have individual PRs that don't yet satisfy 100% of every spec requirement, as long as the full chain does by the time it's done). **Flagged explicitly for PR4b**: `ActualizarPrecioUseCase` will need `EVENT_PUBLISHER` added as a new constructor dependency and a `publish(new PrecioActualizado(...))` call added after `save()`, plus the corresponding spec test — this is a real, not-yet-closed gap that PR4b must close, not an oversight to silently carry forward past 4b.
+
+Everything else matches design.md verbatim: the D-C upsert bifurcation (branch on `catalogProductId`, `DO UPDATE SET` excludes `catalog_product_id`/`company_id` in both branches), the D-E `companyStatus` gate ordering (checked before any repository call, identical shape in both use cases), and the D7/Diagram 3 byte-identical 404 behavior.
+
+### Issues Found (PR4a)
+
+None blocking. Two items to know about, not defects:
+
+1. **`toFixed(2)` vs `Math.round(x*100)/100`**: the entity (`provider-catalog-item.entity.ts`, PR3a) already rounds `precioBase`/`precioMaximo` to 2 decimals before this use case ever sees them (`crear`/`actualizarPrecio` both round-then-validate). `toProviderCatalogValues()` in `save()` calls `.toFixed(2)` purely to produce the `string` shape the `numeric` column needs (D-C's gotcha) — it is formatting an already-rounded value, not re-rounding. No double-rounding risk.
+2. **Kysely's `.expression()` conflict target**: branch 2's `ON CONFLICT` target is an expression index (`lower(btrim(nombre)), lower(btrim(categoria))`), which Kysely's query builder cannot express via `.columns([...])` (that method only accepts plain column names). `.expression(sql\`...\`)` is Kysely's own documented mechanism for exactly this case ("Specify an expression as the conflict target. This can be used if the unique index is an expression index."). The exact SQL text this produces was already proven correct against real Postgres by PR1's opt-in integration test (`catalogo-provider-catalog-upsert.integration-spec.ts`, task 1.7) — this PR's unit test only proves the application code builds the right conflict-target/predicate/update-set shape, mocked.
+
+### Files Changed (PR4a)
+
+| File | Action | What Was Done |
+|---|---|---|
+| `services/core-api/src/domains/catalogo/ports-in/cargar-producto-catalogo.use-case.ts` | Created | `companyStatus` gate → `crear()` → `save()` → `publish(ProductoAgregado)` |
+| `services/core-api/src/domains/catalogo/ports-in/cargar-producto-catalogo.use-case.spec.ts` | Created | RED→GREEN, 4 tests |
+| `services/core-api/src/domains/catalogo/ports-in/actualizar-precio.use-case.ts` | Created | `companyStatus` gate → `findById` → byte-identical `CatalogItemNotFoundError` for both not-found/cross-tenant → `actualizarPrecio()` → `save()` |
+| `services/core-api/src/domains/catalogo/ports-in/actualizar-precio.use-case.spec.ts` | Created | RED→GREEN, 6 tests, test-negativo-first per design.md Diagram 3 |
+| `services/core-api/src/domains/catalogo/events/producto-agregado.event.ts` | Created | `ProductoAgregado` — natural dependency of `CargarProductoCatalogoUseCase`, created early per the batch's explicit instruction |
+| `services/core-api/src/domains/catalogo/domain/catalogo.errors.ts` | Modified | Appended `CatalogItemNotFoundError`, `EmpresaNoActivaError` |
+| `services/core-api/src/domains/catalogo/adapters/persistence/kysely-catalog.repository.ts` | Modified | Implemented `save()` (D-C bifurcation); added `toProviderCatalogValues()` reverse mapper |
+| `services/core-api/src/domains/catalogo/adapters/persistence/kysely-catalog.repository.spec.ts` | Modified | Replaced the "save throws PR4a" placeholder test with 4 real `save()` tests; `saveMany` placeholder test kept as-is (still PR6) |
+| `openspec/changes/backend-core-api-catalogo/tasks.md` | Modified | Marked tasks 4a.1–4a.8 `[x]` |
+| `openspec/changes/backend-core-api-catalogo/apply-progress.md` | Modified | Merged PR4a section into PR1+PR2+PR3a+PR3b's file (this file) |
+
+### Commit (PR4a)
+
+One commit created for this PR4a batch:
+
+```
+feat(core-api): add catalogo unit-write use cases with cross-tenant 404 protection
+```
+
+Commit hash: `ab097e8`. Working tree was clean before this batch except the same pre-existing untracked `openspec/changes/backend-core-api-catalogo/{design.md,exploration.md,proposal.md,specs/}` noted since PR2 — left untouched/untracked, out of this batch's scope.
+
+### Workload note
+
+Diff came in at 591 insertions / 26 deletions (≈617 changed lines) against the tasks.md estimate of 320-400 for this work unit — over budget, driven by the depth of the R1 test coverage (byte-identical-error assertions, both `save()` conflict-target branches independently verified) rather than scope creep; no task outside 4a.1-4a.8 was touched. Flagged here rather than silently absorbed, per this project's Review Workload Guard — this PR was already called out in `tasks.md` as "the PR that most deserves dedicated review," so the overage is a deliberate trade (more test evidence on the highest-risk PR) rather than an oversight.
+
+---
+
+## What PR4b (next batch) Needs to Know
+
+- **Start here**: `## Phase 4b: Unit writes — HTTP adapter + exception filter + e2e` in `tasks.md` (tasks 4b.1–4b.7). Depends on PR4a's use cases (done).
+- **`CargarProductoCatalogoUseCase`/`ActualizarPrecioUseCase` both exist and are fully tested** at `domains/catalogo/ports-in/{cargar-producto-catalogo,actualizar-precio}.use-case.ts`. Their `execute()` signatures: `cargarProductoCatalogo(companyId: string, companyStatus: CompanyStatus, producto: NuevoProductoProveedor): Promise<ProviderCatalogItem>`; `actualizarPrecio(companyId: string, companyStatus: CompanyStatus, itemId: string, precioBase: number, precioMaximo: number): Promise<ProviderCatalogItem>`. The controller (this PR) is responsible for extracting `actor.companyId`/`actor.companyStatus` (both typed `| null` on `AuthenticatedActor`, but non-null at runtime once `@Roles('provider')` has passed) and passing them as explicit scalars — same D8 pattern as everywhere else in this change.
+- **`ActualizarPrecioUseCase` does NOT publish `PrecioActualizado` yet** — this is PR4b's gap to close, not a bug to report. Add `EVENT_PUBLISHER` as a new constructor dependency, create `events/precio-actualizado.event.ts` (doesn't exist yet), call `publish(new PrecioActualizado(...))` after `save()`, and add a RED test for it before implementing (extend the existing `actualizar-precio.use-case.spec.ts`, don't create a second spec file).
+- **`events/producto-agregado.event.ts` already exists** (`ProductoAgregado`, `type: 'producto.agregado'`, fields `(companyId, itemId)`) — do not recreate it. Only `precio-actualizado.event.ts` is still needed.
+- **`CatalogItemNotFoundError`/`EmpresaNoActivaError` are in `domain/catalogo.errors.ts`**, alongside `PrecioInvalidoError` — this is the error-mapping table `CatalogoExceptionFilter` (task 4b.5) needs: `CatalogItemNotFoundError`→404 `CATALOG_ITEM_NOT_FOUND`, `EmpresaNoActivaError`→403 `EMPRESA_NO_ACTIVA`, `PrecioInvalidoError`→400 `PRECIO_INVALIDO` (design.md's "Errores de dominio" table). Mirror `IdentidadExceptionFilter`'s shape exactly (constructor-keyed map, `@Catch()` scoped to the mapped classes, `@UseFilters` at controller level).
+- **`KyselyCatalogRepository.save()` is fully implemented and tested** (D-C bifurcation) — nothing left to do there for PR4b. `saveMany()` still throws until PR6; do not touch it.
+- **`catalogo.module.ts` still only binds the PR3b read-side providers** (`CATALOG_REPOSITORY`, `CATALOG_QUERY_PORT`, `CATALOG_PRODUCT_REPOSITORY`, `BuscarProductosUseCase`) — task 4b.7 appends `CargarProductoCatalogoUseCase`/`ActualizarPrecioUseCase` to `providers`. Do this LAST, after the DTOs/controller/filter exist, so the module wires a complete, working set in one step (matches this file's own precedent: PR3b's module edit came after its use case/controller were both done).
+- **DTOs must have zero `companyId` field** (D8, design.md: "el DTO NO tiene companyId. No existe tal campo") — `nuevo-producto.dto.ts` and `actualizar-precio.dto.ts` only carry product-facing fields; `class-validator` decorators live here (per `shared-types-package`'s delta: validation is a DTO-layer concern, never the entity's).
+- **Routes** (design.md "Superficie HTTP"): `POST /catalogo/mi-catalogo` → 201, `@Roles('provider')`, `cargarProductoCatalogo`. `PUT /catalogo/mi-catalogo/:itemId/precio` → 204, `@Roles('provider')`, `actualizarPrecio`. Both under `mi-catalogo` (never a `:companyId` path param — D8 in the URL space).
+- **E2e must prove 404-not-403 for cross-tenant** (`test/catalogo-mi-catalogo.e2e-spec.ts`, task 4b.6) — the unit tests in this PR (4a) already prove the use-case-level behavior; the e2e is what proves the exception filter actually maps `CatalogItemNotFoundError` to a real HTTP 404 end-to-end, plus DTO rejection (400) and suspended-company (403) happy/unhappy paths for both routes.
 - **ESLint zone verification method for future contracts/-adjacent work**: if a later PR needs to re-verify the boundary rule, the fastest check is a small Node script that imports `eslint.config.js` directly and inspects `buildCrossDomainZones()`'s output (used for task 2.7) — faster than writing a throwaway cross-domain import just to watch ESLint reject it, though that manual-violation approach also works and is more "black box."
