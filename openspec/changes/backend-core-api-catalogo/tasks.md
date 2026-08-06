@@ -103,14 +103,14 @@ Depends on Phase 3a's entity.
 
 Highest review priority per design.md ("el PR que más merece review dedicada"). R1 closes here. Depends on Phase 3a/3b's entity + repository.
 
-- [ ] 4a.1 RED: `ports-in/cargar-producto-catalogo.use-case.spec.ts` — `companyId` derives only from `actor.companyId`; `companyStatus !== 'activo'` → `EmpresaNoActivaError` before any repo call; publishes exactly one `ProductoAgregado` (core-api-catalogo "Provider loads their own product" / "A client-supplied companyId cannot influence the write" / "A suspended company cannot write").
-- [ ] 4a.2 GREEN: `ports-in/cargar-producto-catalogo.use-case.ts`.
-- [ ] 4a.3 RED (test negativo primero, per design.md's diagram 3): `ports-in/actualizar-precio.use-case.spec.ts` — cross-tenant item (company B) → `CatalogItemNotFoundError`, never a 403-shaped error; item not found → same error (core-api-catalogo "Cross-tenant update attempt returns 404, not 403, and does not mutate").
-- [ ] 4a.4 RED: add happy-path, `EmpresaNoActivaError`, and price-invariant-delegates-to-entity cases to the same spec file.
-- [ ] 4a.5 GREEN: `ports-in/actualizar-precio.use-case.ts` — `findById` → ownership check → `item.actualizarPrecio()` → `save`.
-- [ ] 4a.6 RED: extend `kysely-catalog.repository.spec.ts` — `save()` bifurcates the `ON CONFLICT` target by `catalogProductId` presence (D-C); `DO UPDATE SET` never touches `catalog_product_id`/`company_id`.
-- [ ] 4a.7 GREEN: implement `save()` on `KyselyCatalogRepository`.
-- [ ] 4a.8 `domain/catalogo.errors.ts`: append `CatalogItemNotFoundError`, `EmpresaNoActivaError`.
+- [x] 4a.1 RED: `ports-in/cargar-producto-catalogo.use-case.spec.ts` — `companyId` derives only from `actor.companyId`; `companyStatus !== 'activo'` → `EmpresaNoActivaError` before any repo call; publishes exactly one `ProductoAgregado` (core-api-catalogo "Provider loads their own product" / "A client-supplied companyId cannot influence the write" / "A suspended company cannot write").
+- [x] 4a.2 GREEN: `ports-in/cargar-producto-catalogo.use-case.ts`.
+- [x] 4a.3 RED (test negativo primero, per design.md's diagram 3): `ports-in/actualizar-precio.use-case.spec.ts` — cross-tenant item (company B) → `CatalogItemNotFoundError`, never a 403-shaped error; item not found → same error (core-api-catalogo "Cross-tenant update attempt returns 404, not 403, and does not mutate").
+- [x] 4a.4 RED: add happy-path, `EmpresaNoActivaError`, and price-invariant-delegates-to-entity cases to the same spec file.
+- [x] 4a.5 GREEN: `ports-in/actualizar-precio.use-case.ts` — `findById` → ownership check → `item.actualizarPrecio()` → `save`.
+- [x] 4a.6 RED: extend `kysely-catalog.repository.spec.ts` — `save()` bifurcates the `ON CONFLICT` target by `catalogProductId` presence (D-C); `DO UPDATE SET` never touches `catalog_product_id`/`company_id`.
+- [x] 4a.7 GREEN: implement `save()` on `KyselyCatalogRepository`.
+- [x] 4a.8 `domain/catalogo.errors.ts`: append `CatalogItemNotFoundError`, `EmpresaNoActivaError`.
 
 ## Phase 4b: Unit writes — HTTP adapter + exception filter + e2e — Spec: `core-api-catalogo`
 

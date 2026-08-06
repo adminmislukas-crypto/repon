@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Kysely, Selectable } from 'kysely';
+import { sql } from 'kysely';
 import type { ProviderCatalogItem } from '@repon/types';
 import { DATABASE } from '../../../../shared/database/database.module';
 import type { DB, ProviderCatalogTable } from '../../../../shared/database/schema';
@@ -33,6 +34,29 @@ export function mapProviderCatalogRow(row: Selectable<ProviderCatalogTable>): Pr
 }
 
 /**
+ * Reverse of `mapProviderCatalogRow` — entity -> `insertInto('provider_
+ * catalog')` values. `precioBase`/`precioMaximo` go back through the same
+ * `numeric`-as-`string` gotcha (D-C): `.toFixed(2)`, never a raw `number`,
+ * because by the time an item reaches `save()` the domain has already
+ * rounded and validated it (`provider-catalog-item.entity.ts`) — this is
+ * formatting, not re-rounding.
+ */
+function toProviderCatalogValues(item: ProviderCatalogItem) {
+  return {
+    id: item.id,
+    company_id: item.companyId,
+    catalog_product_id: item.catalogProductId ?? null,
+    nombre: item.nombre,
+    categoria: item.categoria,
+    precio_base: item.precioBase.toFixed(2),
+    precio_maximo: item.precioMaximo.toFixed(2),
+    stock: item.stock,
+    disponible: item.disponible,
+    imagen_url: item.imagenUrl ?? null,
+  };
+}
+
+/**
  * `CatalogRepository`'s Kysely-backed implementation (design.md "Wiring de
  * módulos y tokens"). Built incrementally across the chained PR sequence,
  * same as design.md's own §"Secuencia de implementación" table plans it:
@@ -51,12 +75,59 @@ export class KyselyCatalogRepository implements CatalogRepository {
     return tx ? toKyselyTransaction(tx) : this.db;
   }
 
+  /**
+   * design.md D-C: bifurcates on `item.catalogProductId` presence, matching
+   * PR 1's two mutually-exclusive partial unique indexes — one is a plain
+   * column list, the other an expression index (`lower(btrim(...))`), so
+   * each branch declares its `ON CONFLICT` target differently (Kysely's
+   * `.columns([...])` vs `.expression(...)`).
+   *
+   * Two hard rules for `DO UPDATE SET`, true in BOTH branches: never
+   * `catalog_product_id` (branch 1's conflict key; setting it in branch 2
+   * would silently move the row from one index to the other — re-linking a
+   * loose item to a reference product is a deliberate operation, never a
+   * side effect of re-uploading a file) and never `company_id` (part of
+   * both keys, always forced upstream by D8's actor-derived `companyId`,
+   * never mutated by an upsert).
+   */
   async save(item: ProviderCatalogItem, tx?: TransactionContext): Promise<void> {
-    throw new Error(
-      `KyselyCatalogRepository.save(itemId=${item.id}, tx=${tx ? 'given' : 'none'}) is ` +
-        'implemented in PR 4a (backend-core-api-catalogo, design.md D-C upsert bifurcation) ' +
-        '— not yet available.',
-    );
+    const values = toProviderCatalogValues(item);
+    const update = {
+      nombre: values.nombre,
+      categoria: values.categoria,
+      precio_base: values.precio_base,
+      precio_maximo: values.precio_maximo,
+      stock: values.stock,
+      disponible: values.disponible,
+      imagen_url: values.imagen_url,
+    };
+    const insert = this.executor(tx).insertInto('provider_catalog').values(values);
+
+    if (item.catalogProductId) {
+      // provider_catalog_company_catalog_product_uidx (plain columns).
+      await insert
+        .onConflict((oc) =>
+          oc
+            .columns(['company_id', 'catalog_product_id'])
+            .where('catalog_product_id', 'is not', null)
+            .doUpdateSet(update),
+        )
+        .execute();
+    } else {
+      // provider_catalog_company_nombre_categoria_uidx — an EXPRESSION
+      // index, so the conflict target is declared via `.expression(...)`,
+      // not `.columns([...])` (Kysely: "Specify an expression as the
+      // conflict target. This can be used if the unique index is an
+      // expression index.").
+      await insert
+        .onConflict((oc) =>
+          oc
+            .expression(sql`company_id, lower(btrim(nombre)), lower(btrim(categoria))`)
+            .where('catalog_product_id', 'is', null)
+            .doUpdateSet(update),
+        )
+        .execute();
+    }
   }
 
   async saveMany(items: ProviderCatalogItem[], tx?: TransactionContext): Promise<void> {

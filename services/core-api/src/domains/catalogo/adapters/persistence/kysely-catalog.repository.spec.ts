@@ -1,4 +1,5 @@
 import type { Kysely, Selectable } from 'kysely';
+import type { ProviderCatalogItem } from '@repon/types';
 import type { DB, ProviderCatalogTable } from '../../../../shared/database/schema';
 import { KyselyCatalogRepository } from './kysely-catalog.repository';
 
@@ -72,6 +73,50 @@ function buildDb(rows: unknown[]) {
   const selectFrom = jest.fn(() => chain);
   const db = { selectFrom } as unknown as Kysely<DB>;
   return { db, selectFrom, chain, ebCalls, whereCalls };
+}
+
+// design.md D-C: `save()`'s conflict target is either a plain column list
+// (branch 1) or an expression index (branch 2, `lower(btrim(...))`), which
+// Kysely's `OnConflictBuilder` exposes via two different methods
+// (`.columns([...])` vs `.expression(...)`). This fake observes exactly
+// which one gets called, with which arguments, mirroring `buildDb`'s
+// `eb`-recording convention above for the read-side anti-join.
+function buildInsertDb() {
+  const calls: Record<string, unknown[][]> = {};
+  const record = (method: string, args: unknown[]) => {
+    (calls[method] ??= []).push(args);
+  };
+  const onConflictBuilder: Record<string, jest.Mock> = {};
+  onConflictBuilder.columns = jest.fn((...args: unknown[]) => {
+    record('columns', args);
+    return onConflictBuilder;
+  });
+  onConflictBuilder.expression = jest.fn((...args: unknown[]) => {
+    record('expression', args);
+    return onConflictBuilder;
+  });
+  onConflictBuilder.where = jest.fn((...args: unknown[]) => {
+    record('where', args);
+    return onConflictBuilder;
+  });
+  onConflictBuilder.doUpdateSet = jest.fn((...args: unknown[]) => {
+    record('doUpdateSet', args);
+    return onConflictBuilder;
+  });
+
+  const insertChain: Record<string, jest.Mock> = {};
+  insertChain.values = jest.fn((...args: unknown[]) => {
+    record('values', args);
+    return insertChain;
+  });
+  insertChain.onConflict = jest.fn((build: (oc: typeof onConflictBuilder) => unknown) => {
+    build(onConflictBuilder);
+    return insertChain;
+  });
+  insertChain.execute = jest.fn(async () => undefined);
+  const insertInto = jest.fn(() => insertChain);
+  const db = { insertInto } as unknown as Kysely<DB>;
+  return { db, calls, insertChain };
 }
 
 function buildRow(
@@ -205,25 +250,88 @@ describe('KyselyCatalogRepository', () => {
     });
   });
 
-  describe('save / saveMany — not yet implemented (PR 4a / PR 6)', () => {
-    it('save throws, naming PR 4a, rather than silently no-oping', async () => {
-      const { db } = buildDb([]);
+  describe('save — D-C upsert bifurcation (PR 4a)', () => {
+    const baseItem: ProviderCatalogItem = {
+      id: 'item-1',
+      companyId: 'company-a',
+      nombre: 'Agua Purificada',
+      categoria: 'Bebidas',
+      precioBase: 1000,
+      precioMaximo: 1500,
+      stock: 10,
+      disponible: true,
+    };
+
+    it('branch 1 (catalogProductId present): conflict target is (company_id, catalog_product_id), scoped to that partial index by its predicate', async () => {
+      const { db, calls, insertChain } = buildInsertDb();
       const repo = new KyselyCatalogRepository(db);
 
-      await expect(
-        repo.save({
+      await repo.save({ ...baseItem, catalogProductId: 'catalog-product-9' });
+
+      expect(calls['columns']).toEqual([[['company_id', 'catalog_product_id']]]);
+      expect(calls['where']).toEqual([['catalog_product_id', 'is not', null]]);
+      expect(calls['expression']).toBeUndefined();
+      expect(insertChain.values).toHaveBeenCalledWith(
+        expect.objectContaining({
           id: 'item-1',
-          companyId: 'company-a',
-          nombre: 'Agua',
-          categoria: 'Bebidas',
-          precioBase: 100,
-          precioMaximo: 150,
-          stock: 5,
-          disponible: true,
+          company_id: 'company-a',
+          catalog_product_id: 'catalog-product-9',
+          precio_base: '1000.00',
+          precio_maximo: '1500.00',
         }),
-      ).rejects.toThrow(/PR 4a/);
+      );
     });
 
+    it('branch 2 (catalogProductId absent): conflict target is the expression index on lower(btrim(nombre)), lower(btrim(categoria))', async () => {
+      const { db, calls, insertChain } = buildInsertDb();
+      const repo = new KyselyCatalogRepository(db);
+
+      await repo.save(baseItem);
+
+      expect(calls['columns']).toBeUndefined();
+      expect(calls['expression']).toHaveLength(1);
+      const [[expression]] = calls['expression'] as [
+        [{ toOperationNode(): { sqlFragments: readonly string[] } }],
+      ];
+      expect(expression.toOperationNode().sqlFragments.join('')).toBe(
+        'company_id, lower(btrim(nombre)), lower(btrim(categoria))',
+      );
+      expect(calls['where']).toEqual([['catalog_product_id', 'is', null]]);
+      expect(insertChain.values).toHaveBeenCalledWith(
+        expect.objectContaining({ catalog_product_id: null }),
+      );
+    });
+
+    it("DO UPDATE SET never touches catalog_product_id or company_id, in either branch (D-C's two hard rules)", async () => {
+      const branchA = buildInsertDb();
+      await new KyselyCatalogRepository(branchA.db).save({
+        ...baseItem,
+        catalogProductId: 'catalog-product-9',
+      });
+      const [updateA] = branchA.calls['doUpdateSet']![0] as [Record<string, unknown>];
+      expect(updateA).not.toHaveProperty('catalog_product_id');
+      expect(updateA).not.toHaveProperty('company_id');
+
+      const branchB = buildInsertDb();
+      await new KyselyCatalogRepository(branchB.db).save(baseItem);
+      const [updateB] = branchB.calls['doUpdateSet']![0] as [Record<string, unknown>];
+      expect(updateB).not.toHaveProperty('catalog_product_id');
+      expect(updateB).not.toHaveProperty('company_id');
+    });
+
+    it('rounds precioBase/precioMaximo into the 2-decimal string shape the numeric columns need (D-C gotcha)', async () => {
+      const { db, insertChain } = buildInsertDb();
+      const repo = new KyselyCatalogRepository(db);
+
+      await repo.save({ ...baseItem, precioBase: 100, precioMaximo: 150.5 });
+
+      expect(insertChain.values).toHaveBeenCalledWith(
+        expect.objectContaining({ precio_base: '100.00', precio_maximo: '150.50' }),
+      );
+    });
+  });
+
+  describe('saveMany — not yet implemented (PR 6)', () => {
     it('saveMany throws, naming PR 6, rather than silently no-oping', async () => {
       const { db } = buildDb([]);
       const repo = new KyselyCatalogRepository(db);

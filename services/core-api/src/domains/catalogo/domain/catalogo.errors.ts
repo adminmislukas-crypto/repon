@@ -29,3 +29,40 @@ export class PrecioInvalidoError extends Error {
     this.name = 'PrecioInvalidoError';
   }
 }
+
+/**
+ * Maps to 404 `CATALOG_ITEM_NOT_FOUND` in `adapters/http/` (design.md's
+ * error table, Phase 4b). Thrown by `ActualizarPrecioUseCase` when
+ * `findById(itemId)` returns `null` OR returns an item whose `companyId`
+ * does not match the caller's `companyId` (D7) — BOTH branches throw this
+ * exact same error, constructed the exact same way (design.md Diagram 3:
+ * "Byte a byte idéntico a la rama 'el ítem no existe'"). A 403 in the
+ * cross-tenant branch would confirm the item exists and belongs to someone
+ * else, letting an actor enumerate `itemId` to map another company's
+ * catalog by observing 403-vs-404 — 404 in both branches closes that
+ * channel (R1, the risk this exact PR closes).
+ */
+export class CatalogItemNotFoundError extends Error {
+  constructor(itemId: string) {
+    super(`Ítem de catálogo ${itemId} no encontrado.`);
+    this.name = 'CatalogItemNotFoundError';
+  }
+}
+
+/**
+ * Maps to 403 `EMPRESA_NO_ACTIVA` in `adapters/http/` (design.md's error
+ * table). Thrown by all 4 mutating use cases (`cargarProductoCatalogo`,
+ * `cargarCatalogoMasivo`, `actualizarPrecio`, `ajustarPreciosPorCategoria`)
+ * when `companyStatus !== 'activo'` — checked FIRST, before any repository
+ * read or write (core-api-catalogo spec, "The 4 mutating use cases require
+ * an active company"; design.md D-E: one rule, four applications, the same
+ * shape D8 already established for `companyId`). `buscarProductos` never
+ * throws this — reading the reference catalog does not require an active
+ * company.
+ */
+export class EmpresaNoActivaError extends Error {
+  constructor(companyId: string) {
+    super(`La empresa ${companyId} no está activa.`);
+    this.name = 'EmpresaNoActivaError';
+  }
+}
