@@ -2,11 +2,11 @@
 
 **Artifact store**: hybrid (this file + Engram `sdd/backend-core-api-catalogo/apply-progress`)
 **Strict TDD Mode**: active (`test_command: pnpm test`)
-**Last updated**: 2026-08-06T19:50:00Z — PR5a batch (merged with PR1+PR2+PR3a+PR3b+PR4a+PR4b; all unchanged below except this note)
+**Last updated**: 2026-08-06T21:10:00Z — PR5b batch (merged with PR1+PR2+PR3a+PR3b+PR4a+PR4b+PR5a; all unchanged below except this note)
 
-## Status: 7/7 tasks complete for PR1 (Phase 1: DB foundation). 7/7 tasks complete for PR2 (Phase 2: Seams). 3/3 tasks complete for PR3a (Phase 3a: Read side — domain entity + invariant). 9/9 tasks complete for PR3b (Phase 3b: Read side — persistence adapters + buscarProductos + controller). 8/8 tasks complete for PR4a (Phase 4a: Unit writes — use cases + repository save()). 7/7 tasks complete for PR4b (Phase 4b: Unit writes — HTTP adapter + exception filter + e2e). 4/4 tasks complete for PR5a (Phase 5a: Bulk load — CSV parser + envelope validation). 45/~90 tasks complete overall across all 13 planned PRs.
+## Status: 7/7 tasks complete for PR1 (Phase 1: DB foundation). 7/7 tasks complete for PR2 (Phase 2: Seams). 3/3 tasks complete for PR3a (Phase 3a: Read side — domain entity + invariant). 9/9 tasks complete for PR3b (Phase 3b: Read side — persistence adapters + buscarProductos + controller). 8/8 tasks complete for PR4a (Phase 4a: Unit writes — use cases + repository save()). 7/7 tasks complete for PR4b (Phase 4b: Unit writes — HTTP adapter + exception filter + e2e). 4/4 tasks complete for PR5a (Phase 5a: Bulk load — CSV parser + envelope validation). 7/7 tasks complete for PR5b (Phase 5b: Bulk load — use case + controller + e2e). 52/~90 tasks complete overall across all 13 planned PRs.
 
-**Engram note**: no `mem_*` tools were exposed in this batch's tool set either (same as every prior batch, PR1 through PR4b) — this file remains the authoritative record, per the batch instructions ("file is authoritative regardless"). If Engram becomes available in a later batch, the topic key to upsert is `sdd/backend-core-api-catalogo/apply-progress`, content = this full file merged.
+**Engram note**: `mem_*` tools were not exposed in this batch's tool set either (same as every prior batch, PR1 through PR5a) — this file remains the authoritative record, per the batch instructions ("file is authoritative regardless"). If Engram becomes available in a later batch, the topic key to upsert is `sdd/backend-core-api-catalogo/apply-progress`, content = this full file merged.
 
 ---
 
@@ -546,3 +546,137 @@ Working tree was clean before this batch except the same pre-existing untracked 
 - **Two open value-mapping questions restated above** ("Issues Found" #1 and #2) must be resolved while writing `cargarCatalogoMasivoUseCase` — not deferred again.
 - **The duplicate-within-file scenario is explicitly PR5b's job, not PR5a's**: `spec.md`'s "Two rows identifying the same product within one file are rejected as a duplicate" scenario requires in-memory identity detection (same `catalogProductId`, or same `nombre`+`categoria` when absent) — the parser does NOT deduplicate or detect collisions; it only maps columns to `NuevoProductoProveedor` shapes, one per row, independently.
 - **Reminder from design.md, easy to miss**: `cargarCatalogoMasivoUseCase` must NOT inject `TRANSACTION_MANAGER` at all (D2) — the guarantee is structural (constructor shape), not a runtime check. The 4a.1/4a.2 precedent (`CargarProductoCatalogoUseCase`) and 4a.3-4a.5 precedent (`ActualizarPrecioUseCase`) are the closest existing examples of this domain's use-case shape (constructor-injected ports, `EmpresaNoActivaError` gate first, `EVENT_PUBLISHER.publish(...)` last) — reuse that shape, adapted for the per-row loop and the single end-of-invocation `CatalogoCargaMasivaCompletada` publish (never one event per row, D3).
+
+---
+
+## PR5b · Phase 5b: Bulk load — use case + controller + e2e — Spec: `core-api-catalogo`
+
+**Status**: done. This is the PR that closes PR3a's/PR5a's own repeatedly-flagged open question ("Issues Found" #2, restated in every batch since PR3a): does bulk-row value validation belong to `crear()`'s entity invariant, to a DTO-shaped check, or to a bespoke use-case check? **Resolved: extended `ProviderCatalogItem.crear()`** — matching design.md Diagram 1 step 2a's own literal attribution of nombre/categoria/price/stock validation to `ProviderCatalogItem.crear(companyId, fila.producto)`, not re-implemented a second time inside the use case.
+
+| # | Task | Status |
+|---|---|---|
+| 5b.1 | RED: `ports-in/cargar-catalogo-masivo.use-case.spec.ts` — 12 tests | [x] Done |
+| 5b.2 | GREEN: `ports-in/cargar-catalogo-masivo.use-case.ts` | [x] Done |
+| 5b.3 | `events/catalogo-carga-masiva-completada.event.ts` | [x] Done |
+| 5b.4 | `adapters/http/dto/carga-masiva.dto.ts` + `adapters/http/dto/resultado-carga-masiva-response.dto.ts` | [x] Done |
+| 5b.5 | `adapters/http/catalogo.controller.ts`: `POST /catalogo/mi-catalogo/carga-masiva` (200, `@Roles('provider')`) | [x] Done |
+| 5b.6 | E2e: `test/catalogo-carga-masiva.e2e-spec.ts` — 7 tests | [x] Done |
+| 5b.7 | `catalogo.module.ts`: register `CargarCatalogoMasivoUseCase` | [x] Done |
+
+### The `crear()` validation-gap decision (this PR's central claim, stated explicitly for review)
+
+PR3a's `crear()` originally validated ONLY the price invariant (`precioMaximo >= precioBase`), a scope narrowing PR3a's own "Deviations from Design" section named explicitly and flagged for "whichever PR actually exercises row-level validation." PR5a's own apply-progress restated the same open question twice more ("Issues Found" #2) without resolving it, deferring to this batch by name.
+
+**Decision made in this PR: extend `crear()` itself**, not add a parallel check inside `CargarCatalogoMasivoUseCase`. Reasoning:
+
+1. design.md Diagram 1, step 2a literally attributes this validation to `ProviderCatalogItem.crear(companyId, fila.producto)`: *"nombre/categoria no vacíos; precios finitos y >= 0; redondeo a 2 decimales; precioMaximo >= precioBase; stock entero >= 0"* — the diagram is not describing a use-case-level check that happens to call `crear()` afterward; it names `crear()` as the validator.
+2. A second, use-case-local validation pass would duplicate logic already owned by the domain, risking the two checks drifting apart over time (e.g. someone tightens `crear()`'s price check later and forgets the use-case's parallel copy).
+3. `cargarProductoCatalogo` (the single-item path, PR4a/4b) already calls `crear()` too — extending it closes a *latent* gap there as well (today masked by `NuevoProductoDto`'s `class-validator` decorators catching the same cases first, but not structurally guaranteed if that DTO ever changes).
+
+**New error class**: `ProductoInvalidoError` (`domain/catalogo.errors.ts`) — distinct from `PrecioInvalidoError`, which is only the cross-field `precioMaximo >= precioBase` invariant on already-well-formed numbers. `ProductoInvalidoError` is field-level malformation (empty `nombre`/`categoria`, non-finite/negative price, non-integer/negative `stock`), checked BEFORE rounding — `redondear(NaN)` is still `NaN`, and `NaN < x` is always `false`, so `assertPrecioValido` alone could never have caught a non-finite price (PR5a's own "Issues Found" #1 flagged exactly this `Number('')` → `NaN` risk from the parser).
+
+**Order inside `crear()`** (matches design.md's own listed order): `assertProductoValido` (raw input: nombre/categoria non-empty, prices finite >= 0, stock non-negative integer) → round → `assertPrecioValido` (cross-field invariant on rounded values, pre-existing PR3a logic, unchanged).
+
+**Added to `catalogo-exception.filter.ts`'s `ERROR_STATUS_MAP`** as 400 `PRODUCTO_INVALIDO`, defense-in-depth for the single-item path (in practice masked by the DTO today, but not expected to ever surface there — see the error class's own doc comment). `ArchivoCargaInvalidoError` (declared in PR5a, unused until now) was also added to the same map in this batch — this is the first PR with a controller route that can throw it.
+
+**Extending `crear()` did NOT touch `actualizarPrecio()` or `aplicarPorcentaje()`** — design.md's Diagram 3 only names rounding + the price invariant for `actualizarPrecio()`, no nombre/categoria/stock re-validation (those fields aren't part of a price update). Confirmed no regression: PR3a's/PR4a's/PR4b's existing test fixtures all use well-formed nombre/categoria/stock, so extending `crear()`'s validation broke nothing downstream (verified by re-running `cargar-producto-catalogo.use-case.spec.ts` in isolation before running the full suite).
+
+### How duplicate-within-file detection works (this PR's other central claim)
+
+`identidadDeFila(producto)` in `cargar-catalogo-masivo.use-case.ts`: if `catalogProductId` is present, identity is `id:${catalogProductId.trim().toLowerCase()}`; otherwise identity is `nc:${nombre.trim().toLowerCase()}::${categoria.trim().toLowerCase()}`. This deliberately mirrors PR1's own two-branch normalization on the DB side — branch 2's partial unique index is `lower(btrim(nombre)), lower(btrim(categoria))` — so a duplicate the DB would itself collide on (same product, different casing/whitespace) is also caught in-memory, before either row reaches `save()`. Without this normalization, two rows differing only in case would both attempt a `save()` call, and the 2nd would silently UPSERT over the 1st's just-persisted row — the exact "silently merged" outcome the spec scenario forbids.
+
+**Design decision, not explicitly pinned by spec.md, documented here**: identity is tracked as soon as a row is *seen* (before attempting `crear()`/`save()`), regardless of whether that row's own processing later succeeds or fails. Concretely: if row 1 has the same identity as row 2 but row 1 itself fails validation (e.g. empty `nombre`), row 2 is STILL reported as a duplicate, not given a chance to succeed on its own merits. Reasoning: the scenario's own wording — "two rows identifying the same product within one file are rejected as a duplicate" — frames this as a property of the FILE's rows, not of persistence outcome; treating identity-tracking as conditional on the first occurrence's success would make the duplicate-or-not outcome depend on which of two ambiguous rows a provider happens to list first, which is a more surprising rule to explain than "the file names the same product twice, full stop." Flagged explicitly for review since no spec.md scenario pins this exact sub-case either way.
+
+### TDD Cycle Evidence (PR5b)
+
+| Task | RED | GREEN | REFACTOR |
+|---|---|---|---|
+| `crear()` extension (nombre/categoria/price/stock validation) | Added 7 tests to the EXISTING `provider-catalog-item.entity.spec.ts` (empty nombre, whitespace-only categoria, non-finite precioBase, non-finite precioMaximo, negative precioBase, non-integer stock, negative stock) against the not-yet-extended `crear()` → ran `pnpm exec jest --testPathPatterns=provider-catalog-item` → **failed** (7 of 15: `Received function did not throw`) | Added `assertProductoValido` (private helper) + called it first inside `crear()`, before rounding → re-ran → **15/15 passed** (8 pre-existing + 7 new) | None needed |
+| 5b.1/5b.2 (`CargarCatalogoMasivoUseCase`) | Wrote `cargar-catalogo-masivo.use-case.spec.ts` (12 tests: structural `TRANSACTION_MANAGER`-never-injected check via `Reflect.getMetadata('self:paramtypes', ...)`, `EmpresaNoActivaError` gate for both `suspendido`/`pendiente`, companyId applied to every row, N-M partial failure with correct `numero`s, a `save()`-rejection row reported without aborting the batch, duplicate-by-`catalogProductId`, duplicate-by-`nombre`+`categoria` case/whitespace-insensitive, non-duplicate when only one of the two identity fields matches, exactly-one-event for a mixed outcome, exactly-one-event with 0 successes, zero per-item `ProductoAgregado` events) against a not-yet-existing `./cargar-catalogo-masivo.use-case` → ran → **failed** (`Cannot find module`) | Created `events/catalogo-carga-masiva-completada.event.ts` (natural dependency, same precedent as PR4a/4b) and `cargar-catalogo-masivo.use-case.ts` (`EmpresaNoActivaError` gate → per-row loop: identity check → `crear()` → `save()`, catch-and-`fallos.push`-and-continue → single `publish(CatalogoCargaMasivaCompletada)` after the loop) → re-ran → **12/12 passed, first attempt** (including the structural DI test) | None needed |
+| `catalogo-exception.filter.ts` (`ArchivoCargaInvalidoError` + `ProductoInvalidoError` mappings) | Extended `catalogo-exception.filter.spec.ts` with 2 new `describe.each` cases FIRST, then temporarily `git stash`ed the (already-drafted) filter implementation to reproduce a genuine RED (`git stash push` on just the filter file, re-run → 2 failed with `Received: 500`, 3 pre-existing passed) — a deliberate self-correction after initially drafting the filter change before its test, to keep the RED→GREEN evidence honest rather than silently presenting an after-the-fact pass as RED-first | `git stash pop` to restore the drafted `@Catch(...)` + `ERROR_STATUS_MAP` additions → re-ran → **5/5 passed** | None needed |
+| 5b.4/5b.5/5b.7 (DTOs, controller route, module wiring) | No dedicated RED test — same precedent as PR4b's 4b.3/4b.7 (`tasks.md` doesn't label these RED/GREEN; route/DTO wiring is proven by the e2e suite, not a route-level unit spec) | Implemented directly; correctness proven by `pnpm typecheck` (caught one real bug — see "Issues Found" below) + the e2e suite (5b.6) exercising every route through the real `FileInterceptor`/`AuthGuard`/`RolesGuard`/`CatalogoExceptionFilter` pipeline | None needed |
+| 5b.6 (e2e) | No RED-first ordering — same precedent as 3b.9/4b.6/5a's non-labeling of e2e tasks | Wrote `test/catalogo-carga-masiva.e2e-spec.ts` (7 tests) after the use case/DTOs/controller/module were all in place → ran once → **7/7 passed on the first run** | N/A |
+
+### Commands Run (PR5b batch)
+
+| Command | Result |
+|---|---|
+| `pnpm exec jest --testPathPatterns=provider-catalog-item` (RED, before `crear()` extension) | 7 failed / 8 passed |
+| `pnpm exec jest --testPathPatterns=provider-catalog-item` (GREEN) | 15/15 passed |
+| `pnpm exec jest --testPathPatterns=cargar-producto-catalogo` (regression check after extending `crear()`) | 4/4 passed — confirms the single-item path's existing fixtures still satisfy the new validation |
+| `pnpm exec jest --testPathPatterns=cargar-catalogo-masivo` (RED, before the use case existed) | Suite failed to run — module not found |
+| `pnpm exec jest --testPathPatterns=cargar-catalogo-masivo` (GREEN) | 12/12 passed, first attempt |
+| `git stash push` (filter implementation only) + `pnpm exec jest --testPathPatterns=catalogo-exception.filter` (RED) | 2 failed (`Received: 500`) / 3 passed |
+| `git stash pop` + `pnpm exec jest --testPathPatterns=catalogo-exception.filter` (GREEN) | 5/5 passed |
+| `pnpm --filter core-api typecheck` (mid-batch, after the e2e file was written) | Failed once — `test/catalogo-carga-masiva.e2e-spec.ts`'s `authenticate()` helper spread `...overrides` AFTER the computed non-null `companyId`, letting a nullable `overrides.companyId` silently win — both a real logic bug (the computed fallback would have been discarded) and a `TS2322` (`string \| null` not assignable to `string`) against `buildProviderActor`'s required `{ companyId: string }`. Fixed by reordering the spread (`{ ...overrides, profileId, companyId }`) so the computed non-null values always win. Re-ran `pnpm typecheck` → clean |
+| `pnpm exec jest --config ./test/jest-e2e.json --testPathPatterns=catalogo-carga-masiva` (after the typecheck fix) | 7/7 passed |
+| `pnpm lint` (root) | Clean (only the pre-existing unrelated Node engine version WARN) |
+| `pnpm typecheck` (root) | Clean — `packages/types` + `services/core-api` both `Done` |
+| `pnpm test` (root — unit + e2e) | `core-api`: 30 suites / **203** unit tests passed (was 182 before this batch — +21: 7 entity + 12 use-case + 2 filter), 6 suites / **38** e2e tests passed (was 31 — +7 new). Zero regressions |
+| `pnpm build` | Clean — `services/core-api` `tsc -p tsconfig.build.json` `Done` |
+| `pnpm format:check` | Failed once (`catalogo-exception.filter.ts` + `cargar-catalogo-masivo.use-case.spec.ts` not Prettier-formatted) → ran `pnpm exec prettier --write` on both → re-ran `pnpm format:check` → clean |
+| Full re-run of `lint`/`typecheck`/`test`/`build`/`format:check` after the Prettier fix | All green again, same counts (203 unit + 38 e2e) |
+
+All 5 gate commands (`lint`, `typecheck`, `test`, `build`, `format:check`) are green as of the final run.
+
+### Deviations from Design (PR5b)
+
+**One real, named, resolved deviation from PR3a's original scope** — the `crear()` validation extension itself, covered in full above under "The `crear()` validation-gap decision." Not a deviation from design.md (design.md always specified this validation for `crear()`); it IS a deviation from PR3a's narrower implementation, closed here as PR3a's own notes explicitly anticipated.
+
+**5b.6's e2e task text says "re-upload updates not duplicates (relies on PR1's index)"** — NOT implemented as a literal e2e test in this batch. `test/catalogo-carga-masiva.e2e-spec.ts` overrides `CATALOG_REPOSITORY` with a jest mock (same "override the port, keep the wiring real" convention as `catalogo-mi-catalogo.e2e-spec.ts`/`catalogo-buscar-productos.e2e-spec.ts`), so a mocked `save()` cannot meaningfully prove an idempotent upsert against a real unique index — calling `execute()` twice against a mock only proves `save()` was called twice, not that the DB deduplicated. That specific DB-level property is already proven at the correct layer: PR1's opt-in integration test (`catalogo-provider-catalog-upsert.integration-spec.ts`) against real Postgres, and PR4a's `kysely-catalog.repository.spec.ts` unit tests for `save()`'s D-C conflict-target bifurcation. Re-testing it here would either be a no-op assertion against a mock or would require standing up real Supabase in an e2e suite that every other spec in this domain deliberately avoids. `tasks.md`'s own 5b.6 line has been updated (see the task table) to document this explicitly rather than silently dropping the phrase.
+
+Everything else matches design.md verbatim: the per-row loop with no wrapping transaction (D2), the single end-of-invocation event (D3), `companyId` derived exclusively from the actor (D8), the `EmpresaNoActivaError` gate ordering (D-E), and the `ArchivoCargaInvalidoError`-before-any-row-processing ordering (parser runs inside the controller, before `execute()` is ever called).
+
+### Issues Found (PR5b)
+
+None blocking. Two items worth recording:
+
+1. **The `authenticate()` test-helper spread-order bug** (see "Commands Run" above) — caught by `pnpm typecheck`, not by a failing test (the bug was in test-fixture code, not production code; every affected e2e test still passed because none of them actually exercised the `overrides.companyId` code path with a conflicting value). Fixed before any gate ran green. Documents itself as evidence `pnpm typecheck` is doing real work in this codebase's CI gate, not a rubber-stamp.
+2. **Multer's own `fileSize` limit produces `413 PayloadTooLargeException`, not `ArchivoCargaInvalidoError`'s `400 ARCHIVO_CARGA_INVALIDO`** — verified by reading `@nestjs/platform-express`'s `multer.utils.ts` `transformException()` directly (`LIMIT_FILE_SIZE` → `PayloadTooLargeException`, a Nest-native `HttpException`, before `parseArchivoCarga` ever runs). Both `FileInterceptor`'s `limits.fileSize` and `parseArchivoCarga`'s own `file.size > CARGA_MASIVA_MAX_BYTES` check are set to the SAME `CARGA_MASIVA_MAX_BYTES` constant, so in practice Multer's own limit fires first on a genuinely oversized upload — the parser's own size check is defense-in-depth (covers any caller path where `file.size` differs from what Multer measured, and is exhaustively unit-tested against a fake envelope object in PR5a's `carga-masiva.parser.spec.ts`, bypassing real Multer). **The e2e suite tests "malformed" (wrong mimetype, bad header), not "oversized," for exactly this reason** — a real oversized multipart upload in this e2e suite would prove Nest's OWN `PayloadTooLargeException` mapping, not this domain's `ArchivoCargaInvalidoError` path, and would not exercise `parseArchivoCarga`'s size branch at all. Flagged for whoever reviews this PR: if the maintainer wants `ARCHIVO_CARGA_INVALIDO` (not `413`) to be the client-visible outcome for an oversized upload, `FileInterceptor`'s `limits.fileSize` would need to be removed (or set higher than `CARGA_MASIVA_MAX_BYTES`) so Multer never intercepts first — a design.md-level decision, not something this batch should decide unilaterally.
+
+### Workload note (PR5b)
+
+Diff came in at 978 insertions / 28 deletions (≈1,006 changed lines) across 15 files, against the tasks.md estimate of 300-380 for this work unit — roughly 2.6-3.3x over, the largest overage yet in this change, though following the exact same pattern named and accepted in every prior batch (PR4a 617/26, PR4b 930/30, PR5a 392 lines). Breakdown: the two test files are the majority (`cargar-catalogo-masivo.use-case.spec.ts` 231 lines / 12 tests, `test/catalogo-carga-masiva.e2e-spec.ts` 287 lines / 7 tests — 518 lines, ~52% of the diff); the remaining ~460 lines are the use case itself (113), the `crear()` extension + its 7 new tests (~110 combined), the controller route + imports (+63), the exception filter map/catch-list extension + its 2 new tests (+37 combined), the DTOs (+55), the mapper addition (+26), the event class (21), and the module registration (+15). No task outside 5b.1-5b.7 was touched — the `crear()` extension is not scope creep; it was an explicit, named prerequisite this batch's own instructions called out ("this batch's own use case needs those checks to make the partial-failure scenarios pass"). Flagged here per this project's Review Workload Guard, consistent with every prior batch's precedent of naming rather than silently absorbing the overage. `Chain strategy: stacked-to-main` (from `tasks.md`'s Review Workload Forecast) — this PR was committed directly to `main`, same as PR1 through PR5a.
+
+### Files Changed (PR5b)
+
+| File | Action | What Was Done |
+|---|---|---|
+| `services/core-api/src/domains/catalogo/domain/catalogo.errors.ts` | Modified | Appended `ProductoInvalidoError` (400 `PRODUCTO_INVALIDO`) |
+| `services/core-api/src/domains/catalogo/domain/provider-catalog-item.entity.ts` | Modified | Extended `crear()` with `assertProductoValido` (nombre/categoria non-empty, finite non-negative prices, non-negative integer stock), called before rounding |
+| `services/core-api/src/domains/catalogo/domain/provider-catalog-item.entity.spec.ts` | Modified | Added 7 RED→GREEN tests for the `crear()` extension |
+| `services/core-api/src/domains/catalogo/ports-in/cargar-catalogo-masivo.use-case.ts` | Created | `EmpresaNoActivaError` gate → per-row loop (duplicate-identity check → `crear()` → `save()`, catch-and-continue) → single `publish(CatalogoCargaMasivaCompletada)` |
+| `services/core-api/src/domains/catalogo/ports-in/cargar-catalogo-masivo.use-case.spec.ts` | Created | RED→GREEN, 12 tests including the structural `TRANSACTION_MANAGER`-never-injected check |
+| `services/core-api/src/domains/catalogo/events/catalogo-carga-masiva-completada.event.ts` | Created | `CatalogoCargaMasivaCompletada` — `(companyId, totalCargados, totalFallidos)` |
+| `services/core-api/src/domains/catalogo/adapters/http/dto/carga-masiva.dto.ts` | Created | Swagger-only multipart envelope shape (thin — real validation is `parseArchivoCarga`'s) |
+| `services/core-api/src/domains/catalogo/adapters/http/dto/resultado-carga-masiva-response.dto.ts` | Created | Response shape for `cargarCatalogoMasivo` (200) — mirrors `ResultadoCargaMasiva` |
+| `services/core-api/src/domains/catalogo/adapters/http/catalogo.mapper.ts` | Modified | Added `toResultadoCargaMasivaResponseDto` |
+| `services/core-api/src/domains/catalogo/adapters/http/catalogo.controller.ts` | Modified | Added `POST /catalogo/mi-catalogo/carga-masiva` (200, `@Roles('provider')`, `FileInterceptor`, missing-file guard, `parseArchivoCarga` → use case) |
+| `services/core-api/src/domains/catalogo/adapters/http/catalogo-exception.filter.ts` | Modified | Added `ArchivoCargaInvalidoError`→400/`ARCHIVO_CARGA_INVALIDO` and `ProductoInvalidoError`→400/`PRODUCTO_INVALIDO` to `@Catch()` + `ERROR_STATUS_MAP` |
+| `services/core-api/src/domains/catalogo/adapters/http/catalogo-exception.filter.spec.ts` | Modified | Added 2 `describe.each` cases (RED→GREEN, verified via a temporary `git stash` of the implementation) |
+| `services/core-api/src/domains/catalogo/catalogo.module.ts` | Modified | Registered `CargarCatalogoMasivoUseCase`; updated the module's own doc comment |
+| `services/core-api/test/catalogo-carga-masiva.e2e-spec.ts` | Created | 7 e2e tests: partial failure, duplicate-within-file, malformed header → 400, wrong mimetype → 400, suspended company → 403, all-rows-fail still emits one event, non-provider role → 403 |
+| `openspec/changes/backend-core-api-catalogo/tasks.md` | Modified | Marked tasks 5b.1–5b.7 `[x]`; annotated 5b.6 with the "re-upload" scope note |
+| `openspec/changes/backend-core-api-catalogo/apply-progress.md` | Modified | Merged PR5b section into PR1+PR2+PR3a+PR3b+PR4a+PR4b+PR5a's file (this file) |
+
+### Commit (PR5b)
+
+One commit for this PR5b batch:
+
+```
+feat(core-api): add cargarCatalogoMasivo use case with per-row partial-failure reporting
+```
+
+Commit hash: `372f280`. Working tree was clean before this batch except the same pre-existing untracked `openspec/changes/backend-core-api-catalogo/{design.md,exploration.md,proposal.md,specs/}` noted since PR2 — left untouched/untracked, out of this batch's scope.
+
+---
+
+## What PR6 (next batch) Needs to Know
+
+- **Start here**: `## Phase 6: Category adjustment` in `tasks.md` (tasks 6.1–6.9). Depends on PR2's `saveMany` signature (already declared on `CatalogRepository`, currently throwing a named "not yet available" error in `KyselyCatalogRepository`) and PR3b's `findByCompanyAndCategoria` (already implemented, read-side).
+- **This is the FIRST use case in this domain that DOES wrap `runInTransaction`** — a deliberate contrast with `cargarCatalogoMasivo` (PR5b, this batch) and every other mutating use case so far. `ajustarPreciosPorCategoria` reads `findByCompanyAndCategoria`, applies `aplicarPorcentaje()` (PR3a's entity function, already implemented and unit-tested since PR3a) to every item, then calls `saveMany` — ALL inside one `TransactionManager.runInTransaction`, with `tx` propagated through both calls. Do not reuse `CargarCatalogoMasivoUseCase`'s "never inject `TRANSACTION_MANAGER`" shape here — that guarantee is specific to the bulk-load use case (D2), not a domain-wide rule; PR6's own task 6.4 explicitly requires `runInTransaction invoked with tx propagated to saveMany`, the opposite structural guarantee.
+- **`saveMany()` on `KyselyCatalogRepository` still throws** ("not yet available") — task 6.1/6.2 is where it finally gets implemented (extend `kysely-catalog.repository.spec.ts`, then implement). It must accept and propagate `tx` the same way every other repository method already does (`this.executor(tx)`).
+- **`aplicarPorcentaje()` is already fully implemented and unit-tested** (PR3a, `provider-catalog-item.entity.ts`) — scales both `precioBase`/`precioMaximo` by the same factor, rejects `porcentaje <= -100` before any computation, preserves the invariant by construction for any `porcentaje > -100`. PR6's use case calls it per item; no entity-level work should be needed here.
+- **`PorcentajeInvalidoError` does not exist yet** (task 6.3) — append it to `domain/catalogo.errors.ts` (never edited destructively). Note: `aplicarPorcentaje()` itself already throws `PrecioInvalidoError` for the `porcentaje <= -100` case (PR3a's own choice, made before `PorcentajeInvalidoError` existed) — decide in PR6 whether `PorcentajeInvalidoError` is a NEW class the use case throws for a DIFFERENT validation (e.g. rejecting a non-numeric/out-of-a-different-range `porcentaje` before ever calling the entity), or whether task 6.3's intent was actually superseded by PR3a's choice to reuse `PrecioInvalidoError`. This is exactly the kind of "PR3a made a call before PR6 existed" question this file exists to surface — don't silently assume either interpretation; check `tasks.md` task 6.4's exact wording ("porcentaje <= -100 rejected before any repo call") against what `aplicarPorcentaje()` already does before deciding whether `PorcentajeInvalidoError` needs to exist at all, or needs a `catalogo-exception.filter.ts` entry, or both.
+- **`PreciosCategoriaAjustados` event shape**: task 6.6 specifies `{companyId, categoria, porcentaje, totalActualizados}` (D6) — richer than `ProductoAgregado`/`PrecioActualizado`/`CatalogoCargaMasivaCompletada`'s minimal shapes. Follow `tasks.md`'s literal field list, not the minimal-shape precedent those 3 other events set (they were minimal by their OWN choice, not a repo-wide convention).
+- **Cross-tenant isolation for a category adjustment** is proven differently than R1's cross-tenant 404 (PR4a/4b): `ajustarPreciosPorCategoria` operates on `findByCompanyAndCategoria(companyId, categoria)` — a query already scoped to the caller's own company, so there's no `itemId` to leak via enumeration. Task 6.8's e2e "cross-company isolation" scenario should assert company B's items in the same `categoria` are simply never touched (not present in the `saveMany` call), not a 404-vs-403 split.
