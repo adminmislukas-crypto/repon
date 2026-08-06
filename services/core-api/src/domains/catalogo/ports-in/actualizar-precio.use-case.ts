@@ -1,7 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { CompanyStatus, ProviderCatalogItem } from '@repon/types';
+import {
+  EVENT_PUBLISHER,
+  type EventPublisher,
+} from '../../../shared/event-bus/event-publisher.port';
 import { CatalogItemNotFoundError, EmpresaNoActivaError } from '../domain/catalogo.errors';
 import { actualizarPrecio as actualizarPrecioEnLaEntidad } from '../domain/provider-catalog-item.entity';
+import { PrecioActualizado } from '../events/precio-actualizado.event';
 import { CATALOG_REPOSITORY, type CatalogRepository } from '../ports-out/catalog-repository.port';
 
 /**
@@ -20,10 +25,20 @@ import { CATALOG_REPOSITORY, type CatalogRepository } from '../ports-out/catalog
  * channel. The internal log (out of scope for this use case's return
  * value) MAY distinguish the two for observability; the thrown error and
  * the HTTP response it maps to (Phase 4b) never do.
+ *
+ * Publishes exactly one `PrecioActualizado`, after `save()` commits, ONLY
+ * on the happy path — never on the `EmpresaNoActivaError`/
+ * `CatalogItemNotFoundError`/`PrecioInvalidoError` rejection paths (design.md
+ * Diagram 3, step (7); mirrors `CargarProductoCatalogoUseCase`'s
+ * publish-after-save shape). This was a deliberate gap left open by PR 4a
+ * (see that batch's own apply-progress notes) and is closed in this PR.
  */
 @Injectable()
 export class ActualizarPrecioUseCase {
-  constructor(@Inject(CATALOG_REPOSITORY) private readonly catalogRepository: CatalogRepository) {}
+  constructor(
+    @Inject(CATALOG_REPOSITORY) private readonly catalogRepository: CatalogRepository,
+    @Inject(EVENT_PUBLISHER) private readonly eventPublisher: EventPublisher,
+  ) {}
 
   async execute(
     companyId: string,
@@ -47,6 +62,7 @@ export class ActualizarPrecioUseCase {
     // here and never trusting the DB CHECK.
     const actualizado = actualizarPrecioEnLaEntidad(item, precioBase, precioMaximo);
     await this.catalogRepository.save(actualizado);
+    await this.eventPublisher.publish(new PrecioActualizado(companyId, itemId));
     return actualizado;
   }
 }

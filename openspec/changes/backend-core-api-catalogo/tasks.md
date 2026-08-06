@@ -116,13 +116,13 @@ Highest review priority per design.md ("el PR que más merece review dedicada").
 
 Depends on Phase 4a's use cases.
 
-- [ ] 4b.1 `events/producto-agregado.event.ts`, `events/precio-actualizado.event.ts`.
-- [ ] 4b.2 `adapters/http/dto/nuevo-producto.dto.ts`, `adapters/http/dto/actualizar-precio.dto.ts` (no `companyId` field on either, D8), `catalogo.mapper.ts` additions.
-- [ ] 4b.3 `adapters/http/catalogo.controller.ts`: `POST /catalogo/mi-catalogo` (201, `@Roles('provider')`), `PUT /catalogo/mi-catalogo/:itemId/precio` (204, `@Roles('provider')`).
-- [ ] 4b.4 RED: `catalogo-exception.filter.spec.ts` — one test per mapped error class.
-- [ ] 4b.5 GREEN: `adapters/http/catalogo-exception.filter.ts` mirroring `IdentidadExceptionFilter` (404/403/400/503 map), `@UseFilters` at controller level.
-- [ ] 4b.6 E2e: `test/catalogo-mi-catalogo.e2e-spec.ts` — 404 not 403 cross-tenant, DTO rejection (extra/missing field → 400), 403 suspended company, happy paths for both routes.
-- [ ] 4b.7 `catalogo.module.ts`: register `CargarProductoCatalogoUseCase`, `ActualizarPrecioUseCase`.
+- [x] 4b.1 `events/producto-agregado.event.ts`, `events/precio-actualizado.event.ts`.
+- [x] 4b.2 `adapters/http/dto/nuevo-producto.dto.ts`, `adapters/http/dto/actualizar-precio.dto.ts` (no `companyId` field on either, D8), `catalogo.mapper.ts` additions.
+- [x] 4b.3 `adapters/http/catalogo.controller.ts`: `POST /catalogo/mi-catalogo` (201, `@Roles('provider')`), `PUT /catalogo/mi-catalogo/:itemId/precio` (204, `@Roles('provider')`).
+- [x] 4b.4 RED: `catalogo-exception.filter.spec.ts` — one test per mapped error class.
+- [x] 4b.5 GREEN: `adapters/http/catalogo-exception.filter.ts` mirroring `IdentidadExceptionFilter` (404/403/400/503 map), `@UseFilters` at controller level.
+- [x] 4b.6 E2e: `test/catalogo-mi-catalogo.e2e-spec.ts` — 404 not 403 cross-tenant, DTO rejection (extra/missing field → 400), 403 suspended company, happy paths for both routes.
+- [x] 4b.7 `catalogo.module.ts`: register `CargarProductoCatalogoUseCase`, `ActualizarPrecioUseCase`.
 
 ## Phase 5a: Bulk load — CSV parser + envelope validation — Spec: `core-api-catalogo`, `shared-types-package`
 
