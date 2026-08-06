@@ -66,3 +66,27 @@ export class EmpresaNoActivaError extends Error {
     this.name = 'EmpresaNoActivaError';
   }
 }
+
+/**
+ * Maps to 400 `ARCHIVO_CARGA_INVALIDO` in `adapters/http/` (design.md's
+ * error table, Phase 5a). Thrown by `adapters/http/carga-masiva.parser.ts`
+ * when the multipart upload's ENVELOPE is invalid — wrong mimetype, a file
+ * over the size limit, a data-row count outside `[1, 500]`, or a header
+ * missing a required column (design.md Diagram 1, step P1). Never thrown
+ * for a row-VALUE problem (a negative price, an empty `nombre`, etc.) —
+ * that is per-row failure reporting inside `ResultadoCargaMasiva.fallos`
+ * (`cargarCatalogoMasivo`, Phase 5b), not an envelope rejection: a single
+ * malformed row must never invalidate the whole file (D2). When the
+ * envelope itself is rejected, nothing is written and nothing is emitted —
+ * the request fails before `cargarCatalogoMasivo` ever runs. `cause`
+ * preserves the original `csv-parse` error, if any, mirroring
+ * `CatalogQueryUnavailableError`'s `cause`-preserving shape (`contracts/
+ * catalog-query.port.ts`, D-B) for the same reason: never let a
+ * lower-layer error silently vanish.
+ */
+export class ArchivoCargaInvalidoError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'ArchivoCargaInvalidoError';
+  }
+}

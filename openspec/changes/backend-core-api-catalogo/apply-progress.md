@@ -2,11 +2,11 @@
 
 **Artifact store**: hybrid (this file + Engram `sdd/backend-core-api-catalogo/apply-progress`)
 **Strict TDD Mode**: active (`test_command: pnpm test`)
-**Last updated**: 2026-08-06T19:45:00Z — PR4b batch (merged with PR1+PR2+PR3a+PR3b+PR4a; all unchanged below except this note)
+**Last updated**: 2026-08-06T19:50:00Z — PR5a batch (merged with PR1+PR2+PR3a+PR3b+PR4a+PR4b; all unchanged below except this note)
 
-## Status: 7/7 tasks complete for PR1 (Phase 1: DB foundation). 7/7 tasks complete for PR2 (Phase 2: Seams). 3/3 tasks complete for PR3a (Phase 3a: Read side — domain entity + invariant). 9/9 tasks complete for PR3b (Phase 3b: Read side — persistence adapters + buscarProductos + controller). 8/8 tasks complete for PR4a (Phase 4a: Unit writes — use cases + repository save()). 7/7 tasks complete for PR4b (Phase 4b: Unit writes — HTTP adapter + exception filter + e2e). 41/~90 tasks complete overall across all 13 planned PRs.
+## Status: 7/7 tasks complete for PR1 (Phase 1: DB foundation). 7/7 tasks complete for PR2 (Phase 2: Seams). 3/3 tasks complete for PR3a (Phase 3a: Read side — domain entity + invariant). 9/9 tasks complete for PR3b (Phase 3b: Read side — persistence adapters + buscarProductos + controller). 8/8 tasks complete for PR4a (Phase 4a: Unit writes — use cases + repository save()). 7/7 tasks complete for PR4b (Phase 4b: Unit writes — HTTP adapter + exception filter + e2e). 4/4 tasks complete for PR5a (Phase 5a: Bulk load — CSV parser + envelope validation). 45/~90 tasks complete overall across all 13 planned PRs.
 
-**Engram note**: no `mem_*` tools were exposed in this batch's tool set either (same as PR1/PR2, and still true as of the PR4a batch) — this file remains the authoritative record. If Engram becomes available in a later batch, the topic key to upsert is `sdd/backend-core-api-catalogo/apply-progress`, content = this full file merged.
+**Engram note**: no `mem_*` tools were exposed in this batch's tool set either (same as every prior batch, PR1 through PR4b) — this file remains the authoritative record, per the batch instructions ("file is authoritative regardless"). If Engram becomes available in a later batch, the topic key to upsert is `sdd/backend-core-api-catalogo/apply-progress`, content = this full file merged.
 
 ---
 
@@ -449,3 +449,100 @@ Commit hash: `1accff1`. Working tree was clean before this batch except the same
 - **`numero` is 1-based, excluding the header row** — the field `ResultadoCargaMasiva.fallos[].numero` (already declared in `@repon/types`) must line up with this exactly so a provider can find the offending row in their original file.
 - **CERO validation of row VALUES during parsing** (design.md Diagram 1, P2): the parser only maps CSV columns to `NuevoProductoProveedor` keys and casts with `Number()` (`NaN` is an acceptable parse result at this stage) — row-level value validation (non-empty `nombre`, non-negative prices, etc.) happens later, per row, in PR5b's use case (reusing the same `class-validator`-shaped checks that `NuevoProductoDto` already has for the single-item path, OR reusing `crear()`'s entity-level invariant — check design.md's Diagram 1 step 2a again before deciding which layer owns it for the bulk path; PR3a's own apply-progress note flags this exact question as still open).
 - **This PR's `NuevoProductoDto`/`ActualizarPrecioDto`/`catalogo.mapper.ts` are NOT reused directly by PR5a/5b** — the bulk path works from `ArchivoCarga`/`FilaCarga` (already-parsed, framework-free), not from a per-row DTO instance. Do not force a DTO validation pass onto bulk rows just because the single-item path has one; re-derive whatever validation the bulk path needs at the point design.md's diagram says it belongs (the use case, not the parser).
+
+---
+
+## PR5a · Phase 5a: Bulk load — CSV parser + envelope validation — Spec: `core-api-catalogo`, `shared-types-package`
+
+**Status**: done. Parser-only slice, independent of PR5b's use case (which consumes this parser's `ArchivoCarga` output).
+
+| # | Task | Status |
+|---|---|---|
+| 5a.1 | Add `csv-parse` + `@types/multer` to `services/core-api/package.json` | [x] Done |
+| 5a.2 | RED: `adapters/http/carga-masiva.parser.spec.ts` — envelope rejects wrong mimetype, oversized file, 0/>500 rows, missing/malformed header (400 `ARCHIVO_CARGA_INVALIDO`); valid CSV parses into `ArchivoCarga` with 1-based `numero` | [x] Done |
+| 5a.3 | GREEN: `adapters/http/carga-masiva.parser.ts` (`csv-parse/sync`) — envelope checks + form-only row mapping | [x] Done |
+| 5a.4 | `domain/catalogo.errors.ts`: append `ArchivoCargaInvalidoError` | [x] Done |
+
+### Environment note, worth recording for future batches
+
+`pnpm add`/`pnpm install` against the repo's configured private registry (AWS CodeArtifact, `~/.npmrc`) failed with `401 Unauthorized` — the cached auth token had expired, and no AWS credentials were available in this environment to refresh it (`aws sts get-caller-identity` → `NoCredentials`). **Both `csv-parse` and `@types/multer` are public, unscoped packages with no reason to require the private proxy.** Worked around it by pointing `pnpm add`/`pnpm install` at the public registry directly for this one operation only (`--registry=https://registry.npmjs.org`), which resolved cleanly. `package.json`/`pnpm-lock.yaml` afterward are identical in shape to what a normal `pnpm add` against the private mirror would have produced (same version, same dependency tree) — the override only changed *where the tarballs were fetched from*, not what got recorded. If the private registry's token is still expired in a later batch needing a new dependency, the same workaround applies; if the private registry proxies packages that AREN'T on public npm (private, scoped `@repon/*`-style packages), this workaround would NOT work and the token would need a real refresh.
+
+### TDD Cycle Evidence (PR5a)
+
+| Task | RED | GREEN | REFACTOR |
+|---|---|---|---|
+| 5a.2/5a.3 (`parseArchivoCarga`) | Wrote `carga-masiva.parser.spec.ts` (11 tests: 6 envelope-rejection cases — wrong mimetype, oversized file, completely empty file, header-only/0 data rows, >500 data rows, header missing a required column, header sharing none of the required columns — and 5 successful-parse cases — 1-based `numero` excluding header, optional-column presence/absence, `Number()`-cast with `NaN` permitted for a malformed cell without tainting sibling fields, header-order independence) against a not-yet-existing `./carga-masiva.parser` → ran `pnpm exec jest --testPathPatterns=carga-masiva.parser` → **failed** (`Cannot find module './carga-masiva.parser'`, suite failed to run — genuine RED, `ArchivoCargaInvalidoError` was created first as a natural compile dependency, same precedent as PR3a/PR4a creating their error classes ahead of the GREEN implementation) | Created `carga-masiva.parser.ts`: mimetype check → size check → raw-row parse (`csv-parse/sync`, no `columns: true` — deliberately, so "header present with 0 data rows" and "no header at all" stay two independently-throwing, independently-testable branches) → header-contains-required-columns check → row-count-in-range check → per-row form-only mapping (`Number()` cast for numeric columns, boolean cast for `disponible`, pass-through for optional string columns) → re-ran same command → **11/11 passed, first attempt** | None needed |
+| 5a.1 (dependencies) | N/A — package.json/lockfile edit, not behavior-under-test, same category as PR1's DDL tasks | N/A | N/A |
+| 5a.4 (`ArchivoCargaInvalidoError`) | N/A — pure declaration, doc-commented, appended (never edited destructively) to the existing `catalogo.errors.ts`, same convention as `CatalogItemNotFoundError`/`EmpresaNoActivaError` in PR4a | N/A | N/A |
+
+### Commands Run (PR5a batch)
+
+| Command | Result |
+|---|---|
+| `pnpm add csv-parse @types/multer --filter core-api --registry=https://registry.npmjs.org` | Resolved and installed both; `pnpm-lock.yaml` updated. `@types/multer` initially landed in `dependencies` (pnpm's default placement) — manually moved to `devDependencies` afterward to match this repo's own convention (`@types/pg`/`@types/jest`/`@types/supertest` are all `devDependencies`), then re-ran `pnpm install --filter core-api --registry=...` to reconcile the lockfile with the manual edit — clean, no re-resolution needed |
+| `pnpm exec jest --testPathPatterns=carga-masiva.parser` (RED, before implementation) | Suite failed to run — `Cannot find module './carga-masiva.parser'` |
+| `pnpm exec jest --testPathPatterns=carga-masiva.parser` (GREEN, after implementation) | 11/11 passed, first attempt |
+| `pnpm lint` (root) | Clean (only the pre-existing unrelated Node engine version WARN) |
+| `pnpm typecheck` (root) | Clean — `packages/types` + `services/core-api` both `Done`. Confirms the `tsconfig.json` `types: ["node", "jest", "multer"]` addition correctly pulls in `Express.Multer.File`'s global augmentation without needing an explicit `/// <reference>` in application code |
+| `pnpm test` (root — unit + e2e) | `core-api`: 29 suites / **182** unit tests passed (was 171 before this batch — +11 is exactly the new `carga-masiva.parser.spec.ts`), 5 suites / **31** e2e tests passed (unchanged — this batch adds no e2e, no route exists yet). Zero regressions |
+| `pnpm build` | Clean — `services/core-api` `tsc -p tsconfig.build.json` `Done` |
+| `pnpm format:check` | Failed once (`carga-masiva.parser.ts` + `.spec.ts` not Prettier-formatted) → ran `pnpm exec prettier --write` on both → re-ran `pnpm format:check` → clean |
+| Full re-run of `lint`/`typecheck`/`test`/`build` after the Prettier fix | All green again, same counts (182 unit + 31 e2e) |
+
+All 5 gate commands (`lint`, `typecheck`, `test`, `build`, `format:check`) are green as of the final run.
+
+### Deviations from Design (PR5a)
+
+**One necessary interpretation, not a silent deviation — the CSV header's exact column names.** Neither `spec.md` nor `design.md` pins the literal CSV column names a provider's file must use; design.md's Diagram 1 only says "cabecera esperada" (an expected header) without specifying it. Chose the 8 `NuevoProductoProveedor` field names verbatim as the column vocabulary (`catalogProductId, nombre, categoria, precioBase, precioMaximo, stock, disponible, imagenUrl`), matched by name (not position) so a provider's column order never matters — this is the most literal reading of design.md's own P2 description ("`csv-parse` -> `ArchivoCarga`... SOLO forma: mapea columnas a claves"), which implies a direct column-name-to-key mapping rather than an undocumented translation table nobody asked for. Header validation checks **presence of the 5 required columns only** (`nombre`, `categoria`, `precioBase`, `precioMaximo`, `stock`) — the 3 optional `NuevoProductoProveedor` fields do not force an always-empty column onto a provider who never uses them. **Flagged for review**: if product/design later pins a different (e.g. Spanish-prose, non-field-name) column vocabulary for the provider-facing template, this is the file to revisit — the mapping logic is centralized in one function (`mapRowAProducto`), so the blast radius of a column-vocabulary change is contained to `carga-masiva.parser.ts` alone.
+
+**One scope decision matching the batch's own explicit instruction, not a gap**: task 5a.3's own text says "+ `FileInterceptor('archivo')` wiring", but per the batch instructions ("if there's no natural attachment point yet, keep the interceptor wiring documented/ready but do not create the route itself") and the explicit "What NOT to do" list ("do not add the `POST /catalogo/mi-catalogo/carga-masiva` route"), no controller method exists yet to attach `@UseInterceptors(FileInterceptor(...))` to. Readiness is expressed instead as an exported `CARGA_MASIVA_FILE_FIELD = 'archivo'` constant with a doc comment spelling out exactly how PR5b's controller method will consume it (`@UseInterceptors(FileInterceptor(CARGA_MASIVA_FILE_FIELD, { limits: { fileSize: CARGA_MASIVA_MAX_BYTES } }))`) — single source of truth for the field name so the interceptor and the parser can never drift apart. `catalogo.controller.ts` was NOT touched in this batch, per instruction. Similarly, "+ envelope DTO" in task 5a.3's text is PR5b's task 5b.4 (`adapters/http/dto/carga-masiva.dto.ts`, the multipart envelope DTO) — not created here; this batch's envelope validation lives entirely inside `parseArchivoCarga` itself (a plain function, not a `class-validator`-decorated DTO, since there is no framework request-body object to decorate yet — the file arrives as a Multer buffer, not JSON).
+
+**One documented value-mapping choice for `disponible` (boolean), not pinned by design.md**: numeric columns have a natural "malformed" sentinel (`NaN`), explicitly sanctioned by design.md's P2 wording. Booleans have no equivalent sentinel. Chose: a non-empty cell equal to `"true"` (case/whitespace-insensitive) maps to `true`; every other non-empty value maps to `false`; an empty/absent cell maps to `undefined` (matching `NuevoProductoProveedor.disponible?`'s own optionality). This is a genuine boolean either way — no "malformed boolean" state was invented, since `disponible` is optional and needs no downstream value validation the way prices/stock do.
+
+Everything else matches design.md verbatim: mimetype `text/csv`, size ≤ 2 MB, `1 ≤ filas ≤ 500`, `numero` 1-based excluding the header row, `Number()` casting with `NaN` explicitly permitted, zero row-VALUE validation (reserved for PR5b's use case, per D2 — "one malformed row must never invalidate the whole file").
+
+### Issues Found (PR5a)
+
+None blocking. Two items worth flagging for PR5b, not defects in this batch:
+
+1. **`Number('') → 0` gotcha, handled but worth restating for the next batch**: `Number('')` is `0`, not `NaN` — a genuinely empty numeric cell (provider left `precioBase` blank) must still read as malformed downstream, never silently become a valid price of `0`. Handled with an explicit `value || NaN` fallback before the `Number()` cast (only fires on empty string; a real `'0'` cell is a non-empty string and passes through as `0` correctly). PR5b's row-level validation should NOT assume `NaN` is the only way a bad cell surfaces — an explicit `0` is also possible (a provider who typed `0`) and is a legitimate, separately-decidable business rule (is `precioBase: 0` valid? `crear()`'s current invariant only checks `precioMaximo >= precioBase`, which `0 >= 0` trivially satisfies).
+2. **PR3a's own still-open question, restated for PR5b (already flagged once in PR3a's apply-progress, and again in PR4b's "What PR5a Needs to Know")**: does bulk-row value validation belong to `crear()`'s entity invariant, to a new `class-validator`-shaped check mirroring `NuevoProductoDto`, or to a bespoke check inside `cargarCatalogoMasivoUseCase` itself? Not decided in this batch (out of scope — this batch produces `ArchivoCarga`, PR5b decides how to validate its rows). Whoever picks up PR5b must resolve this before writing `cargarCatalogoMasivoUseCase`, not defer it a third time.
+
+### Workload note (PR5a)
+
+Diff came in at 392 lines (excluding the mechanical 82-line `pnpm-lock.yaml` diff) across 6 files — `tasks.md` +8/-6, `package.json` +4, `catalogo.errors.ts` +24, `tsconfig.json` +7, `carga-masiva.parser.ts` +158, `carga-masiva.parser.spec.ts` +191 — against the tasks.md estimate of 220-290 for this work unit, roughly 35% over the top of the range. Same pattern as PR4a's and PR4b's own named overages: driven by (a) doc-comment density consistent with this codebase's own established convention (every file read during this batch — `catalog-query.port.ts`, `catalogo.errors.ts`, `provider-catalog-item.entity.ts` — carries this same density), and (b) one dedicated test per envelope-rejection branch plus multiple successful-parse variations, not scope creep — no file outside 5a.1-5a.4's stated scope was touched. Flagged here per this project's Review Workload Guard rather than silently absorbed.
+
+### Files Changed (PR5a)
+
+| File | Action | What Was Done |
+|---|---|---|
+| `services/core-api/package.json` | Modified | Added `csv-parse` (`dependencies`) and `@types/multer` (`devDependencies`, matching `@types/pg`'s placement convention) |
+| `pnpm-lock.yaml` | Modified | Regenerated for the 2 new dependencies (installed via the public npm registry directly — see "Environment note" above) |
+| `services/core-api/tsconfig.json` | Modified | Added `"multer"` to the `types` array so `Express.Multer.File`'s global augmentation (`@types/multer`) is available without an explicit `/// <reference>` — this file's `module`/`moduleResolution` override precedent (PR 3) already documents why this project pins `types` explicitly rather than auto-including every `@types/*` package |
+| `services/core-api/src/domains/catalogo/domain/catalogo.errors.ts` | Modified | Appended `ArchivoCargaInvalidoError` (400 `ARCHIVO_CARGA_INVALIDO`), never editing the 3 existing error classes |
+| `services/core-api/src/domains/catalogo/adapters/http/carga-masiva.parser.ts` | Created | `parseArchivoCarga()` — envelope validation (mimetype/size/row-count/header) + form-only row mapping to `ArchivoCarga`; exports `CARGA_MASIVA_FILE_FIELD`/`CARGA_MASIVA_MIMETYPE_ESPERADO`/`CARGA_MASIVA_MAX_BYTES`/`CARGA_MASIVA_MIN_FILAS`/`CARGA_MASIVA_MAX_FILAS` for PR5b to consume |
+| `services/core-api/src/domains/catalogo/adapters/http/carga-masiva.parser.spec.ts` | Created | RED→GREEN, 11 tests (6 envelope-rejection + 5 successful-parse) |
+| `openspec/changes/backend-core-api-catalogo/tasks.md` | Modified | Marked tasks 5a.1–5a.4 `[x]` |
+| `openspec/changes/backend-core-api-catalogo/apply-progress.md` | Modified | Merged PR5a section into PR1+PR2+PR3a+PR3b+PR4a+PR4b's file (this file) |
+
+### Commit (PR5a)
+
+One commit for this PR5a batch:
+
+```
+feat(core-api): add carga-masiva CSV parser with envelope validation
+```
+
+Working tree was clean before this batch except the same pre-existing untracked `openspec/changes/backend-core-api-catalogo/{design.md,exploration.md,proposal.md,specs/}` noted since PR2 — left untouched/untracked, out of this batch's scope; commit hash recorded in the return envelope to the orchestrator.
+
+---
+
+## What PR5b (next batch) Needs to Know
+
+- **Start here**: `## Phase 5b: Bulk load — use case + controller + e2e` in `tasks.md` (tasks 5b.1–5b.7). Depends on PR5a's parser (done, this batch) and PR4a's `CatalogRepository.save()` (done) for the per-row D-C upsert.
+- **`parseArchivoCarga(file)` is ready to call**: import from `adapters/http/carga-masiva.parser.ts`. It throws `ArchivoCargaInvalidoError` for envelope failures (400) and returns a fully-formed `ArchivoCarga` otherwise — `NaN` numeric fields ARE possible in its output and must be treated as a per-row validation failure by `cargarCatalogoMasivoUseCase`, not re-thrown as an envelope error.
+- **`ArchivoCargaInvalidoError` exists but has NO entry yet in `catalogo-exception.filter.ts`'s `ERROR_STATUS_MAP`** — that's this next batch's job (400 `ARCHIVO_CARGA_INVALIDO`), done when the controller route that can throw it exists.
+- **The route/interceptor wiring is NOT started**: `CARGA_MASIVA_FILE_FIELD = 'archivo'` is exported from the parser file specifically for PR5b's controller method to consume via `@UseInterceptors(FileInterceptor(CARGA_MASIVA_FILE_FIELD, { limits: { fileSize: CARGA_MASIVA_MAX_BYTES } }))`. Also import `CARGA_MASIVA_MAX_BYTES` for that `limits.fileSize` value so the multer-level cutoff and the parser's own envelope check never drift apart.
+- **Two open value-mapping questions restated above** ("Issues Found" #1 and #2) must be resolved while writing `cargarCatalogoMasivoUseCase` — not deferred again.
+- **The duplicate-within-file scenario is explicitly PR5b's job, not PR5a's**: `spec.md`'s "Two rows identifying the same product within one file are rejected as a duplicate" scenario requires in-memory identity detection (same `catalogProductId`, or same `nombre`+`categoria` when absent) — the parser does NOT deduplicate or detect collisions; it only maps columns to `NuevoProductoProveedor` shapes, one per row, independently.
+- **Reminder from design.md, easy to miss**: `cargarCatalogoMasivoUseCase` must NOT inject `TRANSACTION_MANAGER` at all (D2) — the guarantee is structural (constructor shape), not a runtime check. The 4a.1/4a.2 precedent (`CargarProductoCatalogoUseCase`) and 4a.3-4a.5 precedent (`ActualizarPrecioUseCase`) are the closest existing examples of this domain's use-case shape (constructor-injected ports, `EmpresaNoActivaError` gate first, `EVENT_PUBLISHER.publish(...)` last) — reuse that shape, adapted for the per-row loop and the single end-of-invocation `CatalogoCargaMasivaCompletada` publish (never one event per row, D3).

@@ -126,10 +126,10 @@ Depends on Phase 4a's use cases.
 
 ## Phase 5a: Bulk load — CSV parser + envelope validation — Spec: `core-api-catalogo`, `shared-types-package`
 
-- [ ] 5a.1 Add `csv-parse` + `@types/multer` to `services/core-api/package.json`.
-- [ ] 5a.2 RED: `adapters/http/carga-masiva.parser.spec.ts` — envelope validation rejects wrong mimetype, >2MB, 0 or >500 rows, missing header (400 `ARCHIVO_CARGA_INVALIDO`); valid CSV parses into `ArchivoCarga` with 1-based `numero` excluding header.
-- [ ] 5a.3 GREEN: `adapters/http/carga-masiva.parser.ts` (`csv-parse/sync`) + `FileInterceptor('archivo')` wiring + envelope DTO.
-- [ ] 5a.4 `domain/catalogo.errors.ts`: append `ArchivoCargaInvalidoError`.
+- [x] 5a.1 Add `csv-parse` + `@types/multer` to `services/core-api/package.json`.
+- [x] 5a.2 RED: `adapters/http/carga-masiva.parser.spec.ts` — envelope validation rejects wrong mimetype, >2MB, 0 or >500 rows, missing header (400 `ARCHIVO_CARGA_INVALIDO`); valid CSV parses into `ArchivoCarga` with 1-based `numero` excluding header.
+- [x] 5a.3 GREEN: `adapters/http/carga-masiva.parser.ts` (`csv-parse/sync`) + `FileInterceptor('archivo')` wiring + envelope DTO.
+- [x] 5a.4 `domain/catalogo.errors.ts`: append `ArchivoCargaInvalidoError`.
 
 ## Phase 5b: Bulk load — use case + controller + e2e — Spec: `core-api-catalogo`
 

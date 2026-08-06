@@ -19,7 +19,12 @@
     "emitDecoratorMetadata": true,
     "declaration": false,
     "sourceMap": true,
-    "types": ["node", "jest"]
+    // "multer" (PR 5a): `@types/multer`'s `Express.Multer.File` is a global
+    // namespace augmentation, not a named export — nothing in this project
+    // ever imports from the `multer` module itself (`FileInterceptor` takes
+    // the field name as a string), so without listing it here explicitly TS
+    // would never pull the augmentation into the program.
+    "types": ["node", "jest", "multer"]
   },
   "include": ["src/**/*.ts", "test/**/*.ts"]
 }
