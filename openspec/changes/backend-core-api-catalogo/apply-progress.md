@@ -2,9 +2,9 @@
 
 **Artifact store**: hybrid (this file + Engram `sdd/backend-core-api-catalogo/apply-progress`)
 **Strict TDD Mode**: active (`test_command: pnpm test`)
-**Last updated**: 2026-08-06T19:04:00Z — PR4a batch (merged with PR1+PR2+PR3a+PR3b; all unchanged below)
+**Last updated**: 2026-08-06T19:45:00Z — PR4b batch (merged with PR1+PR2+PR3a+PR3b+PR4a; all unchanged below except this note)
 
-## Status: 7/7 tasks complete for PR1 (Phase 1: DB foundation). 7/7 tasks complete for PR2 (Phase 2: Seams). 3/3 tasks complete for PR3a (Phase 3a: Read side — domain entity + invariant). 9/9 tasks complete for PR3b (Phase 3b: Read side — persistence adapters + buscarProductos + controller). 8/8 tasks complete for PR4a (Phase 4a: Unit writes — use cases + repository save()). 34/~90 tasks complete overall across all 13 planned PRs.
+## Status: 7/7 tasks complete for PR1 (Phase 1: DB foundation). 7/7 tasks complete for PR2 (Phase 2: Seams). 3/3 tasks complete for PR3a (Phase 3a: Read side — domain entity + invariant). 9/9 tasks complete for PR3b (Phase 3b: Read side — persistence adapters + buscarProductos + controller). 8/8 tasks complete for PR4a (Phase 4a: Unit writes — use cases + repository save()). 7/7 tasks complete for PR4b (Phase 4b: Unit writes — HTTP adapter + exception filter + e2e). 41/~90 tasks complete overall across all 13 planned PRs.
 
 **Engram note**: no `mem_*` tools were exposed in this batch's tool set either (same as PR1/PR2, and still true as of the PR4a batch) — this file remains the authoritative record. If Engram becomes available in a later batch, the topic key to upsert is `sdd/backend-core-api-catalogo/apply-progress`, content = this full file merged.
 
@@ -340,16 +340,112 @@ Diff came in at 591 insertions / 26 deletions (≈617 changed lines) against the
 
 ---
 
-## What PR4b (next batch) Needs to Know
+## PR4b · Phase 4b: Unit writes — HTTP adapter + exception filter + e2e — Spec: `core-api-catalogo`
 
-- **Start here**: `## Phase 4b: Unit writes — HTTP adapter + exception filter + e2e` in `tasks.md` (tasks 4b.1–4b.7). Depends on PR4a's use cases (done).
-- **`CargarProductoCatalogoUseCase`/`ActualizarPrecioUseCase` both exist and are fully tested** at `domains/catalogo/ports-in/{cargar-producto-catalogo,actualizar-precio}.use-case.ts`. Their `execute()` signatures: `cargarProductoCatalogo(companyId: string, companyStatus: CompanyStatus, producto: NuevoProductoProveedor): Promise<ProviderCatalogItem>`; `actualizarPrecio(companyId: string, companyStatus: CompanyStatus, itemId: string, precioBase: number, precioMaximo: number): Promise<ProviderCatalogItem>`. The controller (this PR) is responsible for extracting `actor.companyId`/`actor.companyStatus` (both typed `| null` on `AuthenticatedActor`, but non-null at runtime once `@Roles('provider')` has passed) and passing them as explicit scalars — same D8 pattern as everywhere else in this change.
-- **`ActualizarPrecioUseCase` does NOT publish `PrecioActualizado` yet** — this is PR4b's gap to close, not a bug to report. Add `EVENT_PUBLISHER` as a new constructor dependency, create `events/precio-actualizado.event.ts` (doesn't exist yet), call `publish(new PrecioActualizado(...))` after `save()`, and add a RED test for it before implementing (extend the existing `actualizar-precio.use-case.spec.ts`, don't create a second spec file).
-- **`events/producto-agregado.event.ts` already exists** (`ProductoAgregado`, `type: 'producto.agregado'`, fields `(companyId, itemId)`) — do not recreate it. Only `precio-actualizado.event.ts` is still needed.
-- **`CatalogItemNotFoundError`/`EmpresaNoActivaError` are in `domain/catalogo.errors.ts`**, alongside `PrecioInvalidoError` — this is the error-mapping table `CatalogoExceptionFilter` (task 4b.5) needs: `CatalogItemNotFoundError`→404 `CATALOG_ITEM_NOT_FOUND`, `EmpresaNoActivaError`→403 `EMPRESA_NO_ACTIVA`, `PrecioInvalidoError`→400 `PRECIO_INVALIDO` (design.md's "Errores de dominio" table). Mirror `IdentidadExceptionFilter`'s shape exactly (constructor-keyed map, `@Catch()` scoped to the mapped classes, `@UseFilters` at controller level).
-- **`KyselyCatalogRepository.save()` is fully implemented and tested** (D-C bifurcation) — nothing left to do there for PR4b. `saveMany()` still throws until PR6; do not touch it.
-- **`catalogo.module.ts` still only binds the PR3b read-side providers** (`CATALOG_REPOSITORY`, `CATALOG_QUERY_PORT`, `CATALOG_PRODUCT_REPOSITORY`, `BuscarProductosUseCase`) — task 4b.7 appends `CargarProductoCatalogoUseCase`/`ActualizarPrecioUseCase` to `providers`. Do this LAST, after the DTOs/controller/filter exist, so the module wires a complete, working set in one step (matches this file's own precedent: PR3b's module edit came after its use case/controller were both done).
-- **DTOs must have zero `companyId` field** (D8, design.md: "el DTO NO tiene companyId. No existe tal campo") — `nuevo-producto.dto.ts` and `actualizar-precio.dto.ts` only carry product-facing fields; `class-validator` decorators live here (per `shared-types-package`'s delta: validation is a DTO-layer concern, never the entity's).
-- **Routes** (design.md "Superficie HTTP"): `POST /catalogo/mi-catalogo` → 201, `@Roles('provider')`, `cargarProductoCatalogo`. `PUT /catalogo/mi-catalogo/:itemId/precio` → 204, `@Roles('provider')`, `actualizarPrecio`. Both under `mi-catalogo` (never a `:companyId` path param — D8 in the URL space).
-- **E2e must prove 404-not-403 for cross-tenant** (`test/catalogo-mi-catalogo.e2e-spec.ts`, task 4b.6) — the unit tests in this PR (4a) already prove the use-case-level behavior; the e2e is what proves the exception filter actually maps `CatalogItemNotFoundError` to a real HTTP 404 end-to-end, plus DTO rejection (400) and suspended-company (403) happy/unhappy paths for both routes.
-- **ESLint zone verification method for future contracts/-adjacent work**: if a later PR needs to re-verify the boundary rule, the fastest check is a small Node script that imports `eslint.config.js` directly and inspects `buildCrossDomainZones()`'s output (used for task 2.7) — faster than writing a throwaway cross-domain import just to watch ESLint reject it, though that manual-violation approach also works and is more "black box."
+**Status**: done. This is the batch that makes R1 provable end-to-end over real HTTP (unit-level proof already existed since PR4a).
+
+| # | Task | Status |
+|---|---|---|
+| 4b.1 | `events/precio-actualizado.event.ts` (`producto-agregado.event.ts` already existed from PR4a) | [x] Done |
+| 4b.2 | `adapters/http/dto/nuevo-producto.dto.ts`, `adapters/http/dto/actualizar-precio.dto.ts` (no `companyId` field on either, D8), `catalogo.mapper.ts` additions | [x] Done |
+| 4b.3 | `adapters/http/catalogo.controller.ts`: `POST /catalogo/mi-catalogo` (201, `@Roles('provider')`), `PUT /catalogo/mi-catalogo/:itemId/precio` (204, `@Roles('provider')`) | [x] Done |
+| 4b.4 | RED: `catalogo-exception.filter.spec.ts` — one test per mapped error class | [x] Done |
+| 4b.5 | GREEN: `adapters/http/catalogo-exception.filter.ts` mirroring `IdentidadExceptionFilter`, `@UseFilters` at controller level | [x] Done |
+| 4b.6 | E2e: `test/catalogo-mi-catalogo.e2e-spec.ts` — 404 not 403 cross-tenant, DTO rejection, 403 suspended company, happy paths for both routes | [x] Done |
+| 4b.7 | `catalogo.module.ts`: register `CargarProductoCatalogoUseCase`, `ActualizarPrecioUseCase` | [x] Done |
+
+**PR4a gap explicitly closed in this batch (not its own numbered task, called out separately per the batch instructions)**: `ActualizarPrecioUseCase` did NOT publish `PrecioActualizado` before this PR (flagged by PR4a's own "Deviations from Design" section as a deliberate, named gap for PR4b to close). Closed by:
+1. Creating `events/precio-actualizado.event.ts` — deliberately minimal shape (`companyId`, `itemId`), mirroring `ProductoAgregado`'s precedent (no scenario in `spec.md`/`design.md` pins a richer payload; documented as an additive extension point in the file's own doc comment).
+2. Adding `EVENT_PUBLISHER` as a new constructor dependency on `ActualizarPrecioUseCase`, and a `publish(new PrecioActualizado(companyId, itemId))` call immediately after `save()`.
+3. Extending the EXISTING `actualizar-precio.use-case.spec.ts` (not a second spec file, per instruction) — every one of its 6 tests now also asserts the publish behavior: `toHaveBeenCalledTimes(1)`/`toHaveBeenCalledWith(expect.objectContaining({...}))` on the happy path, `not.toHaveBeenCalled()` on all 4 rejection paths (cross-tenant, not-found, `EmpresaNoActivaError`, `PrecioInvalidoError`).
+
+### TDD Cycle Evidence (PR4b)
+
+| Task | RED | GREEN | REFACTOR |
+|---|---|---|---|
+| PR4a gap-close (`PrecioActualizado` publish) | Created `events/precio-actualizado.event.ts` first (natural dependency to compile the test, same precedent as `ProductoAgregado` in PR4a), then extended `actualizar-precio.use-case.spec.ts` with `buildEventPublisher()` + a new assertion block on every existing test + a new happy-path assertion (`toHaveBeenCalledTimes(1)`/`toHaveBeenCalledWith(...)`) → ran `pnpm exec jest --testPathPatterns=actualizar-precio.use-case` → **failed** (1 of 6: `Expected number of calls: 1, Received number of calls: 0` on the happy-path publish assertion — the other 5 rejection-path assertions passed vacuously since `publish` was never called from any branch yet) | Added `EVENT_PUBLISHER`/`EventPublisher` as a 2nd constructor param and a `publish(new PrecioActualizado(companyId, itemId))` call after `save()` → re-ran → **6/6 passed** | None needed |
+| 4b.2 (`NuevoProductoDto`/`ActualizarPrecioDto`) | **Self-corrected ordering slip**: wrote both DTO implementation files, then wrote `catalogo-dto.spec.ts` (15 tests) — implementation-before-test, not RED-first. Caught before moving on: deleted both DTO files, re-ran `pnpm exec jest --testPathPatterns=catalogo-dto` → **failed** (`Cannot find module './actualizar-precio.dto'`, suite failed to run — confirms genuine RED, not a rubber-stamp) | Restored both DTO files (unchanged content from the pre-deletion version) → re-ran → **15/15 passed** | None — flagged explicitly in this table rather than silently presented as clean RED-first, per this batch's non-negotiable instruction |
+| 4b.4/4b.5 (`CatalogoExceptionFilter`) | Wrote `catalogo-exception.filter.spec.ts` (3 `describe.each` cases: `CatalogItemNotFoundError`→404, `EmpresaNoActivaError`→403, `PrecioInvalidoError`→400) against a not-yet-existing `./catalogo-exception.filter` → ran → **failed** (`Cannot find module './catalogo-exception.filter'`) | Created `catalogo-exception.filter.ts`, `ERROR_STATUS_MAP` keyed by constructor, mirroring `IdentidadExceptionFilter` verbatim in shape → re-ran → **3/3 passed** | None needed |
+| 4b.3/4b.7 (controller routes + module wiring) | No dedicated RED test — `tasks.md` labels these plain (not RED/GREEN), consistent with `IdentidadController`'s own precedent (route wiring is proven by the e2e suite, not a route-level unit spec) | Implemented directly; correctness proven by `pnpm typecheck` (compiles against both use cases' real signatures) + the e2e suite (4b.6) exercising every route through the real HTTP pipeline | None needed |
+| 4b.6 (e2e) | No RED-first ordering — `tasks.md` does not label e2e tasks RED/GREEN anywhere in this change (3b.9/5b.6/6.8/7.9 are the same pattern); e2e proves the full wiring AFTER the pieces exist, consistent with every prior PR in this change | Wrote `test/catalogo-mi-catalogo.e2e-spec.ts` (12 tests) after the controller/DTOs/filter/module were all in place → ran once → **12/12 passed on the first run**, no iteration needed | N/A |
+
+### Commands Run (PR4b batch)
+
+| Command | Result |
+|---|---|
+| `pnpm exec jest --testPathPatterns=actualizar-precio.use-case` (RED, before publish wiring) | 5 passed / 1 failed — confirms the gap-close test fails without the implementation |
+| `pnpm exec jest --testPathPatterns=actualizar-precio.use-case` (GREEN) | 6/6 passed |
+| `pnpm exec jest --testPathPatterns=catalogo-dto` (RED, DTO files deleted to correct the ordering slip) | Suite failed to run — module not found |
+| `pnpm exec jest --testPathPatterns=catalogo-dto` (GREEN, DTO files restored) | 15/15 passed |
+| `pnpm exec jest --testPathPatterns=catalogo-exception.filter` (RED, before impl) | Suite failed to run — module not found |
+| `pnpm exec jest --testPathPatterns=catalogo-exception.filter` (GREEN) | 3/3 passed |
+| `pnpm --filter core-api typecheck` (mid-batch, after controller/module wiring) | `Done` — confirms controller compiles against `CargarProductoCatalogoUseCase`/`ActualizarPrecioUseCase`'s real signatures |
+| `pnpm exec jest --config ./test/jest-e2e.json --testPathPatterns=catalogo-mi-catalogo` | 12/12 passed, first run |
+| `pnpm lint` (root) | Clean (only the pre-existing unrelated Node engine version WARN) |
+| `pnpm typecheck` (root) | Clean — `packages/types` + `services/core-api` both `Done` |
+| `pnpm test` (root — unit + e2e) | `core-api`: 28 suites / **171** unit tests passed (was 153 before this batch — +18: 15 from `catalogo-dto.spec.ts`, 3 from `catalogo-exception.filter.spec.ts`; `actualizar-precio.use-case.spec.ts` grew its assertions but kept the same 6-test count), 5 suites / **31** e2e tests passed (was 19 — +12 from the new `catalogo-mi-catalogo.e2e-spec.ts`). Zero regressions |
+| `pnpm build` | Clean — `services/core-api` `tsc -p tsconfig.build.json` `Done` |
+| `pnpm format:check` | Failed once (`catalogo-exception.filter.spec.ts` + `test/catalogo-mi-catalogo.e2e-spec.ts` not Prettier-formatted) → ran `pnpm exec prettier --write` on both → re-ran `pnpm format:check` → clean |
+| Full re-run of `lint`/`typecheck`/`test`/`build`/`format:check` after the Prettier fix | All green again, same counts (171 unit + 31 e2e) |
+
+All 5 gate commands (`lint`, `typecheck`, `test`, `build`, `format:check`) are green as of the final run.
+
+### Deviations from Design (PR4b)
+
+**None on the HTTP surface, DTOs, or exception filter** — routes, status codes, guards, and the error-mapping table all match design.md's "Superficie HTTP"/"Errores de dominio" tables verbatim.
+
+**One documented process deviation, self-corrected, not a design deviation**: task 4b.2's two DTOs were implemented before their validation spec was written (ordering slip, not a scope or design issue). Caught before moving to the next task — both files were deleted, the RED failure was reproduced and confirmed genuine (`Cannot find module`, not a vacuous pass), then restored unchanged to reach GREEN honestly. Documented in the TDD Cycle Evidence table above rather than silently presented as clean RED-first. No other task in this batch had this issue — `PrecioActualizado`'s publish wiring and `CatalogoExceptionFilter` were both genuinely RED-first on the first attempt.
+
+**`PrecioActualizado`'s field shape is a scope judgment call, flagged for review**: neither `spec.md` nor `design.md` pins exact fields for this event (only its name and "published after `save()`" are specified). Chose the minimal `(companyId, itemId)` shape mirroring `ProductoAgregado`, over a richer shape carrying the new `precioBase`/`precioMaximo` (which `catalogo/SPEC.md`'s "Al extraer como microservicio" note hints a future `refill-matching` cache consumer might eventually want). Documented as an additive, non-breaking extension point in the event class's own doc comment — not a blocker, but worth a reviewer's explicit sign-off since no scenario constrains this choice either way.
+
+### Issues Found (PR4b)
+
+None blocking. One workload note, not a defect: see below.
+
+### Workload note (PR4b)
+
+Diff came in at 930 insertions / 30 deletions (≈960 changed lines) across 14 files, against the tasks.md estimate of 260-340 for this work unit — significantly over budget, same pattern as PR4a's own overage (591/26, also flagged). Breakdown: the e2e suite (`test/catalogo-mi-catalogo.e2e-spec.ts`, 334 lines, 12 tests covering both routes' happy/unhappy paths) and the DTO validation spec (`catalogo-dto.spec.ts`, 108 lines, 15 tests) together account for roughly half the diff; the remaining ~490 lines are the controller (+102), exception filter + its spec (+111), DTOs + response DTO (+131), mapper additions (+47), the `PrecioActualizado` event (+25), and the `ActualizarPrecioUseCase` gap-close (+74 across impl+spec). No task outside 4b.1-4b.7 was touched, and no scope was added beyond what the batch instructions specified — the overage is test-coverage depth (every route's happy path, DTO rejection, and 403/404 split independently proven at the e2e layer, exactly as task 4b.6 required), not scope creep. Flagged here per this project's Review Workload Guard, consistent with PR4a's own precedent of naming the overage rather than silently absorbing it.
+
+### Files Changed (PR4b)
+
+| File | Action | What Was Done |
+|---|---|---|
+| `services/core-api/src/domains/catalogo/events/precio-actualizado.event.ts` | Created | `PrecioActualizado` — minimal `(companyId, itemId)` shape |
+| `services/core-api/src/domains/catalogo/ports-in/actualizar-precio.use-case.ts` | Modified | Added `EVENT_PUBLISHER` dependency + `publish(new PrecioActualizado(...))` after `save()` (closes the PR4a gap) |
+| `services/core-api/src/domains/catalogo/ports-in/actualizar-precio.use-case.spec.ts` | Modified | Extended with `buildEventPublisher()` + publish assertions on all 6 existing tests |
+| `services/core-api/src/domains/catalogo/adapters/http/dto/nuevo-producto.dto.ts` | Created | `class-validator` decorators, no `companyId` field (D8) |
+| `services/core-api/src/domains/catalogo/adapters/http/dto/actualizar-precio.dto.ts` | Created | `class-validator` decorators, no `companyId`/`itemId` field |
+| `services/core-api/src/domains/catalogo/adapters/http/dto/provider-catalog-item-response.dto.ts` | Created | Response shape for `POST /catalogo/mi-catalogo` (201) |
+| `services/core-api/src/domains/catalogo/adapters/http/dto/catalogo-dto.spec.ts` | Created | 15 tests covering both DTOs (field validation + D8's "no companyId" rejection) |
+| `services/core-api/src/domains/catalogo/adapters/http/catalogo.mapper.ts` | Modified | Added `toNuevoProductoProveedor`, `toProviderCatalogItemResponseDto` |
+| `services/core-api/src/domains/catalogo/adapters/http/catalogo.controller.ts` | Modified | Added `POST /catalogo/mi-catalogo` (201, `@Roles('provider')`), `PUT /catalogo/mi-catalogo/:itemId/precio` (204, `@Roles('provider')`), `@UseFilters(CatalogoExceptionFilter)` |
+| `services/core-api/src/domains/catalogo/adapters/http/catalogo-exception.filter.ts` | Created | `ERROR_STATUS_MAP` for `CatalogItemNotFoundError`/`EmpresaNoActivaError`/`PrecioInvalidoError`, mirrors `IdentidadExceptionFilter` |
+| `services/core-api/src/domains/catalogo/adapters/http/catalogo-exception.filter.spec.ts` | Created | RED→GREEN, 3 tests (one per mapped error class) |
+| `services/core-api/src/domains/catalogo/catalogo.module.ts` | Modified | Registered `CargarProductoCatalogoUseCase`, `ActualizarPrecioUseCase` as providers |
+| `services/core-api/test/catalogo-mi-catalogo.e2e-spec.ts` | Created | 12 e2e tests: cross-tenant 404 (not 403), missing-item 404, DTO rejection (missing/extra field → 400), 403 suspended company (both routes), 403 non-provider role, happy paths for both routes with event-publish assertions |
+| `openspec/changes/backend-core-api-catalogo/tasks.md` | Modified | Marked tasks 4b.1–4b.7 `[x]` |
+| `openspec/changes/backend-core-api-catalogo/apply-progress.md` | Modified | Merged PR4b section into PR1+PR2+PR3a+PR3b+PR4a's file (this file) |
+
+### Commit (PR4b)
+
+One commit created for this PR4b batch:
+
+```
+feat(core-api): add catalogo write HTTP surface, exception filter, and PrecioActualizado event
+```
+
+Commit hash: `1accff1`. Working tree was clean before this batch except the same pre-existing untracked `openspec/changes/backend-core-api-catalogo/{design.md,exploration.md,proposal.md,specs/}` noted since PR2 — left untouched/untracked, out of this batch's scope.
+
+---
+
+## What PR5a (next batch) Needs to Know
+
+- **Start here**: `## Phase 5a: Bulk load — CSV parser + envelope validation` in `tasks.md` (tasks 5a.1–5a.4). Depends on PR2's `ArchivoCarga` type (done). Independent of PR5b's use case — this slice is parser-only.
+- **The full write path (single-item) is now done and proven end-to-end**: `cargarProductoCatalogo`/`actualizarPrecio` both exist, are unit-tested, HTTP-wired, exception-filtered, and e2e-proven. PR5b's bulk-load use case will reuse `crear()` (PR3a's entity factory) per-row and `CatalogRepository.save()` (PR4a's D-C bifurcation) per-row — nothing new needed from either.
+- **`csv-parse` + `@types/multer` are NOT yet installed** — task 5a.1 is the first task of PR5a, add them to `services/core-api/package.json` before writing the parser.
+- **D11's boundary**: the CSV parser lives ONLY in `adapters/http/` (`carga-masiva.parser.ts`) — `ports-in`/`domain` must never see a framework buffer type (`Express.Multer.File`). The parser's output is `ArchivoCarga` (already declared in `@repon/types` since PR2), which is framework-free.
+- **`ArchivoCargaInvalidoError` does not exist yet** (task 5a.4) — append it to `domain/catalogo.errors.ts` (same file as `CatalogItemNotFoundError`/`EmpresaNoActivaError`/`PrecioInvalidoError`, never edited destructively, only appended to). It will need its own entry in `catalogo-exception.filter.ts`'s `ERROR_STATUS_MAP` eventually (400 `ARCHIVO_CARGA_INVALIDO`) — but that wiring is PR5b's job (the filter change happens when the controller route that can throw it exists), not PR5a's; PR5a only needs the error class to exist so the parser can throw it.
+- **Envelope validation, per design.md Diagram 1 (P1)**: mimetype `text/csv`, size ≤ 2 MB, 1 ≤ rows ≤ 500, header matches expected columns. These are placeholder values per design.md's own "Riesgos residuales" list ("Límites del upload... son placeholders: Q4 es de sdd-spec, que fija los valores duros en el DTO") — `spec.md` is where the hard numeric thresholds should already be fixed; re-check `spec.md`'s "Open item deferred beyond this spec" section before hardcoding, in case a later spec revision pinned exact numbers.
+- **`numero` is 1-based, excluding the header row** — the field `ResultadoCargaMasiva.fallos[].numero` (already declared in `@repon/types`) must line up with this exactly so a provider can find the offending row in their original file.
+- **CERO validation of row VALUES during parsing** (design.md Diagram 1, P2): the parser only maps CSV columns to `NuevoProductoProveedor` keys and casts with `Number()` (`NaN` is an acceptable parse result at this stage) — row-level value validation (non-empty `nombre`, non-negative prices, etc.) happens later, per row, in PR5b's use case (reusing the same `class-validator`-shaped checks that `NuevoProductoDto` already has for the single-item path, OR reusing `crear()`'s entity-level invariant — check design.md's Diagram 1 step 2a again before deciding which layer owns it for the bulk path; PR3a's own apply-progress note flags this exact question as still open).
+- **This PR's `NuevoProductoDto`/`ActualizarPrecioDto`/`catalogo.mapper.ts` are NOT reused directly by PR5a/5b** — the bulk path works from `ArchivoCarga`/`FilaCarga` (already-parsed, framework-free), not from a per-row DTO instance. Do not force a DTO validation pass onto bulk rows just because the single-item path has one; re-derive whatever validation the bulk path needs at the point design.md's diagram says it belongs (the use case, not the parser).
