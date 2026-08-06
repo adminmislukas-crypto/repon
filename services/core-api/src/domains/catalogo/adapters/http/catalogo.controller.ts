@@ -26,6 +26,7 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiPayloadTooLargeResponse,
   ApiQuery,
   ApiTags,
   ApiUnauthorizedResponse,
@@ -160,7 +161,19 @@ export class CatalogoController {
   @ApiOkResponse({ type: ResultadoCargaMasivaResponseDto })
   @ApiBadRequestResponse({
     description:
-      'Archivo inválido: mimetype, tamaño, cantidad de filas, o cabecera (design.md Diagram 1, P1). Nada se escribió ni se emitió.',
+      'Archivo inválido: mimetype, cantidad de filas, o cabecera (design.md Diagram 1, P1). ' +
+      'Nada se escribió ni se emitió. NOTA: un archivo que excede ' +
+      `${CARGA_MASIVA_MAX_BYTES} bytes no llega a este código — ver 413 abajo.`,
+  })
+  @ApiPayloadTooLargeResponse({
+    description:
+      `Archivo mayor a ${CARGA_MASIVA_MAX_BYTES} bytes. Rechazado por el límite de ` +
+      "Multer (`FileInterceptor`'s `limits.fileSize`) ANTES de que el archivo se " +
+      'bufferee en memoria — deliberadamente más estricto que el chequeo de tamaño ' +
+      'que `parseArchivoCarga` también hace (ese segundo chequeo cubre un `Content-Length` ' +
+      'ausente o mentiroso; en la práctica Multer siempre gana primero). No es un caso de ' +
+      '`ARCHIVO_CARGA_INVALIDO` (400) — es un rechazo a nivel de transporte, decisión ' +
+      'deliberada para nunca bufferear un archivo que ya sabemos que es demasiado grande.',
   })
   @ApiUnauthorizedResponse({ description: 'Token ausente o inválido.' })
   @ApiForbiddenResponse({ description: 'Actor no es provider, o su empresa no está activa.' })
