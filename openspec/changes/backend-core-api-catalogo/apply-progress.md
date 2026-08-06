@@ -6,7 +6,7 @@
 
 ## Status: 7/7 tasks complete for PR1 (Phase 1: DB foundation). 7/7 tasks complete for PR2 (Phase 2: Seams). 3/3 tasks complete for PR3a (Phase 3a: Read side — domain entity + invariant). 9/9 tasks complete for PR3b (Phase 3b: Read side — persistence adapters + buscarProductos + controller). 8/8 tasks complete for PR4a (Phase 4a: Unit writes — use cases + repository save()). 34/~90 tasks complete overall across all 13 planned PRs.
 
-**Engram note**: no `mem_*` tools were exposed in this batch's tool set either (same as PR1/PR2) — this file remains the authoritative record. If Engram becomes available in a later batch, the topic key to upsert is `sdd/backend-core-api-catalogo/apply-progress`, content = this full file merged.
+**Engram note**: no `mem_*` tools were exposed in this batch's tool set either (same as PR1/PR2, and still true as of the PR4a batch) — this file remains the authoritative record. If Engram becomes available in a later batch, the topic key to upsert is `sdd/backend-core-api-catalogo/apply-progress`, content = this full file merged.
 
 ---
 
