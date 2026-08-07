@@ -60,12 +60,11 @@ function toProviderCatalogValues(item: ProviderCatalogItem) {
  * `CatalogRepository`'s Kysely-backed implementation (design.md "Wiring de
  * módulos y tokens"). Built incrementally across the chained PR sequence,
  * same as design.md's own §"Secuencia de implementación" table plans it:
- * Phase 3b lands the 4 read methods below; `save` (PR 4a) and `saveMany`
- * (PR 6) are declared here (the interface requires all 6) but throw a
- * named, loud error until their own PR implements them — a silent no-op
- * stub would be worse than a missing provider (same principle
- * `catalogo.module.ts`'s original placeholder doc comment already states
- * for this domain).
+ * Phase 3b landed the 4 read methods below; `save` (PR 4a) and `saveMany`
+ * (PR 6, a loop over `save()`) complete the interface — every method not
+ * yet implemented threw a named, loud error until its own PR landed, never
+ * a silent no-op stub (same principle `catalogo.module.ts`'s original
+ * placeholder doc comment already states for this domain).
  */
 @Injectable()
 export class KyselyCatalogRepository implements CatalogRepository {
@@ -130,12 +129,22 @@ export class KyselyCatalogRepository implements CatalogRepository {
     }
   }
 
+  /**
+   * design.md D4 / "Mapa de transacciones": the port was born batch-shaped
+   * so the FIRST adapter can be a loop over the already-tested `save()`
+   * bifurcation — migrating this loop to a single
+   * `UPDATE ... FROM (VALUES ...)` later never touches `save()`'s own
+   * conflict-target logic, `ajustarPreciosPorCategoria`, or either's tests.
+   * `tx` is forwarded unchanged to every `save()` call, same as every other
+   * method's `executor(tx)` convention — `ajustarPreciosPorCategoria`
+   * (PR 6) is the first caller, and it always passes the transaction's own
+   * `tx` here so every write lands inside the SAME transaction as the
+   * `findByCompanyAndCategoria` read that produced these items.
+   */
   async saveMany(items: ProviderCatalogItem[], tx?: TransactionContext): Promise<void> {
-    throw new Error(
-      `KyselyCatalogRepository.saveMany(count=${items.length}, tx=${tx ? 'given' : 'none'}) ` +
-        'is implemented in PR 6 (backend-core-api-catalogo, ajustarPreciosPorCategoria) ' +
-        '— not yet available.',
-    );
+    for (const item of items) {
+      await this.save(item, tx);
+    }
   }
 
   async findById(itemId: string, tx?: TransactionContext): Promise<ProviderCatalogItem | null> {

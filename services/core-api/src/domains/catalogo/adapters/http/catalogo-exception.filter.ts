@@ -9,6 +9,7 @@ import {
   ArchivoCargaInvalidoError,
   CatalogItemNotFoundError,
   EmpresaNoActivaError,
+  PorcentajeInvalidoError,
   PrecioInvalidoError,
   ProductoInvalidoError,
 } from '../../domain/catalogo.errors';
@@ -25,19 +26,20 @@ interface StatusAndCode {
 // `domain/catalogo.errors.ts`'s per-class doc comments + design.md's
 // "Errores de dominio" table pin the exact status/code every one of these
 // plain-`Error` subclasses maps to at this domain's HTTP boundary. A lookup
-// keyed by constructor, not an instanceof-chain, so a 4th error class
-// (`PorcentajeInvalidoError`, Phase 6; `CatalogQueryUnavailableError`,
-// cross-domain only) is a one-line append — mirrors
-// `IdentidadExceptionFilter` exactly. `ArchivoCargaInvalidoError` (Phase
-// 5a) and `ProductoInvalidoError` (Phase 5b) are added in this Phase 5b
-// batch — the first controller route that can throw either now exists
-// (`POST /catalogo/mi-catalogo/carga-masiva`).
+// keyed by constructor, not an instanceof-chain, so a new error class
+// (`CatalogQueryUnavailableError`, cross-domain only) is a one-line append
+// — mirrors `IdentidadExceptionFilter` exactly. `ArchivoCargaInvalidoError`
+// (Phase 5a) and `ProductoInvalidoError` (Phase 5b) were added in Phase 5b;
+// `PorcentajeInvalidoError` (Phase 6) is added in this batch — the first
+// controller route that can throw it now exists (`POST
+// /catalogo/mi-catalogo/ajustes-de-precio`).
 type ErrorConstructor = new (...args: never[]) => Error;
 
 const ERROR_STATUS_MAP = new Map<ErrorConstructor, StatusAndCode>([
   [CatalogItemNotFoundError, { statusCode: HttpStatus.NOT_FOUND, code: 'CATALOG_ITEM_NOT_FOUND' }],
   [EmpresaNoActivaError, { statusCode: HttpStatus.FORBIDDEN, code: 'EMPRESA_NO_ACTIVA' }],
   [PrecioInvalidoError, { statusCode: HttpStatus.BAD_REQUEST, code: 'PRECIO_INVALIDO' }],
+  [PorcentajeInvalidoError, { statusCode: HttpStatus.BAD_REQUEST, code: 'PORCENTAJE_INVALIDO' }],
   [
     ArchivoCargaInvalidoError,
     { statusCode: HttpStatus.BAD_REQUEST, code: 'ARCHIVO_CARGA_INVALIDO' },
@@ -55,7 +57,7 @@ const ERROR_STATUS_MAP = new Map<ErrorConstructor, StatusAndCode>([
  * shape regardless of which filter handled it — same pattern as
  * `identidad/adapters/http/identidad-exception.filter.ts`.
  *
- * `@Catch()` deliberately lists only these 5 classes (this domain's scope
+ * `@Catch()` deliberately lists only these 6 classes (this domain's scope
  * so far): anything else (a guard rejection, an unexpected infra error)
  * does not match, so Nest falls through to `main.ts`'s
  * `GlobalExceptionFilter` instead of this filter inventing a second,
@@ -65,6 +67,7 @@ const ERROR_STATUS_MAP = new Map<ErrorConstructor, StatusAndCode>([
   CatalogItemNotFoundError,
   EmpresaNoActivaError,
   PrecioInvalidoError,
+  PorcentajeInvalidoError,
   ArchivoCargaInvalidoError,
   ProductoInvalidoError,
 )

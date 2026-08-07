@@ -1,6 +1,7 @@
 import type { Kysely, Selectable } from 'kysely';
 import type { ProviderCatalogItem } from '@repon/types';
 import type { DB, ProviderCatalogTable } from '../../../../shared/database/schema';
+import type { TransactionContext } from '../../../../shared/database/transaction';
 import { KyselyCatalogRepository } from './kysely-catalog.repository';
 
 // core-api-catalogo spec, "Cross-tenant matching reads exclude a suspended
@@ -331,12 +332,54 @@ describe('KyselyCatalogRepository', () => {
     });
   });
 
-  describe('saveMany — not yet implemented (PR 6)', () => {
-    it('saveMany throws, naming PR 6, rather than silently no-oping', async () => {
-      const { db } = buildDb([]);
-      const repo = new KyselyCatalogRepository(db);
+  describe('saveMany — writes all items, propagates tx (PR 6, D4)', () => {
+    const itemA: ProviderCatalogItem = {
+      id: 'item-1',
+      companyId: 'company-a',
+      nombre: 'Agua Purificada',
+      categoria: 'Bebidas',
+      precioBase: 1000,
+      precioMaximo: 1500,
+      stock: 10,
+      disponible: true,
+    };
+    const itemB: ProviderCatalogItem = {
+      ...itemA,
+      id: 'item-2',
+      catalogProductId: 'catalog-product-9',
+    };
 
-      await expect(repo.saveMany([])).rejects.toThrow(/PR 6/);
+    it('calls save() once per item, forwarding the SAME tx to every call (design.md: "el puerto ya nace con forma de lote", the first adapter is a loop over the already-tested save() bifurcation)', async () => {
+      const { db } = buildInsertDb();
+      const repo = new KyselyCatalogRepository(db);
+      const saveSpy = jest.spyOn(repo, 'save').mockResolvedValue(undefined);
+      const tx = {} as TransactionContext;
+
+      await repo.saveMany([itemA, itemB], tx);
+
+      expect(saveSpy).toHaveBeenCalledTimes(2);
+      expect(saveSpy).toHaveBeenNthCalledWith(1, itemA, tx);
+      expect(saveSpy).toHaveBeenNthCalledWith(2, itemB, tx);
+    });
+
+    it('works without a tx (tx is optional, same as every other method)', async () => {
+      const { db } = buildInsertDb();
+      const repo = new KyselyCatalogRepository(db);
+      const saveSpy = jest.spyOn(repo, 'save').mockResolvedValue(undefined);
+
+      await repo.saveMany([itemA]);
+
+      expect(saveSpy).toHaveBeenCalledWith(itemA, undefined);
+    });
+
+    it('an empty list writes nothing and never calls save()', async () => {
+      const { db } = buildInsertDb();
+      const repo = new KyselyCatalogRepository(db);
+      const saveSpy = jest.spyOn(repo, 'save').mockResolvedValue(undefined);
+
+      await repo.saveMany([]);
+
+      expect(saveSpy).not.toHaveBeenCalled();
     });
   });
 });

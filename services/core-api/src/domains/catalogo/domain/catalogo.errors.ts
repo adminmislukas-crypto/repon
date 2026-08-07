@@ -122,3 +122,40 @@ export class ProductoInvalidoError extends Error {
     this.name = 'ProductoInvalidoError';
   }
 }
+
+/**
+ * Maps to 400 `PORCENTAJE_INVALIDO` in `adapters/http/` (design.md's error
+ * table, Phase 6 — a DISTINCT row from `PRECIO_INVALIDO`, with its own HTTP
+ * `code`). Thrown by `AjustarPreciosPorCategoriaUseCase` itself, as an
+ * up-front gate on the raw `porcentaje` argument, BEFORE `runInTransaction`
+ * is even entered — i.e. before `findByCompanyAndCategoria` (a repository
+ * READ) or `saveMany` (the write) ever run.
+ *
+ * Why this can't just reuse `provider-catalog-item.entity.ts`'s existing
+ * `aplicarPorcentaje()` guard (which already throws `PrecioInvalidoError`
+ * for the identical `porcentaje <= -100` condition — a PR 3a choice made
+ * before this class existed): `aplicarPorcentaje()` only runs PER ITEM,
+ * inside the loop that happens AFTER `findByCompanyAndCategoria` has
+ * already executed. core-api-catalogo spec's own scenario text requires
+ * rejection "before touching the database" / "no repository call is made"
+ * — not just "before any write". Relying solely on the entity's guard would
+ * violate that in two ways: (1) the SELECT already ran by the time any
+ * item's `aplicarPorcentaje()` call could throw, and (2) if zero items
+ * match the `categoria`, the per-item loop never runs at all, so an invalid
+ * `porcentaje` would be silently accepted end-to-end (the SELECT still ran,
+ * `saveMany([])` is a no-op, and a "successful" empty adjustment gets
+ * reported). This class closes both gaps with one synchronous check, run
+ * before the transaction is even opened.
+ *
+ * `aplicarPorcentaje()`'s own `PrecioInvalidoError` guard is left
+ * unchanged — still correct, still tested (PR 3a), and now effectively
+ * unreachable via THIS use case's call path (this gate always fires
+ * first) — but it remains the right defense-in-depth for any other/future
+ * direct caller of the entity function.
+ */
+export class PorcentajeInvalidoError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PorcentajeInvalidoError';
+  }
+}

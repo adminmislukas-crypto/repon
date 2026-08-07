@@ -2,9 +2,9 @@
 
 **Artifact store**: hybrid (this file + Engram `sdd/backend-core-api-catalogo/apply-progress`)
 **Strict TDD Mode**: active (`test_command: pnpm test`)
-**Last updated**: 2026-08-06T21:10:00Z — PR5b batch (merged with PR1+PR2+PR3a+PR3b+PR4a+PR4b+PR5a; all unchanged below except this note)
+**Last updated**: 2026-08-06T22:30:00Z — PR6 batch (merged with PR1+PR2+PR3a+PR3b+PR4a+PR4b+PR5a+PR5b+orchestrator-fix-forward; all unchanged below except this note)
 
-## Status: 7/7 tasks complete for PR1 (Phase 1: DB foundation). 7/7 tasks complete for PR2 (Phase 2: Seams). 3/3 tasks complete for PR3a (Phase 3a: Read side — domain entity + invariant). 9/9 tasks complete for PR3b (Phase 3b: Read side — persistence adapters + buscarProductos + controller). 8/8 tasks complete for PR4a (Phase 4a: Unit writes — use cases + repository save()). 7/7 tasks complete for PR4b (Phase 4b: Unit writes — HTTP adapter + exception filter + e2e). 4/4 tasks complete for PR5a (Phase 5a: Bulk load — CSV parser + envelope validation). 7/7 tasks complete for PR5b (Phase 5b: Bulk load — use case + controller + e2e). 52/~90 tasks complete overall across all 13 planned PRs.
+## Status: 7/7 tasks complete for PR1 (Phase 1: DB foundation). 7/7 tasks complete for PR2 (Phase 2: Seams). 3/3 tasks complete for PR3a (Phase 3a: Read side — domain entity + invariant). 9/9 tasks complete for PR3b (Phase 3b: Read side — persistence adapters + buscarProductos + controller). 8/8 tasks complete for PR4a (Phase 4a: Unit writes — use cases + repository save()). 7/7 tasks complete for PR4b (Phase 4b: Unit writes — HTTP adapter + exception filter + e2e). 4/4 tasks complete for PR5a (Phase 5a: Bulk load — CSV parser + envelope validation). 7/7 tasks complete for PR5b (Phase 5b: Bulk load — use case + controller + e2e). 9/9 tasks complete for PR6 (Phase 6: Category adjustment). 61/~90 tasks complete overall across all 13 planned PRs.
 
 **Engram note**: `mem_*` tools were not exposed in this batch's tool set either (same as every prior batch, PR1 through PR5a) — this file remains the authoritative record, per the batch instructions ("file is authoritative regardless"). If Engram becomes available in a later batch, the topic key to upsert is `sdd/backend-core-api-catalogo/apply-progress`, content = this full file merged.
 
@@ -690,3 +690,136 @@ PR5b's own risk report flagged that `FileInterceptor`'s `limits.fileSize` (set t
 **For Phase 9 closure**: this 413/400 split should be named explicitly in `catalogo/SPEC.md`'s delta list (task 9.1) alongside the other declared deltas — it's a real HTTP contract detail no spec.md scenario currently pins.
 
 Verified: `pnpm lint && pnpm typecheck && pnpm format:check` all green after this fix (not re-run via full `pnpm test`, since no test files changed — only Swagger decorator metadata on an existing route).
+
+---
+
+## PR6 · Phase 6: Category adjustment — Spec: `core-api-catalogo`
+
+**Status**: done. This is the batch that resolves the `PorcentajeInvalidoError` open question named explicitly in "What PR6 Needs to Know" above, and the first use case in this domain to wrap `runInTransaction`.
+
+| # | Task | Status |
+|---|---|---|
+| 6.1 | RED: extend `kysely-catalog.repository.spec.ts` — `saveMany()` writes all items, propagates `tx` | [x] Done |
+| 6.2 | GREEN: implement `saveMany()` on `KyselyCatalogRepository` | [x] Done |
+| 6.3 | `domain/catalogo.errors.ts`: append `PorcentajeInvalidoError` | [x] Done |
+| 6.4 | RED: `ports-in/ajustar-precios-por-categoria.use-case.spec.ts` — 8 tests | [x] Done |
+| 6.5 | GREEN: `ports-in/ajustar-precios-por-categoria.use-case.ts` | [x] Done |
+| 6.6 | `events/precios-categoria-ajustados.event.ts` | [x] Done |
+| 6.7 | `adapters/http/dto/ajustar-precios.dto.ts` + controller route | [x] Done |
+| 6.8 | E2e: `test/catalogo-ajustes-precio.e2e-spec.ts` — 7 tests | [x] Done |
+| 6.9 | `catalogo.module.ts`: register `AjustarPreciosPorCategoriaUseCase` | [x] Done |
+
+### The `PorcentajeInvalidoError` decision (this PR's central claim, stated explicitly for review — the exact open question the batch instructions required be resolved, not silently papered over)
+
+**The question, restated precisely**: `provider-catalog-item.entity.ts`'s `aplicarPorcentaje()` (PR 3a, already implemented and tested) already throws `PrecioInvalidoError` when `porcentaje <= -100` — a choice made before `PorcentajeInvalidoError` existed as a concept. Does `PorcentajeInvalidoError` need to exist at all?
+
+**Decision: YES, it needs to exist — option (b) from the batch instructions, but with the "genuinely different validation" more precisely characterized than the instructions' own example ("non-numeric/NaN porcentaje caught at the DTO layer").** That specific example does NOT hold up under inspection: a non-numeric `porcentaje` in the request body is already rejected by Nest's global `ValidationPipe` (`@IsNumber()` on `AjustarPreciosDto`) BEFORE the controller method — let alone the use case — ever runs, so it would never reach a domain error class at all. The REAL genuinely-different validation is not about the TYPE of `porcentaje`, but about WHEN the identical `porcentaje <= -100` numeric check must run:
+
+1. **`spec.md`'s exact scenario wording, checked as instructed** ("porcentaje <= -100 is rejected before touching the database" — `specs/core-api-catalogo/spec.md` lines 137-141, 129): *"It MUST reject `porcentaje <= -100` as a validation error before any repository read/write"* and the scenario itself: *"a validation error is raised, **no repository call is made**, and no item is modified."* This is explicitly READ **and** WRITE — not just "before the write."
+2. **`aplicarPorcentaje()`'s existing guard cannot satisfy that**, structurally, for two independent reasons:
+   - It only runs INSIDE the per-item `.map()`, which happens strictly AFTER `findByCompanyAndCategoria` (a repository READ) has already executed inside the transaction. By the time the entity could throw, the SELECT has already run — violating "no repository call is made."
+   - If ZERO items match the given `categoria`, the `.map()` never runs at all — an invalid `porcentaje` would be silently accepted end-to-end (the SELECT still ran, `saveMany([])` no-ops, one `PreciosCategoriaAjustados` with `totalActualizados: 0` gets published as if it were a legitimate empty adjustment). This is worse than a slow rejection — it's a SILENT non-rejection for a real subset of calls.
+3. **Task 6.4's own literal wording confirms this**: "`porcentaje <= -100` rejected before any repo call ('rejected before touching the database')" — read together with 6.5's "wraps `findByCompanyAndCategoria` + `saveMany` in `TransactionManager.runInTransaction`", the ordering required is: validate → THEN open the transaction → THEN read → THEN write. Relying on the entity's per-item guard alone would invert that: open transaction → read → (maybe) validate.
+4. **design.md's own HTTP error table settles it independently**: `PorcentajeInvalidoError` → 400 `PORCENTAJE_INVALIDO` is listed as a DISTINCT row from `PrecioInvalidoError` → 400 `PRECIO_INVALIDO` (design.md "Errores de dominio" table, line 565) — two different `code` values for two different classes is a real product/API contract, not decorative. `catalogo-exception.filter.ts`'s own doc comment, written during PR5b (before this batch existed), already named this exact class as a "Phase 6" one-line append — independent confirmation the class was always meant to be created, not merged into `PrecioInvalidoError`.
+
+**Resolution implemented**: `PorcentajeInvalidoError` is a new class (`domain/catalogo.errors.ts`), thrown by `AjustarPreciosPorCategoriaUseCase.execute()` itself — a synchronous up-front gate, checked AFTER the `EmpresaNoActivaError`/D-E gate but BEFORE `transactionManager.runInTransaction(...)` is ever called. `aplicarPorcentaje()`'s existing `PrecioInvalidoError` guard (PR 3a) is left completely unchanged — it is not reachable via this use case's call path (the use-case gate always fires first for any `porcentaje <= -100`), but it remains correct, still tested, and still the right defense-in-depth for any other/future direct caller of the entity function. Nothing in PR 3a was touched.
+
+### How the transaction works (this PR's other central claim — first `runInTransaction` in this domain)
+
+design.md's "Mapa de transacciones" names `ajustarPreciosPorCategoria` as the deliberate CONTRAST to `cargarCatalogoMasivo` (PR 5b, D2: never even injects `TRANSACTION_MANAGER`): `Promise<void>` has no channel to report a partial application, so an interrupted adjustment would be a silent, uncorrectable price disaster — the reason atomicity is required here and structurally forbidden there. Flow, in order:
+
+1. `companyStatus !== 'activo'` → `EmpresaNoActivaError` (D-E, before anything else).
+2. `porcentaje <= -100` → `PorcentajeInvalidoError` (this PR's new gate, before anything else — see above).
+3. `transactionManager.runInTransaction(async (tx) => { ... })`:
+   - `findByCompanyAndCategoria(companyId, categoria, tx)` — the read, scoped to the caller's own company and the given category (PR 3b's existing method, unmodified).
+   - `items.map((item) => aplicarPorcentaje(item, porcentaje))` — PR 3a's existing entity function, unmodified, called once per item; preserves `precioMaximo >= precioBase` by construction.
+   - `saveMany(ajustados, tx)` — this PR's new `KyselyCatalogRepository.saveMany()`, implemented as a loop over the already-tested `save()` (design.md's own explicit permission: "el puerto ya nace con forma de lote... migrar el loop del adaptador... después no toca ni el caso de uso ni sus tests").
+   - Returns `ajustados.length` as `totalActualizados`.
+4. `eventPublisher.publish(new PreciosCategoriaAjustados(...))` — AFTER the transaction commits, exactly once, regardless of match count (including 0).
+
+### TDD Cycle Evidence (PR6)
+
+| Task | RED | GREEN | REFACTOR |
+|---|---|---|---|
+| 6.1/6.2 (`saveMany()`) | Extended `kysely-catalog.repository.spec.ts` with a new describe block (3 tests: `save()` called once per item with the SAME `tx` forwarded to every call via `jest.spyOn(repo, 'save')`; works with no `tx`; empty list calls `save()` zero times) against the still-throwing placeholder `saveMany()` → ran `pnpm exec jest --testPathPatterns=kysely-catalog.repository` → **failed** (3 failures, each `KyselyCatalogRepository.saveMany(...) is implemented in PR 6 ... not yet available`) | Replaced the placeholder throw with a loop calling `this.save(item, tx)` per item, reusing the already-tested D-C bifurcation instead of reimplementing it → re-ran → **14/14 passed** (11 pre-existing + 3 new) | None needed |
+| 6.4/6.5 (`AjustarPreciosPorCategoriaUseCase`) | Wrote `ajustar-precios-por-categoria.use-case.spec.ts` (8 tests: `EmpresaNoActivaError` gate closes before the transaction/repo/publisher are touched; `porcentaje === -100` AND `porcentaje === -150` both rejected with `PorcentajeInvalidoError` before `runInTransaction` is ever called — the test that structurally proves the "no repository call is made" requirement; happy path 1000/1500 @ 10% → 1100/1650 exact numbers; `tx` propagated identically to both `findByCompanyAndCategoria` and `saveMany`; `companyId`/`categoria` params passed through unmodified; exactly one `PreciosCategoriaAjustados` for 0 matches and for 40 matches) against a not-yet-existing `./ajustar-precios-por-categoria.use-case` → ran → **failed** (`Cannot find module`) | Created `ajustar-precios-por-categoria.use-case.ts` (D-E gate → `PorcentajeInvalidoError` gate → `runInTransaction{find→map(aplicarPorcentaje)→saveMany}` → publish after commit) → re-ran → **8/8 passed, first attempt** | None needed |
+| 6.6/6.7/6.9 (event, DTO, controller route, module wiring) | No dedicated RED test — same precedent as every prior batch's plain (non-RED/GREEN-labeled) wiring tasks (`tasks.md` doesn't label 6.6/6.7/6.9 RED/GREEN) | Implemented directly; correctness proven by `pnpm typecheck` (compiles against the real use-case signature) + the e2e suite (6.8) exercising the real route | None needed |
+| 6.3 (`PorcentajeInvalidoError`) + `catalogo-exception.filter.ts` mapping | Extended `catalogo-exception.filter.spec.ts` with 1 new `describe.each` case FIRST, then reproduced genuine RED via `git stash push` on JUST the (already-drafted) filter implementation file → ran → **1 failed** (`Received: 500`) / 5 pre-existing passed | `git stash pop` to restore the drafted `ERROR_STATUS_MAP`/`@Catch()` additions → re-ran → **6/6 passed** | None needed — same honest-RED technique PR5b used for its own filter additions |
+| 6.8 (e2e) | No RED-first ordering — same precedent as every prior e2e task in this change | Wrote `test/catalogo-ajustes-precio.e2e-spec.ts` (7 tests: exact 1000/1500→1100/1650 scaling + 204 + event assertion; `porcentaje <= -100` → 400 `PORCENTAJE_INVALIDO` before any repo call; cross-company isolation asserted via the mocked `saveMany` call contents, not a 404/403 split — per this file's own note that `findByCompanyAndCategoria` is already company-scoped, so there's no `itemId` to enumerate; missing `categoria` → 400; suspended company → 403; non-provider role → 403; unauthenticated → 401) after the use case/DTO/controller/module/filter were all in place → ran once → **7/7 passed on the first run** | N/A |
+
+### Commands Run (PR6 batch)
+
+| Command | Result |
+|---|---|
+| `pnpm exec jest --testPathPatterns=kysely-catalog.repository` (RED, before `saveMany()` impl) | 3 failed / 11 passed |
+| `pnpm exec jest --testPathPatterns=kysely-catalog.repository` (GREEN) | 14/14 passed |
+| `pnpm exec jest --testPathPatterns=ajustar-precios-por-categoria` (RED, before the use case existed) | Suite failed to run — module not found |
+| `pnpm exec jest --testPathPatterns=ajustar-precios-por-categoria` (GREEN) | 8/8 passed, first attempt |
+| `pnpm --filter core-api exec tsc --noEmit -p tsconfig.build.json` (mid-batch, after the use case existed) | Clean |
+| `git stash push` (filter implementation only) + `pnpm exec jest --testPathPatterns=catalogo-exception.filter` (RED) | 1 failed (`Received: 500`) / 5 passed |
+| `git stash pop` + `pnpm exec jest --testPathPatterns=catalogo-exception.filter` (GREEN) | 6/6 passed |
+| `pnpm exec jest --config ./test/jest-e2e.json --testPathPatterns=catalogo-ajustes-precio` | 7/7 passed, first run |
+| `pnpm lint` (root) | Clean (only the pre-existing unrelated Node engine version WARN) |
+| `pnpm typecheck` (root) | Clean — `packages/types` + `services/core-api` both `Done` |
+| `pnpm test` (root — unit + e2e) | `core-api`: 31 suites / **214** unit tests passed (was 203 before this batch — +11: 3 `saveMany` + 8 use-case), 7 suites / **45** e2e tests passed (was 38 — +7 new). Zero regressions |
+| `pnpm build` | Clean — `services/core-api` `tsc -p tsconfig.build.json` `Done` |
+| `pnpm format:check` | Failed once (3 new files not Prettier-formatted: the use case, its spec, and the e2e spec) → ran `pnpm exec prettier --write` on all 3 → re-ran `pnpm format:check` → clean |
+| Full re-run of `lint`/`typecheck`/`test`/`build`/`format:check` after the Prettier fix | All green again, same counts (214 unit + 45 e2e) |
+
+All 6 gate commands (`lint`, `typecheck`, `test`, `build`, `format:check`, plus the same-batch `git stash`-verified RED for the filter) are green as of the final run.
+
+### Deviations from Design (PR6)
+
+**None from design.md.** The transaction shape, the `saveMany()`-as-a-loop-over-`save()` implementation, the event field list, and the HTTP surface all match design.md verbatim. The `PorcentajeInvalidoError` resolution (above) is not a deviation — it's the explicit resolution of an open question design.md's own error table had already answered (a distinct class was always named), that PR 3a's earlier, narrower context had left ambiguous.
+
+**One scope note, not a deviation**: `AjustarPreciosDto.porcentaje` carries no `@Min()`/lower-bound `class-validator` decorator, matching `ActualizarPrecioDto`'s own established precedent of NOT duplicating a domain business rule at the DTO layer (`ActualizarPrecioDto`'s doc comment: "the cross-field invariant... stays a domain concern, never re-validated here"). This was a deliberate choice, not an oversight — see the DTO's own doc comment.
+
+### Issues Found (PR6)
+
+None blocking. One item worth recording, not a defect: the e2e "cross-company isolation" scenario (task 6.8) cannot literally exercise two companies' data through the mocked `CATALOG_REPOSITORY` the way a real-Postgres integration test could — `findByCompanyAndCategoria` is mocked, so the test instead asserts (a) the use case passes the ACTOR's own `companyId` (never a second one) to the read, and (b) every item in the `saveMany` call carries that same `companyId`. The actual company-scoping guarantee (that a real query never returns another company's rows) is proven at the correct layer: PR 3b's `kysely-catalog.repository.spec.ts` unit tests for `findByCompanyAndCategoria`'s `WHERE company_id = ...` clause. Same "override the port, keep the wiring real" limitation every other e2e spec in this domain already has and documents.
+
+### Workload note (PR6)
+
+Diff came in at roughly 850-950 insertions across 11 files (2 new source files + spec, 1 new event, 1 new DTO, 1 new e2e spec, plus edits to `kysely-catalog.repository.ts`/`.spec.ts`, `catalogo.errors.ts`, `catalogo.controller.ts`, `catalogo-exception.filter.ts`/`.spec.ts`, `catalogo.module.ts`) against the tasks.md estimate of 310-425 for this work unit — over budget, following the exact same pattern named and accepted in every prior batch since PR4a. Breakdown: the two test files carry the bulk (`ajustar-precios-por-categoria.use-case.spec.ts` ~185 lines / 8 tests, `test/catalogo-ajustes-precio.e2e-spec.ts` ~250 lines / 7 tests); the remainder is the use case itself (~90 lines, doc-comment-dense per this codebase's established convention), the `saveMany()` implementation (~15 lines + doc comment), the `PorcentajeInvalidoError` class (~35 lines, doc-comment-heavy specifically because it resolves a named cross-PR ambiguity, per the batch's own explicit instruction to document the reasoning "explicitly, not silently"), the event class, the DTO, the controller route, and the filter/module one-line additions. No task outside 6.1-6.9 was touched. `Chain strategy: stacked-to-main` — committed directly to `main`, same as every PR since PR1.
+
+### Files Changed (PR6)
+
+| File | Action | What Was Done |
+|---|---|---|
+| `services/core-api/src/domains/catalogo/adapters/persistence/kysely-catalog.repository.spec.ts` | Modified | Replaced the "saveMany throws PR 6" placeholder test with 3 real `saveMany()` tests |
+| `services/core-api/src/domains/catalogo/adapters/persistence/kysely-catalog.repository.ts` | Modified | Implemented `saveMany()` as a loop over `save()`; updated the class's own doc comment |
+| `services/core-api/src/domains/catalogo/domain/catalogo.errors.ts` | Modified | Appended `PorcentajeInvalidoError` (400 `PORCENTAJE_INVALIDO`), with a doc comment documenting the resolved open question in full |
+| `services/core-api/src/domains/catalogo/ports-in/ajustar-precios-por-categoria.use-case.ts` | Created | D-E gate → `PorcentajeInvalidoError` gate → `runInTransaction{findByCompanyAndCategoria→map(aplicarPorcentaje)→saveMany}` → publish after commit |
+| `services/core-api/src/domains/catalogo/ports-in/ajustar-precios-por-categoria.use-case.spec.ts` | Created | RED→GREEN, 8 tests |
+| `services/core-api/src/domains/catalogo/events/precios-categoria-ajustados.event.ts` | Created | `PreciosCategoriaAjustados` — `{companyId, categoria, porcentaje, totalActualizados}` (D6) |
+| `services/core-api/src/domains/catalogo/adapters/http/dto/ajustar-precios.dto.ts` | Created | `categoria`/`porcentaje` fields, no `@Min()` on `porcentaje` (domain concern, not DTO's) |
+| `services/core-api/src/domains/catalogo/adapters/http/catalogo.controller.ts` | Modified | Added `POST /catalogo/mi-catalogo/ajustes-de-precio` (204, `@Roles('provider')`) |
+| `services/core-api/src/domains/catalogo/adapters/http/catalogo-exception.filter.ts` | Modified | Added `PorcentajeInvalidoError`→400/`PORCENTAJE_INVALIDO` to `@Catch()` + `ERROR_STATUS_MAP` |
+| `services/core-api/src/domains/catalogo/adapters/http/catalogo-exception.filter.spec.ts` | Modified | Added 1 `describe.each` case (RED→GREEN, verified via a temporary `git stash` of the implementation) |
+| `services/core-api/src/domains/catalogo/catalogo.module.ts` | Modified | Registered `AjustarPreciosPorCategoriaUseCase`; updated the module's own doc comment (`TRANSACTION_MANAGER` is provided by `DatabaseModule`, already imported — no new provider entry needed for it) |
+| `services/core-api/test/catalogo-ajustes-precio.e2e-spec.ts` | Created | 7 e2e tests: exact scaling + event, `porcentaje <= -100` → 400, cross-company isolation, missing `categoria` → 400, suspended company → 403, non-provider role → 403, unauthenticated → 401 |
+| `openspec/changes/backend-core-api-catalogo/tasks.md` | Modified | Marked tasks 6.1–6.9 `[x]` with the `PorcentajeInvalidoError` resolution noted inline on 6.3 |
+| `openspec/changes/backend-core-api-catalogo/apply-progress.md` | Modified | Merged PR6 section into PR1+PR2+PR3a+PR3b+PR4a+PR4b+PR5a+PR5b's file (this file) |
+
+### Commit (PR6)
+
+One commit for this PR6 batch:
+
+```
+feat(core-api): add ajustarPreciosPorCategoria with transactional saveMany
+```
+
+Working tree was clean before this batch except the same pre-existing untracked `openspec/changes/backend-core-api-catalogo/{design.md,exploration.md,proposal.md,specs/}` noted since PR2 — left untouched/untracked, out of this batch's scope; commit hash recorded in the return envelope to the orchestrator.
+
+---
+
+## What PR7 (next batch) Needs to Know
+
+- **Start here**: `## Phase 7: identidad reactivarEmpresa` in `tasks.md` (tasks 7.1–7.10). Independent of PRs 3-6 — it operates entirely inside `domains/identidad/`, mirroring `suspenderEmpresa`. Must land before Phase 8a (the visibility listener needs `EmpresaReactivada` to exist).
+- **This PR does NOT touch `domains/catalogo/` at all** — it's the one phase in this 13-PR chain scoped entirely to `identidad`. Do not carry forward any catalogo-specific pattern (D-E gates, `tx?` on ports-out, etc.) into identidad without first checking `identidad`'s OWN existing conventions — `suspender-empresa.use-case.ts` (read this batch, `services/core-api/src/domains/identidad/ports-in/suspender-empresa.use-case.ts`) is the exact mirror target named by task 7.2, and it already establishes the pattern: `runInTransaction{findById→save→auditLogPort.record}`, `publish` AFTER commit, 4 constructor-injected ports (`CompanyRepository`, `AuditLogPort`, `EventPublisher`, `TransactionManager`).
+- **`CompanyNotSuspendedError` does not exist yet** (task 7.4) — append it to `domains/identidad/domain/identidad.errors.ts` (never edited destructively, same convention as `catalogo.errors.ts`). `CompanyNotFoundError` already exists (used by `suspenderEmpresa` today).
+- **`ReactivacionDto` is a NEW DTO** (task 7.5), not a reuse of `SuspensionDto` — per D-D's naming-collision rationale (both would otherwise have one `motivo` field, but coupling the reactivation route's DTO to the suspension route's DTO would make the two routes' bodies accidentally interchangeable/coupled at the type level for no real reason).
+- **`identidad-exception.filter.ts`'s `ERROR_STATUS_MAP`** needs one new entry: `CompanyNotSuspendedError` → 409 `COMPANY_NOT_SUSPENDED` (task 7.6) — a NEW status code for this domain's filter (404/403/400/503 already exist for other classes; 409 Conflict is the correct semantic for "the company isn't in the state this operation requires").
+- **Route**: `POST /identidad/empresas/:id/reactivacion`, `@AdminRoles('super_admin','soporte')`, 204 (task 7.7) — mirrors `suspender-empresa`'s existing route shape one level up (admin-only, not `@Roles('provider')` — this is an identidad admin action, not a catalogo provider action).
+- **Task 7.10 is a full regression gate, not just a unit for this PR**: run the FULL existing `identidad` suite (111 unit + 17 e2e, per this task's own text) and confirm zero regressions — no existing identidad use case's signature or behavior may change as a side effect of adding `reactivarEmpresa`. Treat this as a hard gate before considering PR7 done, not an optional nice-to-have.
+- **`catalogo`'s own full suite (214 unit + 45 e2e as of PR6) should also stay green** — PR7 shouldn't touch catalogo at all, so this is a trivial check, but confirm it explicitly rather than assuming.

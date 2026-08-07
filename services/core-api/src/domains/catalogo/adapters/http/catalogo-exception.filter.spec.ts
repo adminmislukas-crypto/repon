@@ -3,6 +3,7 @@ import {
   ArchivoCargaInvalidoError,
   CatalogItemNotFoundError,
   EmpresaNoActivaError,
+  PorcentajeInvalidoError,
   PrecioInvalidoError,
   ProductoInvalidoError,
 } from '../../domain/catalogo.errors';
@@ -32,6 +33,11 @@ describe.each([
   ],
   [new ArchivoCargaInvalidoError('Tipo de archivo inválido.'), 400, 'ARCHIVO_CARGA_INVALIDO'],
   [new ProductoInvalidoError('nombre no puede estar vacío.'), 400, 'PRODUCTO_INVALIDO'],
+  [
+    new PorcentajeInvalidoError('porcentaje (-100) no puede ser menor o igual a -100.'),
+    400,
+    'PORCENTAJE_INVALIDO',
+  ],
 ] as const)('CatalogoExceptionFilter — %#', (exception, statusCode, code) => {
   it(`maps ${exception.constructor.name} to ${statusCode} ${code}`, () => {
     const filter = new CatalogoExceptionFilter();

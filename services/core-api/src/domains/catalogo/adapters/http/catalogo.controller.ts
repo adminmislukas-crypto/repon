@@ -36,6 +36,7 @@ import { Roles } from '../../../../shared/auth/decorators/roles.decorator';
 import type { AuthenticatedActor } from '../../../../shared/auth/ports/actor.port';
 import { ArchivoCargaInvalidoError } from '../../domain/catalogo.errors';
 import { ActualizarPrecioUseCase } from '../../ports-in/actualizar-precio.use-case';
+import { AjustarPreciosPorCategoriaUseCase } from '../../ports-in/ajustar-precios-por-categoria.use-case';
 import { BuscarProductosUseCase } from '../../ports-in/buscar-productos.use-case';
 import { CargarCatalogoMasivoUseCase } from '../../ports-in/cargar-catalogo-masivo.use-case';
 import { CargarProductoCatalogoUseCase } from '../../ports-in/cargar-producto-catalogo.use-case';
@@ -52,6 +53,7 @@ import {
   toResultadoCargaMasivaResponseDto,
 } from './catalogo.mapper';
 import { ActualizarPrecioDto } from './dto/actualizar-precio.dto';
+import { AjustarPreciosDto } from './dto/ajustar-precios.dto';
 import { CargaMasivaDto } from './dto/carga-masiva.dto';
 import { CatalogProductResponseDto } from './dto/catalog-product-response.dto';
 import { NuevoProductoDto } from './dto/nuevo-producto.dto';
@@ -77,6 +79,7 @@ export class CatalogoController {
     private readonly cargarProductoCatalogoUseCase: CargarProductoCatalogoUseCase,
     private readonly actualizarPrecioUseCase: ActualizarPrecioUseCase,
     private readonly cargarCatalogoMasivoUseCase: CargarCatalogoMasivoUseCase,
+    private readonly ajustarPreciosPorCategoriaUseCase: AjustarPreciosPorCategoriaUseCase,
   ) {}
 
   @Get('productos')
@@ -204,5 +207,29 @@ export class CatalogoController {
       archivo,
     );
     return toResultadoCargaMasivaResponseDto(resultado);
+  }
+
+  @Roles('provider')
+  @Post('mi-catalogo/ajustes-de-precio')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary:
+      'Ajusta precioBase/precioMaximo de todos los ítems propios de una categoría, ' +
+      'en un porcentaje (D5). No idempotente: POST, no PUT.',
+  })
+  @ApiNoContentResponse()
+  @ApiBadRequestResponse({ description: 'DTO inválido, o porcentaje <= -100.' })
+  @ApiUnauthorizedResponse({ description: 'Token ausente o inválido.' })
+  @ApiForbiddenResponse({ description: 'Actor no es provider, o su empresa no está activa.' })
+  async ajustarPreciosPorCategoria(
+    @Body() dto: AjustarPreciosDto,
+    @Actor() actor: AuthenticatedActor,
+  ): Promise<void> {
+    await this.ajustarPreciosPorCategoriaUseCase.execute(
+      actor.companyId!,
+      actor.companyStatus!,
+      dto.categoria,
+      dto.porcentaje,
+    );
   }
 }

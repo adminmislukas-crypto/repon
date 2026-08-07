@@ -145,15 +145,15 @@ Depends on Phase 5a's parser and PR 1's unique index for a real `ON CONFLICT` ta
 
 ## Phase 6: Category adjustment — Spec: `core-api-catalogo`
 
-- [ ] 6.1 RED: extend `kysely-catalog.repository.spec.ts` — `saveMany()` writes all items, propagates `tx`.
-- [ ] 6.2 GREEN: implement `saveMany()` on `KyselyCatalogRepository`.
-- [ ] 6.3 `domain/catalogo.errors.ts`: append `PorcentajeInvalidoError`.
-- [ ] 6.4 RED: `ports-in/ajustar-precios-por-categoria.use-case.spec.ts` — both `precio_base`/`precio_maximo` scale by the same factor ("Both bounds scale proportionally"); `porcentaje <= -100` rejected before any repo call ("rejected before touching the database"); invariant preserved by construction; company B's items in the same `categoria` untouched; exactly one `PreciosCategoriaAjustados`; `runInTransaction` invoked with `tx` propagated to `saveMany`.
-- [ ] 6.5 GREEN: `ports-in/ajustar-precios-por-categoria.use-case.ts` — wraps `findByCompanyAndCategoria` + `saveMany` in `TransactionManager.runInTransaction`.
-- [ ] 6.6 `events/precios-categoria-ajustados.event.ts` (`{companyId, categoria, porcentaje, totalActualizados}`, D6).
-- [ ] 6.7 `adapters/http/dto/ajustar-precios.dto.ts` + controller route `POST /catalogo/mi-catalogo/ajustes-de-precio` (204, `@Roles('provider')`).
-- [ ] 6.8 E2e: `test/catalogo-ajustes-precio.e2e-spec.ts` — proportional scaling happy path, `porcentaje <= -100` → 400, cross-company isolation.
-- [ ] 6.9 `catalogo.module.ts`: register `AjustarPreciosPorCategoriaUseCase`.
+- [x] 6.1 RED: extend `kysely-catalog.repository.spec.ts` — `saveMany()` writes all items, propagates `tx`.
+- [x] 6.2 GREEN: implement `saveMany()` on `KyselyCatalogRepository`.
+- [x] 6.3 `domain/catalogo.errors.ts`: append `PorcentajeInvalidoError`. **Resolved open question**: this class IS needed, thrown by the USE CASE itself (not the entity) as an up-front gate before `runInTransaction`/`findByCompanyAndCategoria` — see the class's own doc comment and apply-progress.md's "What PR6 Needs to Know" resolution for the full reasoning.
+- [x] 6.4 RED: `ports-in/ajustar-precios-por-categoria.use-case.spec.ts` — both `precio_base`/`precio_maximo` scale by the same factor ("Both bounds scale proportionally"); `porcentaje <= -100` rejected before any repo call ("rejected before touching the database"); invariant preserved by construction; company B's items in the same `categoria` untouched; exactly one `PreciosCategoriaAjustados`; `runInTransaction` invoked with `tx` propagated to `saveMany`.
+- [x] 6.5 GREEN: `ports-in/ajustar-precios-por-categoria.use-case.ts` — wraps `findByCompanyAndCategoria` + `saveMany` in `TransactionManager.runInTransaction`.
+- [x] 6.6 `events/precios-categoria-ajustados.event.ts` (`{companyId, categoria, porcentaje, totalActualizados}`, D6).
+- [x] 6.7 `adapters/http/dto/ajustar-precios.dto.ts` + controller route `POST /catalogo/mi-catalogo/ajustes-de-precio` (204, `@Roles('provider')`).
+- [x] 6.8 E2e: `test/catalogo-ajustes-precio.e2e-spec.ts` — proportional scaling happy path, `porcentaje <= -100` → 400, cross-company isolation.
+- [x] 6.9 `catalogo.module.ts`: register `AjustarPreciosPorCategoriaUseCase`.
 
 ## Phase 7: identidad `reactivarEmpresa` — Spec: `core-api-identidad`
 
