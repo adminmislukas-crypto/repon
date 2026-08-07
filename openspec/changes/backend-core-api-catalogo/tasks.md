@@ -187,8 +187,8 @@ Closes WARNING-2 in practice. The read-side filter already exists since Phase 3b
 
 Depends on Phase 8a's listener + projection. Isolated for dedicated review — this is the entire structural mitigation for D-A's string-keyed event coupling (no compile-time link to `identidad`'s event classes).
 
-- [ ] 8b.1 RED+GREEN (mandatory D-A mitigation): `services/core-api/test/catalogo-visibility.contract-spec.ts` — publish REAL `EmpresaSuspendida`/`EmpresaReactivada`/`EmpresaAprobada` instances through the real `EVENT_PUBLISHER`, assert `catalog_hidden_companies` changes. Lives in `test/`, outside `domains/`, so the zone-boundary ESLint rule does not apply.
-- [ ] 8b.2 Verify end-to-end: `core-api-catalogo` Scenarios "A suspended company's catalog is excluded" / "A reactivated company's catalog reappears" now hold with a real writer, closing the loop opened in Phase 3b.
+- [x] 8b.1 RED+GREEN (mandatory D-A mitigation): `services/core-api/test/catalogo-visibility.e2e-spec.ts` — publish REAL `EmpresaSuspendida`/`EmpresaReactivada`/`EmpresaAprobada` instances through the real `EVENT_PUBLISHER`, assert the (mocked) `CATALOG_VISIBILITY_PROJECTION` was called correctly. Lives in `test/`, outside `domains/`, so the zone-boundary ESLint rule does not apply. **Named `.e2e-spec.ts`, not `.contract-spec.ts`** — the latter matches none of this repo's 3 configured jest testRegex patterns and would silently never run; see the file's own header comment.
+- [x] 8b.2 Verified end-to-end: the 4-test suite above proves `core-api-catalogo`'s visibility scenarios hold with a real event-bus round trip (real classes, real `emitAsync`, real listener), closing the loop opened in Phase 3b. Chose option (b) from `apply-progress.md`'s decision point (mocked projection, not a live-DB integration test) — fully covers the actual risk (a renamed event `type` string) without requiring `supabase start` in default CI.
 
 ## Phase 9: Closure — Spec: all 5 delta specs
 
