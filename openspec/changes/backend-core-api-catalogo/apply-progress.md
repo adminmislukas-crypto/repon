@@ -2,9 +2,9 @@
 
 **Artifact store**: hybrid (this file + Engram `sdd/backend-core-api-catalogo/apply-progress`)
 **Strict TDD Mode**: active (`test_command: pnpm test`)
-**Last updated**: 2026-08-06T23:45:00Z — PR7 batch (merged with PR1+PR2+PR3a+PR3b+PR4a+PR4b+PR5a+PR5b+PR6+orchestrator-fix-forward; all unchanged below except this note and the new PR7 section)
+**Last updated**: 2026-08-06T23:59:00Z — PR8a batch (merged with PR1+PR2+PR3a+PR3b+PR4a+PR4b+PR5a+PR5b+PR6+PR7+orchestrator-fix-forward; all unchanged below except this note and the new PR8a section)
 
-## Status: 7/7 tasks complete for PR1 (Phase 1: DB foundation). 7/7 tasks complete for PR2 (Phase 2: Seams). 3/3 tasks complete for PR3a (Phase 3a: Read side — domain entity + invariant). 9/9 tasks complete for PR3b (Phase 3b: Read side — persistence adapters + buscarProductos + controller). 8/8 tasks complete for PR4a (Phase 4a: Unit writes — use cases + repository save()). 7/7 tasks complete for PR4b (Phase 4b: Unit writes — HTTP adapter + exception filter + e2e). 4/4 tasks complete for PR5a (Phase 5a: Bulk load — CSV parser + envelope validation). 7/7 tasks complete for PR5b (Phase 5b: Bulk load — use case + controller + e2e). 9/9 tasks complete for PR6 (Phase 6: Category adjustment). 10/10 tasks complete for PR7 (Phase 7: identidad `reactivarEmpresa`, purely additive). 71/~90 tasks complete overall across all 13 planned PRs.
+## Status: 7/7 tasks complete for PR1 (Phase 1: DB foundation). 7/7 tasks complete for PR2 (Phase 2: Seams). 3/3 tasks complete for PR3a (Phase 3a: Read side — domain entity + invariant). 9/9 tasks complete for PR3b (Phase 3b: Read side — persistence adapters + buscarProductos + controller). 8/8 tasks complete for PR4a (Phase 4a: Unit writes — use cases + repository save()). 7/7 tasks complete for PR4b (Phase 4b: Unit writes — HTTP adapter + exception filter + e2e). 4/4 tasks complete for PR5a (Phase 5a: Bulk load — CSV parser + envelope validation). 7/7 tasks complete for PR5b (Phase 5b: Bulk load — use case + controller + e2e). 9/9 tasks complete for PR6 (Phase 6: Category adjustment). 10/10 tasks complete for PR7 (Phase 7: identidad `reactivarEmpresa`, purely additive). 8/8 tasks complete for PR8a (Phase 8a: visibility listener + projection use cases + adapter). 79/~90 tasks complete overall across all 13 planned PRs.
 
 **Engram note**: `mem_*` tools were not exposed in this batch's tool set either (same as every prior batch, PR1 through PR5a) — this file remains the authoritative record, per the batch instructions ("file is authoritative regardless"). If Engram becomes available in a later batch, the topic key to upsert is `sdd/backend-core-api-catalogo/apply-progress`, content = this full file merged.
 
@@ -927,10 +927,100 @@ Working tree was clean before this batch except the same pre-existing untracked 
 
 ---
 
-## What PR8a (next batch) Needs to Know
+## PR8a · Phase 8a: Visibility listener + projection use cases + adapter — Spec: `core-api-catalogo`, `core-api-hexagonal-layout`
 
-- **Start here**: `## Phase 8a: Visibility listener + projection use cases + adapter` in `tasks.md` (tasks 8a.1–8a.8). Depends on Phase 3b (the read-side filter already reads `CatalogVisibilityProjection`, in place since PR3b) and Phase 7 (`EmpresaReactivada` now exists, this batch) — both dependencies are satisfied.
-- **`EmpresaReactivada`** lives at `services/core-api/src/domains/identidad/events/empresa-reactivada.event.ts`, `type = 'empresa.reactivada'`, payload `(companyId, motivo)` — but task 8a.1 explicitly requires `catalogo` to declare its OWN locally-scoped `EmpresaOcultablePayload { companyId, motivo? }` shape rather than importing `identidad`'s event class directly (D-A's string-keyed event coupling, the whole reason Phase 8b's contract test exists). Do not import `EmpresaReactivada`/`EmpresaSuspendida`/`EmpresaAprobada` into `catalogo/` — subscribe by string channel name (`@OnEvent('empresa.reactivada')` etc.) only.
-- **`CompanyVisibilityListener` routes THREE channels to two handlers**: `empresa.suspendida` → `OcultarCatalogoEmpresaUseCase`; `empresa.reactivada` AND `empresa.aprobada` → the SAME `RestaurarCatalogoEmpresaUseCase` handler (design.md Diagram 2's explicit note: `aprobarEmpresa` has no state precondition, so it can also move a company out of `suspendido`, and skipping this `@OnEvent` would leave a company active-but-hidden forever — "fail-CLOSED invisible").
-- **`identidad`'s full suite is now 120 unit + 22 e2e** (up from 111/17 at the start of this whole change) — this is the new regression baseline for any future batch that touches shared kernel code identidad depends on (it should not need to touch `identidad` itself again in this change).
-- **`catalogo`'s full suite is 102 unit + 28 e2e**, confirmed byte-identical to PR6's count in this batch's isolation checks — Phase 8a is the next batch to add to it.
+**Status**: done. First domain in the repo to actually populate `adapters/events/` and the first real `@OnEvent` consumer anywhere in `services/core-api` — closes core-api-hexagonal-layout's WARNING-2 in practice (the formal spec delta for it lands in Phase 9). The read-side visibility filter has existed since PR3b (`findMatching`'s anti-join against `catalog_hidden_companies`, a provable no-op until this batch); this PR is the writer that makes it a real filter.
+
+| # | Task | Status |
+|---|---|---|
+| 8a.1 | `adapters/events/identidad-event.payloads.ts`: locally-declared `EmpresaOcultablePayload` | [x] Done |
+| 8a.2 | RED: `ocultar-catalogo-empresa.use-case.spec.ts` + `restaurar-catalogo-empresa.use-case.spec.ts` | [x] Done |
+| 8a.3 | GREEN: `ocultar-catalogo-empresa.use-case.ts` + `restaurar-catalogo-empresa.use-case.ts` | [x] Done |
+| 8a.4 | RED: `kysely-catalog-visibility.projection.spec.ts` | [x] Done |
+| 8a.5 | GREEN: `kysely-catalog-visibility.projection.ts` | [x] Done |
+| 8a.6 | RED: `company-visibility.listener.spec.ts` | [x] Done |
+| 8a.7 | GREEN: `company-visibility.listener.ts` (`@OnEvent` × 3 channels) | [x] Done |
+| 8a.8 | `catalogo.module.ts`: bind `CATALOG_VISIBILITY_PROJECTION`, register listener + 2 use cases | [x] Done |
+
+### TDD Cycle Evidence (PR8a)
+
+| Task | RED | GREEN | REFACTOR |
+|---|---|---|---|
+| 8a.2/8a.3 (`OcultarCatalogoEmpresaUseCase`, `RestaurarCatalogoEmpresaUseCase`) | Wrote both `.spec.ts` files first (3 tests total: ocultar delegates `companyId`+`motivo` to the mocked `CatalogVisibilityProjection.ocultarEmpresa`, and forwards a `null` motivo unchanged; restaurar delegates `companyId` to `mostrarEmpresa`) against not-yet-existing `./ocultar-catalogo-empresa.use-case`/`./restaurar-catalogo-empresa.use-case` → ran `pnpm --filter core-api exec jest --testPathPatterns="ocultar-catalogo-empresa\|restaurar-catalogo-empresa"` → **failed** (`Cannot find module`, both suites failed to run) | Created both thin pass-through use cases against the already-existing `CatalogVisibilityProjection` port (PR2) → re-ran → **3/3 passed** | None needed |
+| 8a.4/8a.5 (`KyselyCatalogVisibilityProjection`) | Wrote the spec first (4 tests, same `buildInsertDb`/mocked-chain convention as `kysely-catalog.repository.spec.ts`'s `save()` tests: `ocultarEmpresa` upserts with `company_id` as the ON CONFLICT target and `{oculto:true, motivo}` in `doUpdateSet`, accepts a `null` motivo; `mostrarEmpresa` issues a plain `updateTable().set({oculto:false}).where('company_id','=',...)`, and resolves successfully even when the mocked `execute` reports `numUpdatedRows: 0n`) against a not-yet-existing `./kysely-catalog-visibility.projection` → ran → **failed** (module not found) | Implemented both methods exactly as specced — `mostrarEmpresa` deliberately never inspects `numUpdatedRows` (the port's own doc comment: 0 rows affected is success, not an error) → re-ran → **4/4 passed** | None needed |
+| 8a.6/8a.7 (`CompanyVisibilityListener`) | Wrote the spec first (6 tests: `empresa.suspendida` calls `OcultarCatalogoEmpresaUseCase.execute` with companyId+motivo and normalizes an absent `motivo` to `null`; `empresa.reactivada` and `empresa.aprobada` both call the SAME `RestaurarCatalogoEmpresaUseCase.execute`; a rejection from either use case is caught, logged via `Logger.prototype.error` spied with `jest.spyOn`, asserted `{evento, companyId}` in the log call, and never re-thrown — asserted with `.resolves.toBeUndefined()`) against a not-yet-existing `./company-visibility.listener` → ran → **failed** (module not found) | Implemented `CompanyVisibilityListener` with 3 `@OnEvent`-decorated public methods (`'empresa.suspendida'`, `'empresa.reactivada'`, `'empresa.aprobada'`) — the latter two both delegate to a shared private `restaurar(evento, payload)` helper so the log's `evento` field stays accurate per channel (an array-form `@OnEvent(['empresa.reactivada','empresa.aprobada'])` on one method was considered and rejected: NestJS does not pass the triggering event name into the handler, so a single shared method would lose which channel fired, degrading the log's `{evento, companyId}` shape) → re-ran → **6/6 passed** | Ran `pnpm exec prettier --write` on the listener + its spec (a multi-line arrow-function argument list Prettier wanted collapsed) → re-ran the suite → still 6/6 passed |
+
+### Verification that `@OnEvent` actually wires without a dedicated e2e in this batch
+
+`EventEmitterModule.forRoot()` is already registered globally by `shared/event-bus/event-bus.module.ts` (imported into `SharedKernelModule`, `@Global()`, imported once into `AppModule`) — confirmed by reading the file before writing any code this batch, not assumed. No other `@OnEvent` consumer exists anywhere in `services/core-api/src` (checked via `grep -rl OnEvent`) — `CompanyVisibilityListener` is genuinely the first. Registering it in `catalogo.module.ts`'s `providers` array (not `controllers`, since it exposes no route) is sufficient for Nest's event-emitter `DiscoveryService` to find its `@OnEvent`-decorated methods at bootstrap — this is standard `@nestjs/event-emitter` behavior (any provider in the DI graph is scanned), not something specific to this module. `pnpm build`'s clean `tsc -p tsconfig.build.json` run proves the module composes; genuine end-to-end proof that a REAL `EmpresaSuspendida`/`EmpresaReactivada`/`EmpresaAprobada` published through the real `EVENT_PUBLISHER` reaches this listener and mutates `catalog_hidden_companies` is deliberately deferred to Phase 8b's mandatory contract test, per design.md's own D-A mitigation text and this batch's explicit "do NOT write PR8b" instruction.
+
+### Commands Run (PR8a batch)
+
+| Command | Result |
+|---|---|
+| `pnpm --filter core-api exec jest --testPathPatterns="ocultar-catalogo-empresa\|restaurar-catalogo-empresa"` (RED) | 2 suites failed to run — module not found |
+| Same command (GREEN) | 2 suites / 3 tests passed |
+| `pnpm --filter core-api exec jest --testPathPatterns="kysely-catalog-visibility"` (RED) | Suite failed to run — module not found |
+| Same command (GREEN) | 1 suite / 4 tests passed |
+| `pnpm --filter core-api exec jest --testPathPatterns="company-visibility.listener"` (RED) | Suite failed to run — module not found |
+| Same command (GREEN) | 1 suite / 6 tests passed |
+| `pnpm exec tsc --noEmit -p tsconfig.build.json` (mid-batch, after the projection adapter) | Clean |
+| `pnpm lint` (root) | Clean |
+| `pnpm typecheck` (root) | Clean — `packages/types` + `services/core-api` both `Done` |
+| `pnpm test` (root — unit + e2e) | `core-api`: 36 suites / **235** unit tests passed (was 222 before this batch — +13: 2+1 use-case + 4 projection + 6 listener), 7 suites / **50** e2e tests passed (unchanged — no e2e in this batch, by design, deferred to PR8b). Zero regressions |
+| `pnpm build` | Clean |
+| `pnpm format:check` | Failed once (`company-visibility.listener.ts`/`.spec.ts` not Prettier-formatted) → `pnpm exec prettier --write` on both files → re-ran → clean |
+| Full re-run of `lint`/`typecheck`/`test`/`build`/`format:check` after the Prettier fix | All green again, same counts (235 unit + 50 e2e) |
+| **Isolation check**: `pnpm exec jest --testPathIgnorePatterns="domains/catalogo"` (unit) | 21 suites / **120** unit tests — byte-identical to PR7's own non-catalogo count, confirming zero identidad/shared regression |
+| **Isolation check**: `pnpm exec jest --config ./test/jest-e2e.json --testPathIgnorePatterns="catalogo"` (e2e) | 3 suites / **22** e2e tests — byte-identical to PR7's own count |
+| **Isolation check**: `pnpm exec jest --testPathPatterns="domains/catalogo"` (unit) | 15 suites / **115** tests — was 102 before this batch, +13 (exactly this batch's new tests) |
+| **Isolation check**: `pnpm exec jest --config ./test/jest-e2e.json --testPathPatterns="catalogo"` (e2e) | 4 suites / **28** tests — byte-identical to PR6/PR7's own catalogo-only e2e count, confirming this batch added zero e2e (by design) |
+
+All 5 gate commands are green as of the final run. `120 + 115 = 235` unit, `22 + 28 = 50` e2e — the totals decompose exactly into "identidad+shared untouched" plus "catalogo grew by exactly this batch's 13 new unit tests, 0 new e2e," the same load-bearing evidence shape as every prior PR's isolation checks.
+
+### Deviations from Design (PR8a)
+
+**None.** The `catalog_hidden_companies` upsert/update shapes, the 3-channel-to-2-handler routing (including consuming `EmpresaAprobada` for the non-redundant reason design.md D-A names explicitly), the never-re-throw/fail-open listener rule, and the locally-declared `EmpresaOcultablePayload` (never importing `identidad`'s event classes) all match design.md D-A verbatim. One implementation-level judgment call, not a deviation, documented above: routing `empresa.reactivada`/`empresa.aprobada` through 2 separate `@OnEvent`-decorated methods calling a shared private helper, rather than one method with an array-form `@OnEvent([...])` — chosen so the `{evento, companyId}` log shape design.md specifies stays accurate per channel, since NestJS's event emitter does not pass the triggering event name into the handler.
+
+### Issues Found (PR8a)
+
+None blocking. Confirms, not newly discovers: `catalog_hidden_companies` now has a real writer, so `findMatching`'s anti-join (PR3b) and `CatalogQueryPort.buscarCoincidencias`'s equivalent (also PR3b) stop being provable no-ops — this is the intended effect of this PR, not a side effect. The one thing genuinely deferred, by explicit instruction, not by oversight: no test in this batch publishes a REAL `identidad` event instance through the real `EVENT_PUBLISHER` — every test here uses mocked ports or manually-constructed `EmpresaOcultablePayload` literals. Phase 8b's contract test is where that end-to-end proof lands, and it is the entire reason design.md calls it "mandatory," not optional polish.
+
+### Files Changed (PR8a)
+
+| File | Action | What Was Done |
+|---|---|---|
+| `services/core-api/src/domains/catalogo/adapters/events/identidad-event.payloads.ts` | Created | `EmpresaOcultablePayload { companyId, motivo? }` — no import of `identidad`'s event classes |
+| `services/core-api/src/domains/catalogo/ports-in/ocultar-catalogo-empresa.use-case.ts` | Created | Thin pass-through to `CatalogVisibilityProjection.ocultarEmpresa` |
+| `services/core-api/src/domains/catalogo/ports-in/ocultar-catalogo-empresa.use-case.spec.ts` | Created | RED→GREEN, 2 tests |
+| `services/core-api/src/domains/catalogo/ports-in/restaurar-catalogo-empresa.use-case.ts` | Created | Thin pass-through to `CatalogVisibilityProjection.mostrarEmpresa` |
+| `services/core-api/src/domains/catalogo/ports-in/restaurar-catalogo-empresa.use-case.spec.ts` | Created | RED→GREEN, 1 test |
+| `services/core-api/src/domains/catalogo/adapters/persistence/kysely-catalog-visibility.projection.ts` | Created | `KyselyCatalogVisibilityProjection` implementing the PR2-declared port |
+| `services/core-api/src/domains/catalogo/adapters/persistence/kysely-catalog-visibility.projection.spec.ts` | Created | RED→GREEN, 4 tests |
+| `services/core-api/src/domains/catalogo/adapters/events/company-visibility.listener.ts` | Created | `CompanyVisibilityListener`, 3 `@OnEvent` handlers, never re-throws |
+| `services/core-api/src/domains/catalogo/adapters/events/company-visibility.listener.spec.ts` | Created | RED→GREEN, 6 tests |
+| `services/core-api/src/domains/catalogo/catalogo.module.ts` | Modified (append-only) | Bound `CATALOG_VISIBILITY_PROJECTION`→`KyselyCatalogVisibilityProjection`; registered `OcultarCatalogoEmpresaUseCase`, `RestaurarCatalogoEmpresaUseCase`, `CompanyVisibilityListener` as providers; `exports` unchanged (still exactly `[CATALOG_QUERY_PORT]`) |
+| `openspec/changes/backend-core-api-catalogo/tasks.md` | Modified | Marked tasks 8a.1–8a.8 `[x]` |
+| `openspec/changes/backend-core-api-catalogo/apply-progress.md` | Modified | Merged PR8a section into the cumulative file (this file) |
+
+### Commit (PR8a)
+
+One commit for this PR8a batch:
+
+```
+feat(core-api): add catalogo visibility listener and projection writer
+```
+
+Working tree was clean before this batch except the same pre-existing untracked `openspec/changes/backend-core-api-catalogo/{design.md,exploration.md,proposal.md,specs/}` noted since PR2 — left untouched/untracked, out of this batch's scope; commit hash recorded in the return envelope to the orchestrator.
+
+---
+
+## What PR8b (next batch) Needs to Know
+
+- **Start here**: `## Phase 8b: Cross-domain contract test` in `tasks.md` (tasks 8b.1–8b.2). Depends on Phase 8a's listener + projection, both landed this batch. This is the LAST slice before Phase 9's closure/docs PR.
+- **What PR8b actually is**: `services/core-api/test/catalogo-visibility.contract-spec.ts` — publish REAL `EmpresaSuspendida`/`EmpresaReactivada`/`EmpresaAprobada` instances (import `identidad`'s actual event classes here — this file lives in `test/`, outside `domains/`, so the zone-boundary ESLint rule does not apply, unlike `catalogo/adapters/events/identidad-event.payloads.ts`, which deliberately does NOT import them) through the real `EVENT_PUBLISHER` (`EventEmitterPublisher`, backed by a real `EventEmitter2`/`emitAsync`, not a mock) and assert `catalog_hidden_companies` actually changed. This is the mandatory D-A mitigation design.md names explicitly — not optional, the whole reason the string-keyed event coupling (no compile-time link to `identidad`'s event classes) is safe to ship.
+- **How to assert the projection changed without a live DB**: this repo has no opt-in-integration-test precedent inside `test/` for `catalogo` yet (PR1's DB-index integration test is `supabase start`-gated and separate). The two realistic options, to weigh explicitly in that batch rather than default to one silently: (a) stand up a real Nest testing module with the real `EVENT_PUBLISHER` and a REAL `CATALOG_VISIBILITY_PROJECTION` bound to a test/local Supabase instance (closest to "genuine end-to-end," heavier, needs `supabase start` like PR1's opt-in test), or (b) real `EVENT_PUBLISHER` + real `CompanyVisibilityListener` + real `OcultarCatalogoEmpresaUseCase`/`RestaurarCatalogoEmpresaUseCase`, but a MOCKED `CATALOG_VISIBILITY_PROJECTION` asserted via `toHaveBeenCalledWith` (proves the STRING-KEYED WIRING end-to-end — the actual risk D-A's contract test exists to mitigate — without requiring a live database in CI). Design.md's own text ("assert `catalog_hidden_companies` changed") reads as literally wanting (a), but the risk it explicitly names to mitigate (a renamed event `type` breaking the listener silently) is fully covered by (b) alone, since (b) still publishes real event instances through the real emitter and would fail exactly when a `type` string drifts. Whichever is chosen, name the choice explicitly in that batch's own apply-progress notes — don't silently pick one.
+- **Exact event type strings, verified by reading the source in this batch, not assumed**: `EmpresaSuspendida.type = 'empresa.suspendida'`, `EmpresaReactivada.type = 'empresa.reactivada'`, `EmpresaAprobada.type = 'empresa.aprobada'` — `services/core-api/src/domains/identidad/events/{empresa-suspendida,empresa-reactivada,empresa-aprobada}.event.ts`. `EmpresaAprobada`'s constructor takes ONLY `companyId` (no `motivo` field at all) — `EmpresaOcultablePayload.motivo` being optional is exactly what makes this safe to consume with the same local payload type.
+- **`identidad`'s full suite is still 120 unit + 22 e2e** — unchanged this batch (PR8a touched zero `identidad` files), still the regression baseline.
+- **`catalogo`'s full suite is now 115 unit + 28 e2e** (up from 102/28) — PR8a added 13 unit tests and 0 e2e tests (deliberately, per this batch's own scope instructions). Phase 8b is expected to add e2e/contract tests, not more unit tests to this count.
+- **After PR8b, only Phase 9 (closure/docs) remains** — 6 SPEC.md deltas + module-exports audit + full-suite verification, no new production code expected.

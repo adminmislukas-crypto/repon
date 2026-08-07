@@ -174,14 +174,14 @@ Purely additive (R9). Must land before Phase 8a — the listener needs `EmpresaR
 
 Closes WARNING-2 in practice. The read-side filter already exists since Phase 3b — this phase only adds the writer. Depends on Phase 3b (filter reads the projection) and Phase 7 (`EmpresaReactivada` exists).
 
-- [ ] 8a.1 `adapters/events/identidad-event.payloads.ts`: locally-declared `EmpresaOcultablePayload { companyId, motivo? }` — no import of `identidad`'s event classes.
-- [ ] 8a.2 RED: `ports-in/ocultar-catalogo-empresa.use-case.spec.ts` + `ports-in/restaurar-catalogo-empresa.use-case.spec.ts` — each calls the projection port, mocked.
-- [ ] 8a.3 GREEN: `ports-in/ocultar-catalogo-empresa.use-case.ts` + `ports-in/restaurar-catalogo-empresa.use-case.ts`.
-- [ ] 8a.4 RED: `adapters/persistence/kysely-catalog-visibility.projection.spec.ts` — `ocultarEmpresa` upserts `oculto=true` on conflict; `mostrarEmpresa` updates `oculto=false`, 0-rows-affected is success (already visible).
-- [ ] 8a.5 GREEN: `adapters/persistence/kysely-catalog-visibility.projection.ts`.
-- [ ] 8a.6 RED: `adapters/events/company-visibility.listener.spec.ts` — routes `empresa.suspendida`→ocultar, `empresa.reactivada`/`empresa.aprobada`→mostrar (same handler); catches and `logger.error({evento, companyId})` without re-throwing when the projection call fails.
-- [ ] 8a.7 GREEN: `adapters/events/company-visibility.listener.ts` (`@OnEvent` on the 3 channels).
-- [ ] 8a.8 `catalogo.module.ts`: bind `CATALOG_VISIBILITY_PROJECTION`→`KyselyCatalogVisibilityProjection`, register `CompanyVisibilityListener` + the 2 use cases; folder now has `adapters/events/` (core-api-hexagonal-layout Scenario "catalogo has adapters/events because it consumes events").
+- [x] 8a.1 `adapters/events/identidad-event.payloads.ts`: locally-declared `EmpresaOcultablePayload { companyId, motivo? }` — no import of `identidad`'s event classes.
+- [x] 8a.2 RED: `ports-in/ocultar-catalogo-empresa.use-case.spec.ts` + `ports-in/restaurar-catalogo-empresa.use-case.spec.ts` — each calls the projection port, mocked.
+- [x] 8a.3 GREEN: `ports-in/ocultar-catalogo-empresa.use-case.ts` + `ports-in/restaurar-catalogo-empresa.use-case.ts`.
+- [x] 8a.4 RED: `adapters/persistence/kysely-catalog-visibility.projection.spec.ts` — `ocultarEmpresa` upserts `oculto=true` on conflict; `mostrarEmpresa` updates `oculto=false`, 0-rows-affected is success (already visible).
+- [x] 8a.5 GREEN: `adapters/persistence/kysely-catalog-visibility.projection.ts`.
+- [x] 8a.6 RED: `adapters/events/company-visibility.listener.spec.ts` — routes `empresa.suspendida`→ocultar, `empresa.reactivada`/`empresa.aprobada`→mostrar (same handler); catches and `logger.error({evento, companyId})` without re-throwing when the projection call fails.
+- [x] 8a.7 GREEN: `adapters/events/company-visibility.listener.ts` (`@OnEvent` on the 3 channels).
+- [x] 8a.8 `catalogo.module.ts`: bind `CATALOG_VISIBILITY_PROJECTION`→`KyselyCatalogVisibilityProjection`, register `CompanyVisibilityListener` + the 2 use cases; folder now has `adapters/events/` (core-api-hexagonal-layout Scenario "catalogo has adapters/events because it consumes events").
 
 ## Phase 8b: Cross-domain contract test — Spec: `core-api-catalogo`
 
