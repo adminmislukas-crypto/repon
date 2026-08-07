@@ -17,11 +17,14 @@ interface IdentidadInboundPort {
   aprobarEmpresa(companyId: string, adminId: string): Promise<void>
   suspenderUsuario(profileId: string, adminId: string, motivo: string): Promise<void>
   suspenderEmpresa(companyId: string, adminId: string, motivo: string): Promise<void>
+  reactivarEmpresa(companyId: string, adminId: string, motivo: string): Promise<void>   // delta D16 (backend-core-api-catalogo): agregado
   asignarRolAdmin(profileId: string, rol: AdminRole, adminId: string): Promise<void>   // delta 5.4: adminId agregado
 }
 ```
 
 `asignarRolAdmin` ahora recibe `adminId` explícito: `admin_roles.granted_by` es `NOT NULL REFERENCES profiles(id)`, y la firma original no tenía forma de satisfacer esa columna.
+
+**Delta D16 (`backend-core-api-catalogo`)**: hasta este delta, `identidad` no tenía ningún caso de uso que transicionara `suspendido → activo` — `aprobarEmpresa` solo cubre `pendiente → activo`. `reactivarEmpresa` cierra ese hueco, puramente aditivo (ningún caso de uso existente cambia de firma ni de comportamiento). Espejo exacto de `suspenderEmpresa` (admin-mutante, auditado en la misma transacción vía `AuditLogPort`, mismos sub-roles `@AdminRoles('super_admin', 'soporte')`) con una diferencia deliberada: exige `company.status === 'suspendido'` como precondición — a diferencia de `suspenderEmpresa` (destino `suspendido`, alcanzable desde cualquier estado, falla-seguro por diseño), el destino de `reactivarEmpresa` (`activo`) es permisivo, así que sin la precondición reactivar una empresa `pendiente` la activaría saltándose la aprobación. Si la precondición no se cumple, lanza `CompanyNotSuspendedError` (mapeado a HTTP 409) antes de cualquier escritura. Motivación: cierra el lado de escritura de la proyección de visibilidad de `catalogo` (ver `catalogo/SPEC.md`, "Eventos que consume") — sin este caso de uso, una empresa suspendida no tenía ningún camino de vuelta a visible.
 
 ## Puertos de salida (lo que el dominio necesita, sin saber cómo se implementa)
 
@@ -71,7 +74,8 @@ interface EventPublisher {        // implementado por el shared kernel (`EVENT_P
 - `UsuarioRegistrado`
 - `EmpresaRegistrada`
 - `EmpresaAprobada` — habilita a `catalogo` y `refill-matching` a considerar esta empresa
-- `EmpresaSuspendida` — obliga a `catalogo` a ocultar su catálogo y a `refill-matching` a excluirla del matching
+- `EmpresaSuspendida` — obliga a `catalogo` a ocultar su catálogo (de lecturas cross-tenant, ver `catalogo/SPEC.md`) y a `refill-matching` a excluirla del matching
+- `EmpresaReactivada` (delta D16, `backend-core-api-catalogo`) — reverso de `EmpresaSuspendida`; `catalogo` lo consume con el mismo handler que usa para `EmpresaAprobada`
 - `UsuarioSuspendido`
 
 ## Eventos que consume

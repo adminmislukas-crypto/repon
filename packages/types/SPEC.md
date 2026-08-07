@@ -10,7 +10,7 @@ Tipos TypeScript compartidos entre `usuario-mobile`, `proveedor-mobile`, `admin-
 |---|---|
 | `src/identidad.ts` | `Role`, `CompanyStatus`, `ProfileStatus`, `AdminRole`, `Company`, `CompanyDispatchZone`, `Profile` |
 | `src/consumo.ts` | `OwnerType`, `ConsumptionKind`, `Pet`, `UserConsumption`, `ConsumptionLog` |
-| `src/catalogo.ts` | `CatalogProductStatus`, `CatalogProduct`, `ProviderCatalogItem` |
+| `src/catalogo.ts` | `CatalogProductStatus`, `CatalogProduct`, `ProviderCatalogItem`, `NuevoProductoProveedor`, `FilaCarga`, `ArchivoCarga`, `ResultadoCargaMasiva` (últimos 4: delta `backend-core-api-catalogo`, D12 — promovidos desde prosa de `catalogo/SPEC.md` a código real, mismo tratamiento que `shared-types-package` ya hizo para los otros 7 archivos en `backend-core-api-foundation`) |
 | `src/refill-matching.ts` | `RefillRequest`, `RefillItem` |
 | `src/ofertas.ts` | `OfferKind`, `OfferStatus`, `OfferItem` (+ variantes `OfferItemReactiva`/`OfferItemProactiva`/`OfferItemAlt`), `Offer` |
 | `src/pedidos-pagos.ts` | `OrderStatus`, `Order`, `OrderItem`, `PaymentStatus`, `Payment` |

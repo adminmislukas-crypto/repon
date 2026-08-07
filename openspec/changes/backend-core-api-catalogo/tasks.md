@@ -192,12 +192,12 @@ Depends on Phase 8a's listener + projection. Isolated for dedicated review — t
 
 ## Phase 9: Closure — Spec: all 5 delta specs
 
-- [ ] 9.1 `services/core-api/domains/catalogo/SPEC.md`: apply the 7 declared deltas from design.md's table — `actualizarPrecio` signature, `PreciosCategoriaAjustados` event, `companyStatus` gate on the 4 mutating use cases, visibility filter scope correction (`buscarCoincidencias`/`findMatching` only, not `buscarProductos`/`findByCompany`), `CatalogRepository` additions, `CatalogQueryPort` in `contracts/` with `CatalogQueryUnavailableError`.
-- [ ] 9.2 `services/core-api/domains/identidad/SPEC.md`: append `reactivarEmpresa` + `EmpresaReactivada` (purely additive, D16).
-- [ ] 9.3 `packages/types/SPEC.md`: append `ArchivoCarga`/`FilaCarga`/`ResultadoCargaMasiva`/`NuevoProductoProveedor`.
-- [ ] 9.4 Audit `catalogo.module.ts` `exports:` — confirm it is exactly `[CATALOG_QUERY_PORT]`, nothing else crosses the module boundary.
-- [ ] 9.5 Run full workspace verification: `pnpm lint`, `pnpm typecheck`, `pnpm test` (unit+e2e+contract; opt-in integration excluded), `pnpm build` — all green, including the Phase 7 identidad regression suite.
-- [ ] 9.6 Confirm the 6 open items design.md left unresolved (RLS-bypass reads the projection, no self-catalog-listing endpoint, `ajustarPreciosPorCategoria` 204-no-count, cross-file `(nombre,categoria)` collision, timeout values unmeasured, `aprobarEmpresa` still no state precondition) are carried forward as documented follow-ups, not silently dropped.
+- [x] 9.1 `services/core-api/domains/catalogo/SPEC.md`: applied all declared deltas found across proposal/design/apply (grew from 2 to 7): `actualizarPrecio`/`cargarProductoCatalogo`/`cargarCatalogoMasivo`/`ajustarPreciosPorCategoria` signatures (`companyId`+`companyStatus`), `PreciosCategoriaAjustados` event, visibility filter scope correction (`buscarCoincidencias`/`findMatching` only), `CatalogRepository` additions (`findById`/`saveMany`/`findByCompanyAndCategoria`), new `CatalogProductRepository`/`CatalogVisibilityProjection` ports, `CatalogQueryPort`'s `CatalogQueryUnavailableError` failure semantics, `EmpresaReactivada` added to "Eventos que consume".
+- [x] 9.2 `services/core-api/domains/identidad/SPEC.md`: appended `reactivarEmpresa` + `EmpresaReactivada` (purely additive, D16), with the asymmetry-vs-`suspenderEmpresa` rationale documented inline.
+- [x] 9.3 `packages/types/SPEC.md`: appended `ArchivoCarga`/`FilaCarga`/`ResultadoCargaMasiva`/`NuevoProductoProveedor` to the file-organization table.
+- [x] 9.4 Audited `catalogo.module.ts` `exports:` — confirmed exactly `[CATALOG_QUERY_PORT]`, nothing else crosses the module boundary.
+- [x] 9.5 Full workspace verification, all green: `pnpm lint`, `pnpm typecheck`, `pnpm test` (235 unit + 54 e2e — includes the Phase 7 identidad regression suite, 120 unit + 22 e2e, byte-identical to its post-PR7 baseline), `pnpm build`, `pnpm format:check`. Also ran the opt-in integration suite (`pnpm exec jest --config ./test/jest-integration.json` against local Supabase) for extra confidence: 3 suites / 10 tests, all green.
+- [x] 9.6 The 6 open items from design.md's "Riesgos residuales y preguntas abiertas" are carried forward as documented follow-ups in `apply-progress.md`'s cumulative record (RLS-bypass reads the projection, no self-catalog-listing endpoint, `ajustarPreciosPorCategoria` 204-no-count, cross-file `(nombre,categoria)` collision across separate uploads, timeout values unmeasured, `aprobarEmpresa` still no state precondition) — none silently dropped; each is either mitigated structurally (e.g. the deny-list model bounds the RLS-bypass gap) or named as an explicit future SDD change.
 
 ---
 
