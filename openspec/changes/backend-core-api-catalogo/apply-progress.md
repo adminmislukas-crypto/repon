@@ -1058,3 +1058,13 @@ Working tree was clean before this batch except the same pre-existing untracked 
 **Commit**: this batch also commits the SDD planning artifacts that were deliberately left untracked since PR1 (`proposal.md`, `design.md`, `exploration.md`, `specs/*`, plus the final `tasks.md`/`apply-progress.md`) — mirroring the archived `backend-core-api-foundation` change's own precedent (`e6894b0`, "docs(openspec): add SDD planning artifacts") of a dedicated closure commit rather than bundling planning docs into the first implementation PR.
 
 **This change is now feature-complete and ready for `sdd-verify`.** All 13 PRs (`31bbcb6` through this batch's commit) landed on `main`, stacked, each leaving the workspace green. Total: ~9,900 changed lines across 13 PRs + 1 fix-forward commit, against an original 9-PR forecast of ~3,200-4,300 — the overage is consistently attributable to thorough test coverage (RED-first specs, e2e depth, the mandatory contract test), never scope creep, as each batch's own risk report documented in real time.
+
+## sdd-verify result and post-verify fix
+
+**Verdict**: PASS WITH WARNINGS, 0 CRITICAL, 1 WARNING, 2 SUGGESTION (`openspec/changes/backend-core-api-catalogo/verify-report.md`, independent fresh-context pass — re-ran all 5 gates + opt-in integration suite, re-verified R1/D2/R9/D-A/fail-closed/module-boundary directly against source and a live `git diff`/`psql`, not by trusting this file's own narrative).
+
+**The one WARNING was real and has been fixed**: this file's own PR5b fix-forward note explicitly promised the 413-vs-400 upload split would be named in `catalogo/SPEC.md`'s delta list during Phase 9 — it wasn't, despite task 9.1 being checked off. Fixed post-verify: added a note under the `CatalogoInboundPort` delta section documenting that an oversized `cargarCatalogoMasivo` upload returns `413 Payload Too Large` (Multer/transport-level), not `400 ARCHIVO_CARGA_INVALIDO`. No code changed — this was purely a documentation-completeness gap, the runtime behavior was already correct (verified independently by the verifier).
+
+**Both SUGGESTIONs accepted as noted, not actioned in this change**: no e2e test proves the 413 path specifically (deliberate, framework-guaranteed behavior, low risk); `tasks.md`'s review-workload estimates ran 2-3x under actual on 5 of 13 PRs, consistently attributable to test-coverage depth — worth recalibrating `sdd-tasks`'s forecasting model for future SDD changes in this project, not a defect in this one.
+
+Ready for `sdd-archive`.

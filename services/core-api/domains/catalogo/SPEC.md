@@ -24,6 +24,7 @@ interface CatalogoInboundPort {
 - **`actualizarPrecio` gana `companyId`** (no tenía ninguno): sin él, cualquier proveedor autenticado podía mutar el precio de un ítem de otra empresa adivinando `itemId`. El caso de uso verifica `item.companyId === companyId` antes de escribir; si no coincide (o el ítem no existe), responde **404** — nunca 403, para no confirmar por enumeración que el ítem existe y es de otra empresa.
 - **Las 4 firmas ganan `companyStatus`**: un proveedor cuya empresa no está `'activo'` no puede mutar el catálogo — se rechaza antes de cualquier lectura/escritura. Una regla, cuatro aplicaciones (D8/D-E), no cuatro reglas distintas.
 - **`companyId`/`companyStatus` los deriva siempre el actor autenticado**, nunca un valor que el cliente pueda enviar en el body — ningún DTO HTTP tiene un campo `companyId`.
+- **`cargarCatalogoMasivo`: un archivo que excede el tamaño máximo permitido responde `413 Payload Too Large`, no `400 ARCHIVO_CARGA_INVALIDO`.** Es una decisión deliberada, no una inconsistencia: el límite de tamaño lo aplica el interceptor de subida de archivos ANTES de que el archivo se bufferee en memoria (rechazo a nivel de transporte), mientras que `400 ARCHIVO_CARGA_INVALIDO` cubre el resto de las validaciones de envoltorio (mimetype, cantidad de filas, cabecera) que sí requieren haber leído el archivo. Mantener el límite a nivel de transporte es más seguro contra agotamiento de memoria que bufferear un archivo que ya se sabe demasiado grande.
 
 ## Puertos de salida
 
