@@ -310,6 +310,114 @@ describe('Identidad HTTP adapter (e2e)', () => {
     });
   });
 
+  describe('POST /identidad/empresas/:id/reactivacion (@AdminRoles(super_admin, soporte))', () => {
+    it('soporte can reactivate a company — happy path', async () => {
+      const adminId = randomUUID();
+      const companyId = randomUUID();
+      actorPort.findActorById.mockResolvedValueOnce(
+        buildActor({ profileId: adminId, role: 'admin', adminRole: 'soporte' }),
+      );
+      const token = await signToken(adminId);
+      const company: Company = {
+        id: companyId,
+        razonSocial: 'X',
+        rut: 'Y',
+        giro: 'Z',
+        status: 'suspendido',
+      };
+      companyRepository.findById.mockResolvedValueOnce(company);
+      companyRepository.save.mockResolvedValueOnce(undefined);
+
+      await request(app.getHttpServer())
+        .post(`/identidad/empresas/${companyId}/reactivacion`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ motivo: 'Cumplió con el plan de mejora' })
+        .expect(204);
+
+      expect(companyRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ id: companyId, status: 'activo' }),
+        expect.anything(),
+      );
+      expect(auditLogPort.record).toHaveBeenCalledWith(
+        expect.objectContaining({ accion: 'reactivar_empresa' }),
+        expect.anything(),
+      );
+      expect(eventPublisher.publish).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'empresa.reactivada', companyId }),
+      );
+    });
+
+    it('maps a non-suspended target to 409 COMPANY_NOT_SUSPENDED', async () => {
+      const adminId = randomUUID();
+      const companyId = randomUUID();
+      actorPort.findActorById.mockResolvedValueOnce(
+        buildActor({ profileId: adminId, role: 'admin', adminRole: 'super_admin' }),
+      );
+      const token = await signToken(adminId);
+      const company: Company = {
+        id: companyId,
+        razonSocial: 'X',
+        rut: 'Y',
+        giro: 'Z',
+        status: 'activo',
+      };
+      companyRepository.findById.mockResolvedValueOnce(company);
+
+      const res = await request(app.getHttpServer())
+        .post(`/identidad/empresas/${companyId}/reactivacion`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ motivo: 'Intento inválido' })
+        .expect(409);
+
+      expect(res.body).toMatchObject({ statusCode: 409, code: 'COMPANY_NOT_SUSPENDED' });
+      expect(companyRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('maps a missing company to 404 COMPANY_NOT_FOUND', async () => {
+      const adminId = randomUUID();
+      const companyId = randomUUID();
+      actorPort.findActorById.mockResolvedValueOnce(
+        buildActor({ profileId: adminId, role: 'admin', adminRole: 'super_admin' }),
+      );
+      const token = await signToken(adminId);
+      companyRepository.findById.mockResolvedValueOnce(null);
+
+      const res = await request(app.getHttpServer())
+        .post(`/identidad/empresas/${companyId}/reactivacion`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ motivo: 'motivo' })
+        .expect(404);
+
+      expect(res.body).toMatchObject({ statusCode: 404, code: 'COMPANY_NOT_FOUND' });
+    });
+
+    it('rejects a non-admin actor with 403 ROLE_NOT_ALLOWED', async () => {
+      const profileId = randomUUID();
+      const companyId = randomUUID();
+      actorPort.findActorById.mockResolvedValueOnce(buildActor({ profileId, role: 'user' }));
+      const token = await signToken(profileId);
+
+      const res = await request(app.getHttpServer())
+        .post(`/identidad/empresas/${companyId}/reactivacion`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ motivo: 'motivo' })
+        .expect(403);
+
+      expect(res.body).toMatchObject({ statusCode: 403, code: 'ROLE_NOT_ALLOWED' });
+    });
+
+    it('rejects a request with no Authorization header with 401', async () => {
+      const companyId = randomUUID();
+
+      const res = await request(app.getHttpServer())
+        .post(`/identidad/empresas/${companyId}/reactivacion`)
+        .send({ motivo: 'motivo' })
+        .expect(401);
+
+      expect(res.body).toMatchObject({ statusCode: 401, code: 'MISSING_BEARER_TOKEN' });
+    });
+  });
+
   describe('POST /identidad/usuarios/:id/suspension (@AdminRoles(super_admin, soporte))', () => {
     it('suspends the profile for an allowed admin sub-role — happy path', async () => {
       const adminId = randomUUID();

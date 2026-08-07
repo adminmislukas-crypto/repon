@@ -2,9 +2,9 @@
 
 **Artifact store**: hybrid (this file + Engram `sdd/backend-core-api-catalogo/apply-progress`)
 **Strict TDD Mode**: active (`test_command: pnpm test`)
-**Last updated**: 2026-08-06T22:30:00Z — PR6 batch (merged with PR1+PR2+PR3a+PR3b+PR4a+PR4b+PR5a+PR5b+orchestrator-fix-forward; all unchanged below except this note)
+**Last updated**: 2026-08-06T23:45:00Z — PR7 batch (merged with PR1+PR2+PR3a+PR3b+PR4a+PR4b+PR5a+PR5b+PR6+orchestrator-fix-forward; all unchanged below except this note and the new PR7 section)
 
-## Status: 7/7 tasks complete for PR1 (Phase 1: DB foundation). 7/7 tasks complete for PR2 (Phase 2: Seams). 3/3 tasks complete for PR3a (Phase 3a: Read side — domain entity + invariant). 9/9 tasks complete for PR3b (Phase 3b: Read side — persistence adapters + buscarProductos + controller). 8/8 tasks complete for PR4a (Phase 4a: Unit writes — use cases + repository save()). 7/7 tasks complete for PR4b (Phase 4b: Unit writes — HTTP adapter + exception filter + e2e). 4/4 tasks complete for PR5a (Phase 5a: Bulk load — CSV parser + envelope validation). 7/7 tasks complete for PR5b (Phase 5b: Bulk load — use case + controller + e2e). 9/9 tasks complete for PR6 (Phase 6: Category adjustment). 61/~90 tasks complete overall across all 13 planned PRs.
+## Status: 7/7 tasks complete for PR1 (Phase 1: DB foundation). 7/7 tasks complete for PR2 (Phase 2: Seams). 3/3 tasks complete for PR3a (Phase 3a: Read side — domain entity + invariant). 9/9 tasks complete for PR3b (Phase 3b: Read side — persistence adapters + buscarProductos + controller). 8/8 tasks complete for PR4a (Phase 4a: Unit writes — use cases + repository save()). 7/7 tasks complete for PR4b (Phase 4b: Unit writes — HTTP adapter + exception filter + e2e). 4/4 tasks complete for PR5a (Phase 5a: Bulk load — CSV parser + envelope validation). 7/7 tasks complete for PR5b (Phase 5b: Bulk load — use case + controller + e2e). 9/9 tasks complete for PR6 (Phase 6: Category adjustment). 10/10 tasks complete for PR7 (Phase 7: identidad `reactivarEmpresa`, purely additive). 71/~90 tasks complete overall across all 13 planned PRs.
 
 **Engram note**: `mem_*` tools were not exposed in this batch's tool set either (same as every prior batch, PR1 through PR5a) — this file remains the authoritative record, per the batch instructions ("file is authoritative regardless"). If Engram becomes available in a later batch, the topic key to upsert is `sdd/backend-core-api-catalogo/apply-progress`, content = this full file merged.
 
@@ -823,3 +823,114 @@ Working tree was clean before this batch except the same pre-existing untracked 
 - **Route**: `POST /identidad/empresas/:id/reactivacion`, `@AdminRoles('super_admin','soporte')`, 204 (task 7.7) — mirrors `suspender-empresa`'s existing route shape one level up (admin-only, not `@Roles('provider')` — this is an identidad admin action, not a catalogo provider action).
 - **Task 7.10 is a full regression gate, not just a unit for this PR**: run the FULL existing `identidad` suite (111 unit + 17 e2e, per this task's own text) and confirm zero regressions — no existing identidad use case's signature or behavior may change as a side effect of adding `reactivarEmpresa`. Treat this as a hard gate before considering PR7 done, not an optional nice-to-have.
 - **`catalogo`'s own full suite (214 unit + 45 e2e as of PR6) should also stay green** — PR7 shouldn't touch catalogo at all, so this is a trivial check, but confirm it explicitly rather than assuming.
+
+---
+
+## PR7 · Phase 7: identidad `reactivarEmpresa` — Spec: `core-api-identidad`
+
+**Status**: done. Purely additive (R9) — the one PR in this 13-PR chain scoped entirely to `domains/identidad/`, closing the `suspendido → activo` gap named by D16/D-D. Zero existing `identidad` file was edited destructively; every touched file received an append-only change (new class, new map entry, new `@Catch()` name, new provider, new route, new describe block).
+
+| # | Task | Status |
+|---|---|---|
+| 7.1 | RED: `ports-in/reactivar-empresa.use-case.spec.ts` (mirrors `suspender-empresa.use-case.spec.ts`) | [x] Done |
+| 7.2 | GREEN: `ports-in/reactivar-empresa.use-case.ts` | [x] Done |
+| 7.3 | `events/empresa-reactivada.event.ts` | [x] Done |
+| 7.4 | `domain/identidad.errors.ts`: append `CompanyNotSuspendedError` | [x] Done |
+| 7.5 | `adapters/http/dto/reactivacion.dto.ts` (new DTO, not a `SuspensionDto` reuse) | [x] Done |
+| 7.6 | `adapters/http/identidad-exception.filter.ts`: append `CompanyNotSuspendedError`→409 `COMPANY_NOT_SUSPENDED` | [x] Done |
+| 7.7 | `adapters/http/identidad.controller.ts`: append `POST /identidad/empresas/:id/reactivacion` | [x] Done |
+| 7.8 | `identidad.module.ts`: append `ReactivarEmpresaUseCase` to providers | [x] Done |
+| 7.9 | E2e: extend `test/identidad.e2e-spec.ts` — 5 new tests | [x] Done |
+| 7.10 | Full regression gate — zero regressions confirmed | [x] Done |
+
+### TDD Cycle Evidence (PR7)
+
+| Task | RED | GREEN | REFACTOR |
+|---|---|---|---|
+| 7.1/7.2 (`ReactivarEmpresaUseCase`) | Wrote `reactivar-empresa.use-case.spec.ts` (5 tests: happy path — `suspendido → activo`, `save`/`auditLogPort.record`/`publish(EmpresaReactivada)` all called with the right shapes and the same `tx`; `status !== 'suspendido'` — parametrized `it.each` over `'activo'`/`'pendiente'` — throws `CompanyNotSuspendedError` before `save`/`record`/`publish`; company not found → `CompanyNotFoundError`, same "never mutates" assertions; a `save` rejection rolls back — `record`/`publish` never called) against a not-yet-existing `./reactivar-empresa.use-case` and not-yet-existing `CompanyNotSuspendedError` → ran `pnpm exec jest --testPathPatterns=reactivar-empresa` → **failed** (`Cannot find module './reactivar-empresa.use-case'`, suite failed to run) | Created `domain/identidad.errors.ts`'s `CompanyNotSuspendedError` append, `events/empresa-reactivada.event.ts` (`EmpresaReactivada`, byte-for-byte structural mirror of `EmpresaSuspendida`), and `reactivar-empresa.use-case.ts` — exact mirror of `SuspenderEmpresaUseCase`'s constructor/4-port shape and `runInTransaction { findById → save → auditLogPort.record }` + `publish` after commit, with the one deliberate insertion: `if (company.status !== 'suspendido') throw new CompanyNotSuspendedError(companyId)` placed right after the not-found guard and before the mutation, still inside the transaction closure (so it fires before any `save`, matching design.md's D-D text "misma estructura `runInTransaction { findById → save → auditLogPort.record }`") → re-ran → **5/5 passed** | None needed |
+| 7.6 (filter mapping) | Added 1 new `describe.each` case (`CompanyNotSuspendedError` → 409 `COMPANY_NOT_SUSPENDED`) to the existing `identidad-exception.filter.spec.ts` FIRST, against the still-6-class filter → ran → **1 failed / 6 passed** (`Expected: 409, Received: 500` — confirms genuine RED, not a copy-paste no-op) | Appended the `ERROR_STATUS_MAP` entry and the class name to `@Catch(...)` (now 7 classes) → re-ran → **7/7 passed** | None needed |
+| 7.5 (`ReactivacionDto`) + `identidad-dto.spec.ts` | No RED-first ordering for this one (same precedent as every prior plain-DTO task in this change, e.g. PR6's `AjustarPreciosDto` — `tasks.md` doesn't label 7.5 RED/GREEN) — added a new `describe('ReactivacionDto', ...)` block to the existing `identidad-dto.spec.ts` in the SAME commit as the DTO itself (additive-only: `SuspensionDto`'s own describe block untouched, matching design.md D-D's explicit reason for the DTO split in the first place) | Verified via `pnpm exec jest --testPathPatterns=identidad-dto` → 2 new tests pass alongside all pre-existing DTO tests | None needed |
+| 7.3/7.7/7.8 (event, controller route, module wiring) | No dedicated RED test — same precedent as every prior batch's plain wiring tasks (`tasks.md` doesn't label 7.3/7.7/7.8 RED/GREEN) | Implemented directly; correctness proven by `pnpm typecheck` (compiles against the real use-case signature and DI tokens) + the e2e suite (7.9) exercising the real route end-to-end | None needed |
+| 7.9 (e2e) | No RED-first ordering — same precedent as every prior e2e task in this change | Extended `test/identidad.e2e-spec.ts` with a new `describe('POST /identidad/empresas/:id/reactivacion ...')` block (5 tests: soporte happy path with `save`/`auditLogPort.record`/`publish` assertions; non-suspended target → 409 `COMPANY_NOT_SUSPENDED`, `save` never called; missing company → 404 `COMPANY_NOT_FOUND`; non-admin actor → 403 `ROLE_NOT_ALLOWED`; no Authorization header → 401 `MISSING_BEARER_TOKEN`) inserted right after the existing `suspenderEmpresa` block, before the `suspenderUsuario` block — every pre-existing `describe` block in the file left untouched | Ran `pnpm exec jest --config ./test/jest-e2e.json --testPathPatterns=identidad` → **19/19 passed** (14 pre-existing + 5 new), first run | N/A |
+
+### The status-check placement decision (this PR's one real design judgment call, stated explicitly for review)
+
+design.md's D-D prose says `reactivarEmpresa` is "espejo exacto de `SuspenderEmpresaUseCase`... misma estructura `runInTransaction { findById → save → auditLogPort.record }`" — i.e., the precondition check is not a 5th named step outside that structure, it is inserted inside it, between `findById` and `save`. Diagram 2's numbered steps ((5) the precondition check, (6) the transaction) read as sequential prose for the reader, not literal proof the check must execute in a separate DB round trip before `runInTransaction` opens. Two independent things confirm reading it as "inside the transaction, after `findById`, before `save`" was correct, not a guess:
+
+1. **It requires the very row `findById` fetches** (`company.status`) — there is nothing to check without that read, and that read already only happens inside `runInTransaction` in the mirrored pattern.
+2. **The unit test (7.1) proves the effective guarantee spec.md actually asks for** — "no row is mutated, no `audit_log` entry is written, and `EmpresaReactivada` is not published" (spec.md scenario "Reactivating a company that is not suspended fails without mutating") — regardless of which literal DB round trip the guard sits in. Placing it inside the transaction closure, before `save`, satisfies that guarantee exactly: `save`/`record` are never reached, and since nothing before them wrote anything, there is nothing for even a real (non-mocked) transaction to roll back.
+
+This is not a deviation from design.md — it is the one place the design's own words needed a placement decision, made and justified here rather than silently assumed.
+
+### Commands Run (PR7 batch)
+
+| Command | Result |
+|---|---|
+| `pnpm exec jest --testPathPatterns=reactivar-empresa` (RED, before impl) | Suite failed to run — module not found |
+| `pnpm exec jest --testPathPatterns=reactivar-empresa` (GREEN) | 5/5 passed |
+| `pnpm exec jest --testPathPatterns=identidad-exception.filter` (RED, before the 7th `ERROR_STATUS_MAP` entry) | 1 failed (`Received: 500`) / 6 passed |
+| `pnpm exec jest --testPathPatterns=identidad-exception.filter` (GREEN) | 7/7 passed |
+| `pnpm exec tsc --noEmit -p tsconfig.build.json` (mid-batch, after DTO/filter/controller/module wiring) | Clean |
+| `pnpm exec jest --config ./test/jest-e2e.json --testPathPatterns=identidad` | 19/19 passed, first run |
+| `pnpm lint` (root) | Clean (only the pre-existing unrelated Node engine version WARN) |
+| `pnpm typecheck` (root) | Clean — `packages/types` + `services/core-api` both `Done` |
+| `pnpm test` (root — unit + e2e) | `core-api`: 32 suites / **222** unit tests passed (was 214 before this batch — +8: 5 use-case + 2 DTO + 1 filter), 7 suites / **50** e2e tests passed (was 45 — +5 new). Zero regressions |
+| `pnpm build` | Clean — `services/core-api` `tsc -p tsconfig.build.json` `Done` |
+| `pnpm format:check` | Failed once (`identidad-exception.filter.ts`'s new `ERROR_STATUS_MAP` entry not Prettier-formatted — a multi-line array literal Prettier wanted collapsed to one line) → ran `pnpm exec prettier --write` on that one file → re-ran `pnpm format:check` → clean |
+| Full re-run of `lint`/`typecheck`/`test`/`build`/`format:check` after the Prettier fix | All green again, same counts (222 unit + 50 e2e) |
+| **Isolation check**: `pnpm exec jest --testPathIgnorePatterns="domains/catalogo"` (unit) | 21 suites / **120** unit tests (was 112 pre-batch — +8, exactly this batch's new tests, nothing from `catalogo`) |
+| **Isolation check**: `pnpm exec jest --config ./test/jest-e2e.json --testPathIgnorePatterns="catalogo"` (e2e) | 3 suites / **22** e2e tests (was 17 pre-batch — +5, exactly this batch's new tests) |
+| **Isolation check**: `pnpm exec jest --testPathPatterns="domains/catalogo"` (unit) | 11 suites / **102** tests — byte-identical to PR6's own catalogo-only count, confirming zero catalogo regression |
+| **Isolation check**: `pnpm exec jest --config ./test/jest-e2e.json --testPathPatterns="catalogo"` (e2e) | 4 suites / **28** tests — byte-identical to PR6's own catalogo-only count, confirming zero catalogo regression |
+
+All 6 gate commands (`lint`, `typecheck`, `test`, `build`, `format:check`, plus the same-batch RED-verified filter entry) are green as of the final run. The 4 isolation checks are the load-bearing evidence for this PR's central risk claim: `120 + 102 = 222` unit, `22 + 28 = 50` e2e — the totals decompose exactly into "identidad+shared grew by this batch's new tests" plus "catalogo is byte-for-byte unchanged," not just "the grand total is bigger."
+
+### Baseline correction, stated explicitly (not silently substituted)
+
+Task 7.10's own text (written when `tasks.md` was drafted, before PR1 started) says "111 unit + 17 e2e." The orchestrator's batch instructions flagged this might have grown and asked to verify. Measured, pre-batch: **112 unit + 17 e2e** for the non-`catalogo` slice (`domains/identidad` + `shared/`) — the `+1` unit test is PR1's `pool.provider.spec.ts` (a `shared/database` test, added before any catalogo domain code existed, so it counts in the "111" baseline's successor even though it has nothing to do with `identidad` itself). Verified directly: `pnpm exec jest --testPathIgnorePatterns="domains/catalogo"` before writing any PR7 code → 112/17, confirming this reading is correct rather than assumed.
+
+### Deviations from Design (PR7)
+
+**None.** The 4-port constructor shape, the `runInTransaction { findById → save → auditLogPort.record }` structure, the `publish` timing (after commit), the `cambios: { status: { antes: 'suspendido', despues: 'activo' } }` audit shape, the `CompanyNotSuspendedError` → 409 mapping, the `ReactivacionDto` split (not reusing `SuspensionDto`), and the `@AdminRoles('super_admin', 'soporte')` route matrix all match design.md D-D and `specs/core-api-identidad/spec.md` verbatim. The only judgment call made (status-check placement inside vs. outside the transaction closure) is documented above, and is a placement decision within an unambiguous structural instruction, not a deviation from it.
+
+### Issues Found (PR7)
+
+None blocking. One thing to know, not a defect: `aprobarEmpresa` still has no state precondition (can move a `suspendido` company straight to `activo`, same as `EmpresaAprobada` routing to the same visibility-listener handler as `EmpresaReactivada` in Phase 8a per design.md's Diagram 2 step marked "MISMO handler"). This is the exact named, out-of-scope follow-up the batch instructions called out explicitly — untouched here, and untouched deliberately: fixing it would mean editing `aprobarEmpresa`, which would violate R9's additive-only mitigation for this PR.
+
+### Files Changed (PR7)
+
+| File | Action | What Was Done |
+|---|---|---|
+| `services/core-api/src/domains/identidad/ports-in/reactivar-empresa.use-case.ts` | Created | Mirror of `SuspenderEmpresaUseCase` + `CompanyNotSuspendedError` precondition gate inside the transaction, before `save` |
+| `services/core-api/src/domains/identidad/ports-in/reactivar-empresa.use-case.spec.ts` | Created | RED→GREEN, 5 tests |
+| `services/core-api/src/domains/identidad/events/empresa-reactivada.event.ts` | Created | `EmpresaReactivada` — structural mirror of `EmpresaSuspendida` |
+| `services/core-api/src/domains/identidad/domain/identidad.errors.ts` | Modified (append-only) | Appended `CompanyNotSuspendedError`; no existing class touched |
+| `services/core-api/src/domains/identidad/adapters/http/dto/reactivacion.dto.ts` | Created | `ReactivacionDto` — one `motivo` field, deliberately not a `SuspensionDto` reuse |
+| `services/core-api/src/domains/identidad/adapters/http/dto/identidad-dto.spec.ts` | Modified (append-only) | Appended a `describe('ReactivacionDto', ...)` block; `SuspensionDto`'s block untouched |
+| `services/core-api/src/domains/identidad/adapters/http/identidad-exception.filter.ts` | Modified (append-only) | Appended `CompanyNotSuspendedError` → 409 `COMPANY_NOT_SUSPENDED` to `ERROR_STATUS_MAP` and to `@Catch(...)` (now 7 classes) |
+| `services/core-api/src/domains/identidad/adapters/http/identidad-exception.filter.spec.ts` | Modified (append-only) | Appended 1 `describe.each` case (RED→GREEN verified) |
+| `services/core-api/src/domains/identidad/adapters/http/identidad.controller.ts` | Modified (append-only) | Appended `reactivarEmpresaUseCase` to the constructor and the `POST /identidad/empresas/:id/reactivacion` route method; every existing route untouched |
+| `services/core-api/src/domains/identidad/identidad.module.ts` | Modified (append-only) | Appended `ReactivarEmpresaUseCase` to `providers` |
+| `services/core-api/test/identidad.e2e-spec.ts` | Modified (append-only) | Appended a new `describe` block (5 tests); every pre-existing `describe` block untouched |
+| `openspec/changes/backend-core-api-catalogo/tasks.md` | Modified | Marked tasks 7.1–7.10 `[x]` |
+| `openspec/changes/backend-core-api-catalogo/apply-progress.md` | Modified | Merged PR7 section into PR1+PR2+PR3a+PR3b+PR4a+PR4b+PR5a+PR5b+PR6's file (this file) |
+
+### Commit (PR7)
+
+One commit for this PR7 batch:
+
+```
+feat(core-api): add identidad reactivarEmpresa use case (additive, R9)
+```
+
+Working tree was clean before this batch except the same pre-existing untracked `openspec/changes/backend-core-api-catalogo/{design.md,exploration.md,proposal.md,specs/}` noted since PR2 — left untouched/untracked, out of this batch's scope; commit hash recorded in the return envelope to the orchestrator.
+
+---
+
+## What PR8a (next batch) Needs to Know
+
+- **Start here**: `## Phase 8a: Visibility listener + projection use cases + adapter` in `tasks.md` (tasks 8a.1–8a.8). Depends on Phase 3b (the read-side filter already reads `CatalogVisibilityProjection`, in place since PR3b) and Phase 7 (`EmpresaReactivada` now exists, this batch) — both dependencies are satisfied.
+- **`EmpresaReactivada`** lives at `services/core-api/src/domains/identidad/events/empresa-reactivada.event.ts`, `type = 'empresa.reactivada'`, payload `(companyId, motivo)` — but task 8a.1 explicitly requires `catalogo` to declare its OWN locally-scoped `EmpresaOcultablePayload { companyId, motivo? }` shape rather than importing `identidad`'s event class directly (D-A's string-keyed event coupling, the whole reason Phase 8b's contract test exists). Do not import `EmpresaReactivada`/`EmpresaSuspendida`/`EmpresaAprobada` into `catalogo/` — subscribe by string channel name (`@OnEvent('empresa.reactivada')` etc.) only.
+- **`CompanyVisibilityListener` routes THREE channels to two handlers**: `empresa.suspendida` → `OcultarCatalogoEmpresaUseCase`; `empresa.reactivada` AND `empresa.aprobada` → the SAME `RestaurarCatalogoEmpresaUseCase` handler (design.md Diagram 2's explicit note: `aprobarEmpresa` has no state precondition, so it can also move a company out of `suspendido`, and skipping this `@OnEvent` would leave a company active-but-hidden forever — "fail-CLOSED invisible").
+- **`identidad`'s full suite is now 120 unit + 22 e2e** (up from 111/17 at the start of this whole change) — this is the new regression baseline for any future batch that touches shared kernel code identidad depends on (it should not need to touch `identidad` itself again in this change).
+- **`catalogo`'s full suite is 102 unit + 28 e2e**, confirmed byte-identical to PR6's count in this batch's isolation checks — Phase 8a is the next batch to add to it.

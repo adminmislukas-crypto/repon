@@ -8,6 +8,7 @@ import {
 import {
   AuthProviderError,
   CompanyNotFoundError,
+  CompanyNotSuspendedError,
   EmailYaRegistradoError,
   InvalidProfileError,
   ProfileNotFoundError,
@@ -36,6 +37,7 @@ const ERROR_STATUS_MAP = new Map<ErrorConstructor, StatusAndCode>([
   [RegistroFallidoError, { statusCode: HttpStatus.SERVICE_UNAVAILABLE, code: 'REGISTRO_FALLIDO' }],
   [CompanyNotFoundError, { statusCode: HttpStatus.NOT_FOUND, code: 'COMPANY_NOT_FOUND' }],
   [ProfileNotFoundError, { statusCode: HttpStatus.NOT_FOUND, code: 'PROFILE_NOT_FOUND' }],
+  [CompanyNotSuspendedError, { statusCode: HttpStatus.CONFLICT, code: 'COMPANY_NOT_SUSPENDED' }],
 ]);
 
 /**
@@ -47,7 +49,7 @@ const ERROR_STATUS_MAP = new Map<ErrorConstructor, StatusAndCode>([
  * `{statusCode, code, message}` envelope (`core-api-auth-guard` spec) so a
  * client sees one consistent shape regardless of which filter handled it.
  *
- * `@Catch()` deliberately lists only these 6 classes: anything else (a
+ * `@Catch()` deliberately lists only these 7 classes: anything else (a
  * guard rejection, an unexpected infra error) does not match, so Nest
  * falls through to `main.ts`'s `GlobalExceptionFilter` instead of this
  * filter inventing a second, competing catch-all.
@@ -59,6 +61,7 @@ const ERROR_STATUS_MAP = new Map<ErrorConstructor, StatusAndCode>([
   RegistroFallidoError,
   CompanyNotFoundError,
   ProfileNotFoundError,
+  CompanyNotSuspendedError,
 )
 export class IdentidadExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(IdentidadExceptionFilter.name);

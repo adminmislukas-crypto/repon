@@ -28,6 +28,7 @@ import { Public } from '../../../../shared/auth/decorators/public.decorator';
 import type { AuthenticatedActor } from '../../../../shared/auth/ports/actor.port';
 import { AprobarEmpresaUseCase } from '../../ports-in/aprobar-empresa.use-case';
 import { AsignarRolAdminUseCase } from '../../ports-in/asignar-rol-admin.use-case';
+import { ReactivarEmpresaUseCase } from '../../ports-in/reactivar-empresa.use-case';
 import { RegistrarEmpresaUseCase } from '../../ports-in/registrar-empresa.use-case';
 import { RegistrarUsuarioUseCase } from '../../ports-in/registrar-usuario.use-case';
 import { SuspenderEmpresaUseCase } from '../../ports-in/suspender-empresa.use-case';
@@ -35,6 +36,7 @@ import { SuspenderUsuarioUseCase } from '../../ports-in/suspender-usuario.use-ca
 import { AsignarRolAdminDto } from './dto/asignar-rol-admin.dto';
 import { CompanyResponseDto } from './dto/company-response.dto';
 import { ProfileResponseDto } from './dto/profile-response.dto';
+import { ReactivacionDto } from './dto/reactivacion.dto';
 import { RegistrarEmpresaDto } from './dto/registrar-empresa.dto';
 import { RegistrarUsuarioDto } from './dto/registrar-usuario.dto';
 import { SuspensionDto } from './dto/suspension.dto';
@@ -62,6 +64,7 @@ export class IdentidadController {
     private readonly aprobarEmpresaUseCase: AprobarEmpresaUseCase,
     private readonly suspenderUsuarioUseCase: SuspenderUsuarioUseCase,
     private readonly suspenderEmpresaUseCase: SuspenderEmpresaUseCase,
+    private readonly reactivarEmpresaUseCase: ReactivarEmpresaUseCase,
     private readonly asignarRolAdminUseCase: AsignarRolAdminUseCase,
   ) {}
 
@@ -119,6 +122,28 @@ export class IdentidadController {
     @Actor() actor: AuthenticatedActor,
   ): Promise<void> {
     await this.suspenderEmpresaUseCase.execute(id, actor.profileId, dto.motivo);
+  }
+
+  // D-D (`backend-core-api-catalogo`): reverse edge of `suspenderEmpresa`
+  // above, same admin sub-role matrix — `CompanyNotSuspendedError` (409) is
+  // mapped by `IdentidadExceptionFilter` when the target isn't currently
+  // `suspendido`.
+  @AdminRoles('super_admin', 'soporte')
+  @Post('empresas/:id/reactivacion')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Reactiva una empresa suspendida (status -> activo).' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiNoContentResponse()
+  @ApiUnauthorizedResponse({ description: 'Token ausente o inválido.' })
+  @ApiForbiddenResponse({ description: 'Actor no es admin, o su sub-rol no está permitido.' })
+  @ApiNotFoundResponse({ description: 'La empresa no existe.' })
+  @ApiConflictResponse({ description: 'La empresa no está suspendida.' })
+  async reactivarEmpresa(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReactivacionDto,
+    @Actor() actor: AuthenticatedActor,
+  ): Promise<void> {
+    await this.reactivarEmpresaUseCase.execute(id, actor.profileId, dto.motivo);
   }
 
   @AdminRoles('super_admin', 'soporte')

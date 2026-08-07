@@ -2,6 +2,7 @@ import type { ArgumentsHost } from '@nestjs/common';
 import {
   AuthProviderError,
   CompanyNotFoundError,
+  CompanyNotSuspendedError,
   EmailYaRegistradoError,
   InvalidProfileError,
   ProfileNotFoundError,
@@ -30,6 +31,7 @@ describe.each([
   [new RegistroFallidoError(), 503, 'REGISTRO_FALLIDO'],
   [new CompanyNotFoundError('c1'), 404, 'COMPANY_NOT_FOUND'],
   [new ProfileNotFoundError('p1'), 404, 'PROFILE_NOT_FOUND'],
+  [new CompanyNotSuspendedError('c1'), 409, 'COMPANY_NOT_SUSPENDED'],
 ] as const)('IdentidadExceptionFilter — %#', (exception, statusCode, code) => {
   it(`maps ${exception.constructor.name} to ${statusCode} ${code}`, () => {
     const filter = new IdentidadExceptionFilter();

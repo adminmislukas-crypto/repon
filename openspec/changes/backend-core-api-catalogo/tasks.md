@@ -159,16 +159,16 @@ Depends on Phase 5a's parser and PR 1's unique index for a real `ON CONFLICT` ta
 
 Purely additive (R9). Must land before Phase 8a — the listener needs `EmpresaReactivada` to exist.
 
-- [ ] 7.1 RED: `ports-in/reactivar-empresa.use-case.spec.ts` (mirror `suspender-empresa.use-case.spec.ts`) — happy path audits inside the transaction; `status !== 'suspendido'` → `CompanyNotSuspendedError` before any write; company not found → `CompanyNotFoundError`; a mutation failure rolls back the audit entry (core-api-identidad, all 4 scenarios under "reverses a suspension").
-- [ ] 7.2 GREEN: `domains/identidad/ports-in/reactivar-empresa.use-case.ts` — same 4 ports as `suspenderEmpresa`, `runInTransaction{findById→save→auditLogPort.record}`, `publish` after commit.
-- [ ] 7.3 `domains/identidad/events/empresa-reactivada.event.ts`: `type='empresa.reactivada'`, `(companyId, motivo)`.
-- [ ] 7.4 `domains/identidad/domain/identidad.errors.ts`: append `CompanyNotSuspendedError` (no existing class edited).
-- [ ] 7.5 `adapters/http/dto/reactivacion.dto.ts`: new DTO, one `motivo` field (not reusing `SuspensionDto`, per D-D's naming-collision rationale).
-- [ ] 7.6 `adapters/http/identidad-exception.filter.ts`: append `CompanyNotSuspendedError`→409 `COMPANY_NOT_SUSPENDED` to `ERROR_STATUS_MAP` + `@Catch()`.
-- [ ] 7.7 `adapters/http/identidad.controller.ts`: append `POST /identidad/empresas/:id/reactivacion` (`@AdminRoles('super_admin','soporte')`, 204).
-- [ ] 7.8 `identidad.module.ts`: append `ReactivarEmpresaUseCase` to providers (all 4 tokens already provided).
-- [ ] 7.9 E2e: extend `test/identidad.e2e-spec.ts` — soporte can reactivate ("soporte can reactivate a company"), 409 on non-suspended target, 404 on missing company.
-- [ ] 7.10 Run the full existing `identidad` regression suite (111 unit + 17 e2e); confirm zero regressions — no existing use case's signature or behavior changed (R9, Scenario "no regression").
+- [x] 7.1 RED: `ports-in/reactivar-empresa.use-case.spec.ts` (mirror `suspender-empresa.use-case.spec.ts`) — happy path audits inside the transaction; `status !== 'suspendido'` → `CompanyNotSuspendedError` before any write; company not found → `CompanyNotFoundError`; a mutation failure rolls back the audit entry (core-api-identidad, all 4 scenarios under "reverses a suspension").
+- [x] 7.2 GREEN: `domains/identidad/ports-in/reactivar-empresa.use-case.ts` — same 4 ports as `suspenderEmpresa`, `runInTransaction{findById→save→auditLogPort.record}`, `publish` after commit.
+- [x] 7.3 `domains/identidad/events/empresa-reactivada.event.ts`: `type='empresa.reactivada'`, `(companyId, motivo)`.
+- [x] 7.4 `domains/identidad/domain/identidad.errors.ts`: append `CompanyNotSuspendedError` (no existing class edited).
+- [x] 7.5 `adapters/http/dto/reactivacion.dto.ts`: new DTO, one `motivo` field (not reusing `SuspensionDto`, per D-D's naming-collision rationale).
+- [x] 7.6 `adapters/http/identidad-exception.filter.ts`: append `CompanyNotSuspendedError`→409 `COMPANY_NOT_SUSPENDED` to `ERROR_STATUS_MAP` + `@Catch()`.
+- [x] 7.7 `adapters/http/identidad.controller.ts`: append `POST /identidad/empresas/:id/reactivacion` (`@AdminRoles('super_admin','soporte')`, 204).
+- [x] 7.8 `identidad.module.ts`: append `ReactivarEmpresaUseCase` to providers (all 4 tokens already provided).
+- [x] 7.9 E2e: extend `test/identidad.e2e-spec.ts` — soporte can reactivate ("soporte can reactivate a company"), 409 on non-suspended target, 404 on missing company.
+- [x] 7.10 Run the full existing `identidad` regression suite (111→120 unit, 17→22 e2e); confirm zero regressions — no existing use case's signature or behavior changed (R9, Scenario "no regression").
 
 ## Phase 8a: Visibility listener + projection use cases + adapter — Spec: `core-api-catalogo`, `core-api-hexagonal-layout`
 

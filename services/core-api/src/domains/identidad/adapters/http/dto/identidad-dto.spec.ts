@@ -1,6 +1,7 @@
 import { plainToInstance } from 'class-transformer';
 import { validate, type ValidationError } from 'class-validator';
 import { AsignarRolAdminDto } from './asignar-rol-admin.dto';
+import { ReactivacionDto } from './reactivacion.dto';
 import { RegistrarEmpresaDto } from './registrar-empresa.dto';
 import { RegistrarUsuarioDto } from './registrar-usuario.dto';
 import { SuspensionDto } from './suspension.dto';
@@ -82,6 +83,18 @@ describe('SuspensionDto', () => {
 
   it('rejects an empty motivo', async () => {
     const dto = plainToInstance(SuspensionDto, { motivo: '' });
+    expect(hasConstraint(await validate(dto, STRICT_OPTIONS), 'motivo')).toBe(true);
+  });
+});
+
+describe('ReactivacionDto', () => {
+  it('accepts a non-empty motivo', async () => {
+    const dto = plainToInstance(ReactivacionDto, { motivo: 'Cumplió con el plan de mejora' });
+    expect(await validate(dto, STRICT_OPTIONS)).toHaveLength(0);
+  });
+
+  it('rejects an empty motivo', async () => {
+    const dto = plainToInstance(ReactivacionDto, { motivo: '' });
     expect(hasConstraint(await validate(dto, STRICT_OPTIONS), 'motivo')).toBe(true);
   });
 });

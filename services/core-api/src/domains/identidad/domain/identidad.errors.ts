@@ -67,3 +67,18 @@ export class ProfileNotFoundError extends Error {
     this.name = 'ProfileNotFoundError';
   }
 }
+
+/**
+ * Maps to 409 in `adapters/http/` (D-D, `backend-core-api-catalogo`).
+ * `reactivarEmpresa`'s one deliberate asymmetry against `suspenderEmpresa`:
+ * the destination state (`activo`) is permissive, so unlike suspension it
+ * requires a precondition — the target company must currently be
+ * `'suspendido'`. Thrown before any write, so no `audit_log` row is ever
+ * created for a rejected reactivation attempt.
+ */
+export class CompanyNotSuspendedError extends Error {
+  constructor(companyId: string) {
+    super(`Empresa ${companyId} no está suspendida.`);
+    this.name = 'CompanyNotSuspendedError';
+  }
+}

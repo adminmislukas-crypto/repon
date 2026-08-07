@@ -9,6 +9,7 @@ import { IdentidadController } from './adapters/http/identidad.controller';
 import { IdentidadActorAdapter } from './contracts/identidad-actor.adapter';
 import { AprobarEmpresaUseCase } from './ports-in/aprobar-empresa.use-case';
 import { AsignarRolAdminUseCase } from './ports-in/asignar-rol-admin.use-case';
+import { ReactivarEmpresaUseCase } from './ports-in/reactivar-empresa.use-case';
 import { RegistrarEmpresaUseCase } from './ports-in/registrar-empresa.use-case';
 import { RegistrarUsuarioUseCase } from './ports-in/registrar-usuario.use-case';
 import { SuspenderEmpresaUseCase } from './ports-in/suspender-empresa.use-case';
@@ -40,6 +41,7 @@ import { PROFILE_REPOSITORY } from './ports-out/profile-repository.port';
     AprobarEmpresaUseCase,
     SuspenderUsuarioUseCase,
     SuspenderEmpresaUseCase,
+    ReactivarEmpresaUseCase,
     AsignarRolAdminUseCase,
   ],
   exports: [ACTOR_PORT],
