@@ -135,14 +135,14 @@ Depends on Phase 2b's `findById`.
 
 Independent of Phases 3-4; must land before Phase 6a (el cron inyecta `NOTIFICATION_PORT` real).
 
-- [ ] 5.1 `shared/notifications/push-token-resolver.port.ts`: `PushTokenResolver { resolve(profileId): Promise<string | null> }`, `PUSH_TOKEN_RESOLVER` token (D-G).
-- [ ] 5.2 `shared/notifications/null-push-token.resolver.ts`: `NullPushTokenResolver` — always `null`, doc comment naming the missing capability explicitly.
-- [ ] 5.3 RED: `shared/notifications/expo-push-notification.adapter.spec.ts` — no token → logs `push.omitida`/`sin_token`, resolves without throwing (shared-notifications "No-op-safe on a missing token"); resolver throws → still no throw, logs `push.error`; token present (unreachable today) → logs `push.no_entregada`/`token_presente_sin_cliente_expo`.
-- [ ] 5.4 GREEN: `shared/notifications/expo-push-notification.adapter.ts` implementing `NotificationPort.sendPush`; never logs `mensaje` content (health data, D-G).
-- [ ] 5.5 `shared/notifications/notifications.module.ts` (NEW, `@Global()`): `PUSH_TOKEN_RESOLVER`→`NullPushTokenResolver`, `NOTIFICATION_PORT`→`ExpoPushNotificationAdapter`; `exports: [NOTIFICATION_PORT]` only (shared-notifications "NotificationsModule mirrors AuditModule's shape").
-- [ ] 5.6 `shared/shared-kernel.module.ts`: add `NotificationsModule` to `imports`/`exports`; rewrite the doc comment (only `shared/payments` still applies to the old "declares tokens but binds no provider" line).
-- [ ] 5.7 Confirm `consumo.module.ts` binds/exports no `NOTIFICATION_PORT` reference anywhere (shared-notifications "consumo.module.ts does not bind or export NOTIFICATION_PORT").
-- [ ] 5.8 Run the full existing `identidad` and `catalogo` regression suites — zero regressions from the `SharedKernelModule` edit (R5; mirrors `catalogo` tasks.md 7.10's precedent).
+- [x] 5.1 `shared/notifications/push-token-resolver.port.ts`: `PushTokenResolver { resolve(profileId): Promise<string | null> }`, `PUSH_TOKEN_RESOLVER` token (D-G).
+- [x] 5.2 `shared/notifications/null-push-token.resolver.ts`: `NullPushTokenResolver` — always `null`, doc comment naming the missing capability explicitly.
+- [x] 5.3 RED: `shared/notifications/expo-push-notification.adapter.spec.ts` — no token → logs `push.omitida`/`sin_token`, resolves without throwing (shared-notifications "No-op-safe on a missing token"); resolver throws → still no throw, logs `push.error`; token present (unreachable today) → logs `push.no_entregada`/`token_presente_sin_cliente_expo`.
+- [x] 5.4 GREEN: `shared/notifications/expo-push-notification.adapter.ts` implementing `NotificationPort.sendPush`; never logs `mensaje` content (health data, D-G).
+- [x] 5.5 `shared/notifications/notifications.module.ts` (NEW, `@Global()`): `PUSH_TOKEN_RESOLVER`→`NullPushTokenResolver`, `NOTIFICATION_PORT`→`ExpoPushNotificationAdapter`; `exports: [NOTIFICATION_PORT]` only (shared-notifications "NotificationsModule mirrors AuditModule's shape").
+- [x] 5.6 `shared/shared-kernel.module.ts`: add `NotificationsModule` to `imports`/`exports`; rewrite the doc comment (only `shared/payments` still applies to the old "declares tokens but binds no provider" line).
+- [x] 5.7 Confirm `consumo.module.ts` binds/exports no `NOTIFICATION_PORT` reference anywhere (shared-notifications "consumo.module.ts does not bind or export NOTIFICATION_PORT").
+- [x] 5.8 Run the full existing `identidad` and `catalogo` regression suites — zero regressions from the `SharedKernelModule` edit (R5; mirrors `catalogo` tasks.md 7.10's precedent).
 
 ## Phase 6a: Repo CAS + payloads de eventos — Spec: `core-api-consumo`, `db-schema-consumo`
 

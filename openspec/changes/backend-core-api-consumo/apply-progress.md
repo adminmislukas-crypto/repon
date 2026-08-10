@@ -742,3 +742,165 @@ not a defect.
 55/55 tasks complete across PR1 (10/10) + PR2a (6/6) + PR2b (9/9) + PR3
 (16/16) + PR4 (14/14). Ready for next batch: PR5, Phase 5 — kernel de
 notificaciones (`shared/notifications/`).
+
+---
+
+# Batch: PR5 "Kernel de notificaciones" (Phase 5, tasks 5.1–5.8)
+
+**Mode**: Strict TDD (project-wide `strict_tdd: true`).
+
+**Blast-radius note (R5)**: this is the first PR in the chain that touches
+`shared/` — imported by the already-archived `identidad` and `catalogo`
+domains, not just `consumo`. Per the launch instructions, task 5.8's
+regression check ran against `identidad`/`catalogo` in isolation (not just
+the full `pnpm test` roll-up) — see "Isolated Regression Proof (task 5.8)"
+below.
+
+## TDD Cycle Evidence
+
+| Task | RED | GREEN | REFACTOR |
+|---|---|---|---|
+| 5.3/5.4 `expo-push-notification.adapter.ts` (NEW) | `expo-push-notification.adapter.spec.ts` written first — 4 cases (no token, mensaje-never-logged, resolver throws, token present/unreachable-today); ran `jest expo-push-notification.adapter.spec.ts` → `Cannot find module './expo-push-notification.adapter'` (suite failed to run) | Implemented `ExpoPushNotificationAdapter implements NotificationPort` per design.md D-G's exact code shape (`Logger.log` for `push.omitida`/`sin_token`, `Logger.warn` for `push.no_entregada`/`token_presente_sin_cliente_expo`, `Logger.error` for `push.error`; `mensaje` never passed to any logger call); re-ran → 4/4 passed | None needed |
+
+4/4 new tests passed. 5.1/5.2 (`push-token-resolver.port.ts`,
+`null-push-token.resolver.ts`) and 5.5/5.6 (`notifications.module.ts`,
+`shared-kernel.module.ts` edit) are not RED/GREEN tasks per tasks.md (no
+test file named for either — pure interface/token declarations and NestJS
+module wiring, same class of task as PR1's ports/PR2b's module wiring) —
+built directly, then proven by the full-suite regression run (task 5.8)
+exercising real DI resolution through `SharedKernelModule`.
+
+## Completed Tasks (8/8 in this batch)
+
+- [x] 5.1 `shared/notifications/push-token-resolver.port.ts` (NEW): `PushTokenResolver` + `PUSH_TOKEN_RESOLVER`
+- [x] 5.2 `shared/notifications/null-push-token.resolver.ts` (NEW): `NullPushTokenResolver`
+- [x] 5.3 RED `shared/notifications/expo-push-notification.adapter.spec.ts` (NEW)
+- [x] 5.4 GREEN `shared/notifications/expo-push-notification.adapter.ts` (NEW)
+- [x] 5.5 `shared/notifications/notifications.module.ts` (NEW, `@Global()`)
+- [x] 5.6 `shared/shared-kernel.module.ts` — add `NotificationsModule` to `imports`/`exports`; doc comment corrected
+- [x] 5.7 Verification-only: confirmed `consumo.module.ts` has zero `NOTIFICATION_PORT` references
+- [x] 5.8 Full `identidad`/`catalogo` regression run — zero regressions (isolated + full-suite proof below)
+
+## Files Changed
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `services/core-api/src/shared/notifications/push-token-resolver.port.ts` | Created | `PushTokenResolver { resolve(profileId): Promise<string \| null> }` interface + `PUSH_TOKEN_RESOLVER` token (D-G), doc-commented as the seam between today's no-op and a future real resolver |
+| `services/core-api/src/shared/notifications/null-push-token.resolver.ts` | Created | `NullPushTokenResolver implements PushTokenResolver` — `resolve()` always returns `null`; doc comment explicitly names the missing capability (no push-token table exists anywhere in the schema, D10) as a deliberate stub, not an oversight |
+| `services/core-api/src/shared/notifications/expo-push-notification.adapter.spec.ts` | Created | 4 tests: no-token → `push.omitida`/`sin_token` + resolves without throwing; `mensaje` content never appears in any logger call (health-data constraint, D-G); resolver rejects → `push.error`, still no throw; token present (unreachable today) → `push.no_entregada`/`token_presente_sin_cliente_expo` |
+| `services/core-api/src/shared/notifications/expo-push-notification.adapter.ts` | Created | `ExpoPushNotificationAdapter implements NotificationPort` — `sendPush` never throws (D10 hard rule), `mensaje` never logged (only metadata: `recipientProfileId`, `evento`, `motivo`), exact insertion-point comment for a future `expo-server-sdk` client (D-G) |
+| `services/core-api/src/shared/notifications/notifications.module.ts` | Created | `NotificationsModule`, `@Global()`, mirrors `AuditModule`'s shape exactly: `{ provide: PUSH_TOKEN_RESOLVER, useClass: NullPushTokenResolver }` + `{ provide: NOTIFICATION_PORT, useClass: ExpoPushNotificationAdapter }`; `exports: [NOTIFICATION_PORT]` only — `PUSH_TOKEN_RESOLVER` deliberately NOT exported (internal wiring detail, single consumer inside this module, per shared-notifications spec's own scenario) |
+| `services/core-api/src/shared/shared-kernel.module.ts` | Modified | Added `NotificationsModule` to both `imports` and `exports`; rewrote the doc comment — `shared/notifications` no longer "declares tokens but binds no provider," only `shared/payments` still does |
+| `openspec/changes/backend-core-api-consumo/tasks.md` | Modified | Tasks 5.1–5.8 marked `[x]` |
+
+**Total this batch**: 6 files in `services/core-api/` (5 created, 1 modified), 242 insertions / 6 deletions = 248 changed lines (`git diff --cached --stat`); 264 changed lines including the `tasks.md` checkbox diff (16 lines) — within tasks.md's own 180-260 estimate for PR5 (code-only), the smallest `consumo` PR in the chain so far and the first to land inside its own forecast without overage.
+
+## Commands Run and Results
+
+| Command | Result |
+|---|---|
+| `pnpm exec jest src/shared/notifications/expo-push-notification.adapter.spec.ts` (RED, before the adapter existed) | `Cannot find module './expo-push-notification.adapter'` — suite failed to run, confirming RED |
+| `pnpm exec jest src/shared/notifications/expo-push-notification.adapter.spec.ts` (GREEN, after implementation) | 4/4 passed |
+| `pnpm eslint services/core-api/src/shared/notifications/expo-push-notification.adapter.ts` (mid-implementation check on the unused `mensaje` parameter) | 1 error (`@typescript-eslint/no-unused-vars`) on first pass without a `void mensaje;` guard → added the guard with an explanatory comment → re-ran → clean |
+| `pnpm lint` (workspace root) | `eslint .` — clean |
+| `cd services/core-api && pnpm typecheck` | `tsc -p tsconfig.json --noEmit` — clean |
+| `cd services/core-api && pnpm test` | 48 unit suites / 326 tests passed (was 47/322 after PR4 — +1 suite/+4 tests, all new); 12 e2e suites / 78 tests passed (unchanged from PR4 — this batch added zero e2e tests, matching tasks.md's scope). Zero regressions |
+| `cd services/core-api && pnpm build` | `tsc -p tsconfig.build.json` — clean |
+| `pnpm run format:check` (workspace root) | First run: 1 file flagged (line-wrap on `expo-push-notification.adapter.ts`) → fixed via `npx prettier --write` on that file only → re-ran `format:check`/`lint`/`typecheck`/`pnpm test`/`pnpm build` again — all green (same recurring formatting-only gap as every prior batch) |
+
+## Isolated Regression Proof (task 5.8)
+
+Per R5's blast-radius warning, ran `identidad`'s and `catalogo`'s own test
+suites in isolation, both BEFORE (via `git stash` of this batch's 6 files)
+and AFTER this batch's `SharedKernelModule` edit, using the same targeted
+Jest invocation both times:
+
+| Suite | Before (`git stash`, PR4 HEAD `903d472`) | After (this batch) | Delta |
+|---|---|---|---|
+| `identidad` + shared-kernel modules (`src/domains/identidad src/shared/audit src/shared/auth src/shared/database src/shared/event-bus src/shared/supabase`) | 20 suites / 111 tests passed | 20 suites / 111 tests passed | **Zero** — identical suite/test counts |
+| `catalogo` (`src/domains/catalogo`) | 15 suites / 115 tests passed | 15 suites / 115 tests passed | **Zero** — identical suite/test counts |
+
+Since neither domain's own test files were touched by this batch (only
+`shared/shared-kernel.module.ts` and net-new `shared/notifications/` files),
+identical counts also mean identical assertions — no test was added,
+removed, or modified in either domain. This closes R5 for PR5: the
+`SharedKernelModule` edit adds a new `@Global()` import/export pair without
+altering any existing module's shape.
+
+## Deviations from Design
+
+None — implementation matches design.md's D-G section verbatim, down to
+the exact adapter code block (`Logger.log`/`warn`/`error` calls, the exact
+`evento`/`motivo` string literals, the "insertion point" comment for a
+future Expo client) and the shared-notifications spec.md's three named
+scenarios ("NotificationsModule mirrors AuditModule's shape", "No-op-safe
+on a missing token", "consumo.module.ts does not bind or export
+NOTIFICATION_PORT"). One implementation-level addition not dictated by
+either artifact: a `void mensaje;` guard line was needed to satisfy
+`@typescript-eslint/no-unused-vars` (the `mensaje` parameter is genuinely
+unused today — logging it is explicitly forbidden by D-G, and no Expo
+client exists yet to consume it). This is a lint-compliance mechanic, not a
+behavioral deviation; the design.md code sample simply doesn't show this
+because design docs aren't lint-checked.
+
+## Issues Found
+
+None. The RED test failed for the expected reason (module not found), the
+GREEN implementation passed on first run after being written, and the only
+follow-up needed was the same recurring formatting-only `prettier --write`
+step every prior batch has hit, plus the one-line `void mensaje;` lint fix
+noted above.
+
+## What PR6a (next batch) should know
+
+- `NOTIFICATION_PORT` now resolves to a REAL adapter
+  (`ExpoPushNotificationAdapter`) everywhere in the app via
+  `SharedKernelModule`'s global export — PR6b's
+  `ProcesarConsumosVencidosUseCase` (which depends on this PR per tasks.md's
+  dependency table) can inject `NOTIFICATION_PORT` directly with zero
+  additional wiring; it must NOT import `NotificationsModule` itself
+  (already global) and must NOT bind/export `NOTIFICATION_PORT` from
+  `consumo.module.ts` (verified clean in this batch's task 5.7, and that
+  invariant must still hold after PR6b/PR6c land).
+- `consumo.module.ts`'s `exports: []` is UNCHANGED by this batch (PR5 never
+  touched `domains/consumo/` at all) — PR7's final audit should still
+  re-confirm this after PR6a/PR6b/PR6c land, none of which are expected to
+  touch `consumo.module.ts`'s `exports` either.
+- PR6a's scope (repo CAS methods + event payloads) is entirely independent
+  of this batch — it depends on PR1 (debounce column) and PR2a (pure
+  calculation functions), not PR5. The two PRs can be reviewed/merged in
+  either practical order relative to each other in principle, but tasks.md's
+  stated chain keeps PR5 before PR6a because PR6b (which depends on BOTH)
+  is next after PR6a in the sequence.
+- This was the first `consumo` PR to land within its own tasks.md line
+  estimate without overage (236 actual vs. 180-260 estimated) — every prior
+  PR (2b/3/4) exceeded its estimate, driven by comprehensive RED-test
+  coverage under strict TDD. PR6b is flagged in tasks.md's own forecast as
+  "Medium-High" risk and "the caso de uso con más escenarios de todo el
+  cambio" — budget review time generously there, consistent with the
+  overage pattern in PR2b-PR4 rather than this batch's on-estimate outcome.
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, per tasks.md's Review Workload
+  Forecast — resolved by the maintainer, "Decision needed before apply: No")
+- Current work unit: Unit 5 "Kernel de notificaciones" — PR5
+- Boundary: starts from PR4's dose-tracking commit (`main` @ `903d472`);
+  ends with a fully compiling, fully tested shared-kernel commit — the
+  `PushTokenResolver` seam, `NullPushTokenResolver` stub,
+  `ExpoPushNotificationAdapter` (D-G's exact shape), `NotificationsModule`
+  mirroring `AuditModule`, `SharedKernelModule` wiring, plus an isolated
+  `identidad`/`catalogo` regression proof (R5), all gates green
+- Estimated review budget impact: 248 changed lines (code-only, 242
+  insertions / 6 deletions across 6 files) — WITHIN tasks.md's own 180-260
+  estimate and well under the 400-line default budget; Low-Medium
+  risk realized as Low in practice (the "Medium" half of the forecast's
+  rating was about blast radius, not size, and the isolated regression
+  proof above closes that concern)
+
+## Status (cumulative)
+
+63/63 tasks complete across PR1 (10/10) + PR2a (6/6) + PR2b (9/9) + PR3
+(16/16) + PR4 (14/14) + PR5 (8/8). Ready for next batch: PR6a, Phase 6a —
+repo CAS methods + payloads de eventos (`findDueForCheck`,
+`intentarMarcarStockBajo`, `limpiarMarcaStockBajo`, `StockBajoDetectado`).
