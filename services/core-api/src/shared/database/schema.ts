@@ -4,14 +4,15 @@ import type { Generated } from 'kysely';
 // tables this change's scope touches — `profiles`/`companies`/`admin_roles`
 // (identidad's first three tables), `audit_log` (shared kernel), plus
 // `catalog_products`/`provider_catalog`/`catalog_hidden_companies`
-// (catalogo, backend-core-api-catalogo PR 1).
+// (catalogo, backend-core-api-catalogo PR 1) and `pets`/`user_consumption`/
+// `consumption_logs` (consumo, backend-core-api-consumo PR 1).
 //
 // design.md D-A's non-negotiable boundary: these row types never cross into
 // `@repon/types` (which stays `camelCase`, domain-shaped) and never leave
 // `shared/database/` + `adapters/persistence/` — the only two places
 // allowed to know what a Postgres row actually looks like. The remaining
-// 10 tables (`consumo`/`refill-matching`/`ofertas`/`pedidos-pagos`) get
-// typed here as their owning domain change lands, not upfront.
+// 8 tables (`refill-matching`/`ofertas`/`pedidos-pagos`) get typed here as
+// their owning domain change lands, not upfront.
 //
 // Source of truth for every column below:
 // supabase/migrations/20260803120100_01a_identidad_core.sql (companies,
@@ -21,7 +22,11 @@ import type { Generated } from 'kysely';
 // (catalog_products, provider_catalog) and
 // .../20260805120100_12_catalogo_hidden_companies.sql
 // (catalog_hidden_companies) — from this change's own PR 1
-// (backend-core-api-catalogo design.md D-A/D-C).
+// (backend-core-api-catalogo design.md D-A/D-C);
+// .../20260803120200_02_consumo.sql (pets, user_consumption,
+// consumption_logs) and .../20260806120000_13_consumo_stock_bajo_debounce.sql
+// (user_consumption.stock_bajo_notificado_at) — from this domain's own
+// backend-core-api-consumo PR 1 (design.md D-A/D12).
 
 export type CompanyStatusRow = 'pendiente' | 'activo' | 'suspendido';
 export type RoleRow = 'user' | 'provider' | 'admin';
@@ -122,6 +127,46 @@ export interface CatalogHiddenCompaniesTable {
   updated_at: Generated<string>;
 }
 
+export type OwnerTypeRow = 'self' | 'pet';
+export type ConsumptionKindRow = 'medicamento' | 'alimento' | 'vacuna' | 'suplemento';
+
+export interface PetsTable {
+  id: Generated<string>;
+  user_id: string;
+  nombre: string;
+  especie: string;
+  raza: string | null;
+  peso_kg: string | null; // numeric -> string (design.md's "detalle mecánico de mayor riesgo")
+  created_at: Generated<string>;
+  updated_at: Generated<string>;
+}
+
+export interface UserConsumptionTable {
+  id: Generated<string>;
+  user_id: string; // D15: the field that makes D7's ownership check expressible
+  owner_type: OwnerTypeRow;
+  pet_id: string | null;
+  kind: ConsumptionKindRow;
+  nombre: string;
+  dosis_por_toma: string; // numeric -> string
+  unidad: string | null;
+  frecuencia_dias: number; // integer -> number (pg DOES parse int4)
+  horarios: string[]; // text[] -> string[]
+  stock_actual: string; // numeric -> string
+  auto_crear_refill: boolean; // NOT NULL with no default -> not Generated
+  stock_bajo_notificado_at: string | null; // D-A debounce marker
+  created_at: Generated<string>;
+  updated_at: Generated<string>;
+}
+
+export interface ConsumptionLogsTable {
+  id: Generated<string>;
+  consumption_id: string;
+  tomado_at: string;
+  cantidad: string | null; // numeric -> string
+  created_at: Generated<string>;
+}
+
 export interface DB {
   companies: CompaniesTable;
   profiles: ProfilesTable;
@@ -130,4 +175,7 @@ export interface DB {
   catalog_products: CatalogProductsTable;
   provider_catalog: ProviderCatalogTable;
   catalog_hidden_companies: CatalogHiddenCompaniesTable;
+  pets: PetsTable;
+  user_consumption: UserConsumptionTable;
+  consumption_logs: ConsumptionLogsTable;
 }

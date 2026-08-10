@@ -19,6 +19,15 @@ export interface Pet {
 
 export interface UserConsumption {
   id: string;
+  /**
+   * The human owner — always present, even when `ownerType === 'pet'` (a pet
+   * has no account of its own). Mirrors `Pet.userId` and
+   * `db-schema-consumo`'s `user_consumption.user_id NOT NULL` column
+   * (shared-types-package spec, D15). Without it, `core-api-consumo`'s D7
+   * ownership check (`marcarDosisTomada`/`calcularDiasRestantes`
+   * cross-tenant checks) is not expressible directly on the loaded entity.
+   */
+  userId: string;
   ownerType: OwnerType;
   /**
    * Only present when `ownerType === 'pet'` — enforced in `core-api`, not a
