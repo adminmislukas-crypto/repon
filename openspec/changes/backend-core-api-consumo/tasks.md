@@ -116,20 +116,20 @@ Depends on Phase 2a's entities and 2b's `findById` pattern.
 
 Depends on Phase 2b's `findById`.
 
-- [ ] 4.1 RED (extend `kysely-consumption.repository.spec.ts`): `descontarStock` — `UPDATE ... SET stock_actual = greatest(stock_actual - $2, 0) ... RETURNING stock_actual`, atomic, clamps at 0, propagates `tx`.
-- [ ] 4.2 GREEN (extend the file): implements `descontarStock` (D-H.2).
-- [ ] 4.3 RED: `adapters/persistence/kysely-consumption-log.repository.spec.ts` (NEW, first caller) — `append()` inserts with numeric mapper for `cantidad`.
-- [ ] 4.4 GREEN: `adapters/persistence/kysely-consumption-log.repository.ts` — `append()`; `adherenciaUltimos7Dias()` implemented minimally for interface completeness (no caller in this change's scope, doc-commented as such).
-- [ ] 4.5 RED: `ports-in/marcar-dosis-tomada.use-case.spec.ts` — cross-tenant 404 FIRST (core-api-consumo "Cross-tenant attempt returns 404, not 403, and does not mutate"); `runInTransaction` wraps `append`+`descontarStock` with the same `tx` (D6); a failure in the 2nd write leaves neither persisted; `publish(DosisRegistrada)` only after commit; `cantidad` always `= uc.dosisPorToma`, never client-supplied; clamp-at-zero (core-api-consumo "A dose marked when stock is less than one full dose clamps to zero").
-- [ ] 4.6 GREEN: `ports-in/marcar-dosis-tomada.use-case.ts`.
-- [ ] 4.7 `events/dosis-registrada.event.ts` — exact D-D payload: `consumptionId, userId, tomadoAt, cantidad, stockRestante`.
-- [ ] 4.8 `adapters/http/dto/marcar-dosis.dto.ts` (`{ tomadoAt?: string }` ISO-8601; future timestamp → `DosisInvalidaError`).
-- [ ] 4.9 `adapters/http/consumo.controller.ts`: `POST /consumo/mis-consumos/:consumptionId/dosis` (204, authenticated, no `@Roles`).
-- [ ] 4.10 RED (extend the exception filter spec): `DosisInvalidaError`→400.
-- [ ] 4.11 GREEN (extend the filter).
-- [ ] 4.12 `consumo.module.ts`: register `MarcarDosisTomadaUseCase`.
-- [ ] 4.13 E2e: `test/consumo-marcar-dosis.e2e-spec.ts` — happy path (stock decrements, log appended), 404 cross-tenant (zero mutation in DB), 400 future `tomadoAt`, clamp-at-zero.
-- [ ] 4.14 Opt-in integration test (`supabase start` local): `descontarStock` on a row with `stockActual < dosisPorToma` returns 0, never negative (core-api-consumo scenario, verified against real Postgres `greatest()`).
+- [x] 4.1 RED (extend `kysely-consumption.repository.spec.ts`): `descontarStock` — `UPDATE ... SET stock_actual = greatest(stock_actual - $2, 0) ... RETURNING stock_actual`, atomic, clamps at 0, propagates `tx`.
+- [x] 4.2 GREEN (extend the file): implements `descontarStock` (D-H.2).
+- [x] 4.3 RED: `adapters/persistence/kysely-consumption-log.repository.spec.ts` (NEW, first caller) — `append()` inserts with numeric mapper for `cantidad`.
+- [x] 4.4 GREEN: `adapters/persistence/kysely-consumption-log.repository.ts` — `append()`; `adherenciaUltimos7Dias()` implemented minimally for interface completeness (no caller in this change's scope, doc-commented as such).
+- [x] 4.5 RED: `ports-in/marcar-dosis-tomada.use-case.spec.ts` — cross-tenant 404 FIRST (core-api-consumo "Cross-tenant attempt returns 404, not 403, and does not mutate"); `runInTransaction` wraps `append`+`descontarStock` with the same `tx` (D6); a failure in the 2nd write leaves neither persisted; `publish(DosisRegistrada)` only after commit; `cantidad` always `= uc.dosisPorToma`, never client-supplied; clamp-at-zero (core-api-consumo "A dose marked when stock is less than one full dose clamps to zero").
+- [x] 4.6 GREEN: `ports-in/marcar-dosis-tomada.use-case.ts`.
+- [x] 4.7 `events/dosis-registrada.event.ts` — exact D-D payload: `consumptionId, userId, tomadoAt, cantidad, stockRestante`.
+- [x] 4.8 `adapters/http/dto/marcar-dosis.dto.ts` (`{ tomadoAt?: string }` ISO-8601; future timestamp → `DosisInvalidaError`).
+- [x] 4.9 `adapters/http/consumo.controller.ts`: `POST /consumo/mis-consumos/:consumptionId/dosis` (204, authenticated, no `@Roles`).
+- [x] 4.10 RED (extend the exception filter spec): `DosisInvalidaError`→400.
+- [x] 4.11 GREEN (extend the filter).
+- [x] 4.12 `consumo.module.ts`: register `MarcarDosisTomadaUseCase`.
+- [x] 4.13 E2e: `test/consumo-marcar-dosis.e2e-spec.ts` — happy path (stock decrements, log appended), 404 cross-tenant (zero mutation in DB), 400 future `tomadoAt`, clamp-at-zero.
+- [x] 4.14 Opt-in integration test (`supabase start` local): `descontarStock` on a row with `stockActual < dosisPorToma` returns 0, never negative (core-api-consumo scenario, verified against real Postgres `greatest()`).
 
 ## Phase 5: Kernel de notificaciones — Spec: `shared-notifications`
 

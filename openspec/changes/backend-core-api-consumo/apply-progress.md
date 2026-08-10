@@ -492,3 +492,253 @@ Otherwise none: all RED tests failed for the expected reason (module-not-found, 
 41/41 tasks complete across PR1 (10/10) + PR2a (6/6) + PR2b (9/9) + PR3
 (16/16). Ready for next batch: PR4, Phase 4 — dosis (`descontarStock`
 atómico + `marcarDosisTomada` transaccional + evento `DosisRegistrada`).
+
+---
+
+# Batch: PR4 "Dosis" (Phase 4, tasks 4.1–4.14)
+
+**Mode**: Strict TDD (project-wide `strict_tdd: true`).
+
+## TDD Cycle Evidence
+
+| Task | RED | GREEN | REFACTOR |
+|---|---|---|---|
+| 4.1/4.2 `kysely-consumption.repository.ts` (`descontarStock`) | Extended `kysely-consumption.repository.spec.ts` with a `descontarStock` describe block first; ran `jest kysely-consumption.repository.spec.ts` → 5/5 new tests failed against the existing real "not yet available" throwing stub (confirms RED against real code, not a missing module) | Implemented `descontarStock` — single `UPDATE ... SET stock_actual = greatest(stock_actual - $2, 0) ... RETURNING stock_actual` via Kysely's `sql` tag, never a prior read; re-ran → 15/15 passed (10 pre-existing + 5 new) | None needed |
+| 4.3/4.4 `kysely-consumption-log.repository.ts` (NEW, first implementer) | `kysely-consumption-log.repository.spec.ts` written first; ran → `Cannot find module './kysely-consumption-log.repository'` | Implemented `KyselyConsumptionLogRepository.append()` (pure insert, `id` always caller-supplied per D-H.1) + `adherenciaUltimos7Dias()` minimally (no caller in this change's scope, doc-commented as such, deliberately NOT a throwing stub — see "Deviations" below); re-ran → 5/5 passed | None needed |
+| 4.5/4.6 `marcar-dosis-tomada.use-case.ts` (NEW) | `marcar-dosis-tomada.use-case.spec.ts` written first — cross-tenant 404 case FIRST (D16 convention, same discipline as PR2b/PR3); ran → `Cannot find module './marcar-dosis-tomada.use-case'` | Implemented `MarcarDosisTomadaUseCase` — ownership read (`findById`) runs INSIDE `runInTransaction` on the same `tx` as both writes (design.md Diagram 2 + "Mapa de transacciones", see "Deviations" below), `cantidad` always `consumption.dosisPorToma`, `publish(DosisRegistrada)` only after the transaction resolves, `tomadoAt` resolved/validated here (`DosisInvalidaError` on a future timestamp beyond a 1-minute clock-skew tolerance); re-ran → 12/12 passed | None needed |
+| 4.10/4.11 `consumo-exception.filter.ts` (extends PR2b/PR3's file) | Extended `consumo-exception.filter.spec.ts`'s `describe.each` table with a `DosisInvalidaError` row first; ran → new case failed (`500` instead of the expected `400`, confirming the map had no entry yet) | Added `DosisInvalidaError` to `@Catch()` and `ERROR_STATUS_MAP`; re-ran → 5/5 passed | None needed |
+
+37 new/changed unit tests passed (5 + 5 + 12 + 1 net-new, plus the 10
+pre-existing `kysely-consumption.repository.spec.ts` tests and 4
+pre-existing filter tests already counted in prior batches' totals). 4.7
+(`dosis-registrada.event.ts`), 4.8 (DTO), 4.9 (controller route), 4.12
+(module wiring) are not RED/GREEN tasks per tasks.md (no test file named
+individually) — built directly, then proven end-to-end by 4.13's e2e suite
+(8/8 passed on first run, no fix-up needed) and 4.14's opt-in integration
+suite (3/3 passed against a REAL local Postgres — this sandbox had a live
+`supabase start` stack running, so this suite was actually executed, not
+just written; see "Genuine Discovery" below).
+
+## Completed Tasks (14/14 in this batch)
+
+- [x] 4.1 RED (extend `kysely-consumption.repository.spec.ts`): `descontarStock`
+- [x] 4.2 GREEN (extend the file): implements `descontarStock` (D-H.2)
+- [x] 4.3 RED `adapters/persistence/kysely-consumption-log.repository.spec.ts` (NEW)
+- [x] 4.4 GREEN `adapters/persistence/kysely-consumption-log.repository.ts` (NEW)
+- [x] 4.5 RED `ports-in/marcar-dosis-tomada.use-case.spec.ts` (NEW)
+- [x] 4.6 GREEN `ports-in/marcar-dosis-tomada.use-case.ts` (NEW)
+- [x] 4.7 `events/dosis-registrada.event.ts` (NEW)
+- [x] 4.8 `adapters/http/dto/marcar-dosis.dto.ts` (NEW)
+- [x] 4.9 `adapters/http/consumo.controller.ts`: `POST .../dosis` route
+- [x] 4.10 RED (extend the exception filter spec): `DosisInvalidaError`→400
+- [x] 4.11 GREEN (extend the filter)
+- [x] 4.12 `consumo.module.ts`: register `CONSUMPTION_LOG_REPOSITORY`/`MarcarDosisTomadaUseCase`
+- [x] 4.13 E2e `test/consumo-marcar-dosis.e2e-spec.ts`
+- [x] 4.14 Opt-in integration test `test/consumo-descontar-stock.integration-spec.ts`
+
+## Files Changed
+
+| File | Action | What Was Done | Lines |
+|------|--------|----------------|-------|
+| `services/core-api/src/domains/consumo/adapters/persistence/kysely-consumption.repository.spec.ts` | Modified | Added a `descontarStock` describe block: 5 tests — single `UPDATE`/never a prior `SELECT` (atomicity), the `SET` value is a raw SQL expression inspected via `RawBuilder.toOperationNode()` (public kysely API, not internals) to assert the exact `greatest(stock_actual - $1, 0)` shape and its one parameter, numeric-string formatting, `RETURNING` string→number conversion, `tx` propagation | +110 |
+| `services/core-api/src/domains/consumo/adapters/persistence/kysely-consumption.repository.ts` | Modified | Implemented `descontarStock()` — replaces the PR2b/PR3 "not yet available" throwing stub with a single `updateTable().set({ stock_actual: sql\`greatest(stock_actual - ${cantidad.toFixed(2)}, 0)\` }).where('id','=',id).returning('stock_actual').executeTakeFirstOrThrow()`; updated the class doc comment | +35/-16 |
+| `services/core-api/src/domains/consumo/adapters/persistence/kysely-consumption-log.repository.spec.ts` | Created | 5 tests: insert with caller-supplied `id`, numeric-column string formatting for `cantidad`, `null` on absent `cantidad`, `tomado_at` passthrough, `tx` propagation | +96 |
+| `services/core-api/src/domains/consumo/adapters/persistence/kysely-consumption-log.repository.ts` | Created | `KyselyConsumptionLogRepository implements ConsumptionLogRepository` (D-H.2, first implementer) — `append()` is a pure insert (never upsert: append-only health record); `adherenciaUltimos7Dias()` implemented minimally (real `count(*)` query over the existing `consumption_logs_consumption_id_tomado_at_idx` index) rather than a throwing stub, doc-commented as intentionally unused-so-far | +74 |
+| `services/core-api/src/domains/consumo/ports-in/marcar-dosis-tomada.use-case.spec.ts` | Created | 12 tests across 6 describe blocks: cross-tenant/not-found (3, byte-identical rejection + zero mutation), transactional wiring (2, same `tx` across `findById`/`append`/`descontarStock` + failure-in-second-write), publish-after-commit (2), `cantidad` always configured-dose (1), clamp-at-zero flow-through (1), `tomadoAt` resolution (3: absent→now(), future→`DosisInvalidaError` before transaction opens, past→verbatim) | +311 |
+| `services/core-api/src/domains/consumo/ports-in/marcar-dosis-tomada.use-case.ts` | Created | `MarcarDosisTomadaUseCase` — ownership read INSIDE `runInTransaction` (see "Deviations"), `cantidad` always `consumption.dosisPorToma`, `resolveTomadoAt()` helper (1-minute clock-skew tolerance, doc-commented as a reasonable default, not a measured product decision), `publish(DosisRegistrada)` after the transaction resolves | +115 |
+| `services/core-api/src/domains/consumo/events/dosis-registrada.event.ts` | Created | `DosisRegistrada implements DomainEvent` — exact D-D payload: `consumptionId, userId, tomadoAt, cantidad, stockRestante`; `type = 'consumo.dosis_registrada'` | +32 |
+| `services/core-api/src/domains/consumo/adapters/http/dto/marcar-dosis.dto.ts` | Created | `MarcarDosisDto { tomadoAt?: string }` — `@IsOptional() @IsISO8601()`; deliberately no `cantidad` field (D-H.2) | +25 |
+| `services/core-api/src/domains/consumo/adapters/http/consumo.controller.ts` | Modified | Added `POST /consumo/mis-consumos/:consumptionId/dosis` (204, authenticated, no `@Roles`); constructor now injects `MarcarDosisTomadaUseCase` | +31 |
+| `services/core-api/src/domains/consumo/adapters/http/consumo-exception.filter.spec.ts` | Modified | Extended the `describe.each` table with `DosisInvalidaError`→400 | +9 |
+| `services/core-api/src/domains/consumo/adapters/http/consumo-exception.filter.ts` | Modified | Added `DosisInvalidaError` to `@Catch()` and `ERROR_STATUS_MAP` | +18 |
+| `services/core-api/src/domains/consumo/consumo.module.ts` | Modified | Bound `CONSUMPTION_LOG_REPOSITORY`→`KyselyConsumptionLogRepository`; registered `MarcarDosisTomadaUseCase` | +20 |
+| `services/core-api/test/consumo-marcar-dosis.e2e-spec.ts` | Created | 8 tests: happy path (204, decrements by `dosisPorToma`, log appended, `DosisRegistrada` published), 404 cross-tenant (zero mutation), 404 genuinely-missing, 400 future `tomadoAt` (transaction never opens), clamp-at-zero (still 204, `stockRestante: 0`), 400 on a client-supplied `cantidad` field, 401 unauthenticated, 400 non-UUID `consumptionId` — real `AuthGuard`/`ValidationPipe`/`ConsumoExceptionFilter`, `ACTOR_PORT`/`CONSUMPTION_REPOSITORY`/`CONSUMPTION_LOG_REPOSITORY`/`EVENT_PUBLISHER`/`TRANSACTION_MANAGER` overridden with fakes (mirrors `catalogo-ajustes-precio.e2e-spec.ts`'s override shape — the closest catalogo analog: a transactional, event-publishing mutation) | +302 |
+| `services/core-api/test/consumo-descontar-stock.integration-spec.ts` | Created | Opt-in, 3 tests against a REAL local Postgres: normal decrement, clamp-to-0 (`stockActual < dosisPorToma`), two sequential calls both clamp. Follows the REPO's OWN pre-existing convention (`*.integration-spec.ts` + `test/jest-integration.json` + `pnpm --filter core-api test:integration`) — see "4.14 Gating Pattern" below | +105 |
+| `openspec/changes/backend-core-api-consumo/tasks.md` | Modified | Tasks 4.1–4.14 marked `[x]` | +28/-28 (checkbox flips) |
+
+**Total this batch**: 15 files, 1271 insertions / 40 deletions (`git diff --cached --stat`) — ABOVE tasks.md's own PR4 estimate (350-450 lines) and the 400-line default review budget. Same pattern as PR2b's (812 lines vs. 350-470 estimate) and PR3's (~1580 lines vs. 350-450 estimate) overages — driven by comprehensive RED-test coverage under strict TDD (37 new/changed unit tests + 8 e2e tests + 3 integration tests). No scope crept beyond tasks.md's exact 4.1–4.14 list; no file outside this PR's assigned scope was touched. Flagged per the review-workload-guard rule; the maintainer's `stacked-to-main` chain strategy (already resolved, "Decision needed before apply: No") means this PR still merges as its own independent, reviewable unit — no further split taken without an explicit maintainer call, consistent with PR2b/PR3's precedent.
+
+## Commands Run and Results
+
+| Command | Result |
+|---|---|
+| `pnpm exec jest src/domains/consumo/adapters/persistence/kysely-consumption.repository.spec.ts` (RED, before `descontarStock` was implemented) | 5/5 new tests failed against the real "not yet available" throwing stub |
+| `pnpm exec jest src/domains/consumo/adapters/persistence/kysely-consumption.repository.spec.ts` (GREEN) | 15/15 passed (10 pre-existing + 5 new) |
+| `pnpm exec jest src/domains/consumo/adapters/persistence/kysely-consumption-log.repository.spec.ts` (RED) | `Cannot find module` — suite failed to run |
+| `pnpm exec jest src/domains/consumo/adapters/persistence/kysely-consumption-log.repository.spec.ts` (GREEN) | 5/5 passed |
+| `pnpm exec jest src/domains/consumo/ports-in/marcar-dosis-tomada.use-case.spec.ts` (RED) | `Cannot find module` — suite failed to run |
+| `pnpm exec jest src/domains/consumo/ports-in/marcar-dosis-tomada.use-case.spec.ts` (GREEN) | 12/12 passed |
+| `pnpm exec jest src/domains/consumo/adapters/http/consumo-exception.filter.spec.ts` (RED) | New `DosisInvalidaError` case failed with `500` instead of `400` |
+| `pnpm exec jest src/domains/consumo/adapters/http/consumo-exception.filter.spec.ts` (GREEN) | 5/5 passed |
+| `pnpm exec jest --config ./test/jest-e2e.json test/consumo-marcar-dosis.e2e-spec.ts` | 8/8 passed on first run — no fix-up needed |
+| `DATABASE_URL=... pnpm exec jest --config ./test/jest-integration.json test/consumo-descontar-stock.integration-spec.ts` | Ran against a REAL local Supabase Postgres stack (already running in this sandbox, `supabase_db_repon-monorepo` container healthy). First run: 1/3 failed on a formatting assumption (see "Genuine Discovery" below) → fixed the assertion, not the implementation → re-ran → 3/3 passed |
+| `pnpm lint` (workspace root) | `eslint .` — clean |
+| `cd services/core-api && pnpm typecheck` | `tsc -p tsconfig.json --noEmit` — clean |
+| `cd services/core-api && pnpm test` | 47 unit suites / 322 tests passed (was 45/299 after PR3 — +2 suites/+23 tests, all new); 12 e2e suites / 78 tests passed (was 11/70 — +1 suite/+8 tests). Zero regressions on `identidad`/`catalogo`/prior `consumo` PRs |
+| `cd services/core-api && pnpm build` | `tsc -p tsconfig.build.json` — clean |
+| `pnpm run format:check` (workspace root) | First run: 2 files flagged (line-wrap on the new `kysely-consumption-log.repository.spec.ts` / `marcar-dosis-tomada.use-case.spec.ts`) → fixed via `npx prettier --write` on those 2 files only → re-ran `format:check`/`lint`/`typecheck`/`pnpm test`/`pnpm build`/the integration suite again — all green (same recurring formatting-only gap as every prior batch) |
+
+## Genuine Discovery (from the opt-in integration test actually running against real Postgres)
+
+Real Postgres's `greatest(numeric, 0)` returns a **scale-0** numeric
+(`'0'`) when the literal `0` branch wins, NOT `'0.00'` — the scale of the
+*losing* operand does not carry over to the result. Discovered because this
+sandbox happened to have a live local Supabase Postgres stack running, so
+task 4.14's opt-in test was actually executed, not just written blind. The
+first run failed on `expect(row.stock_actual).toBe('0.00')`; the real
+column value was `'0'`. This is NOT a bug in `descontarStock` — `Number('0')
+=== Number('0.00') === 0`, so the repository's own return value (already
+asserted as `toBe(0)` in the same test) was correct either way — only the
+raw-column assertion's format expectation was wrong. Fixed the test
+assertion (`'0'` instead of `'0.00'`), documented the discovery inline in
+the test file. This is precisely the class of thing D-H.2's opt-in
+integration test exists to catch, and precisely why it should be re-run
+whenever a local Supabase stack is available rather than treated as
+permanently un-runnable.
+
+## 4.14 Gating Pattern — Correction to the Launch Prompt's Assumption
+
+The launch prompt anticipated "there may be no existing repo precedent" for
+gating an opt-in integration test and asked me to invent one if needed
+(e.g. `describe.skip` behind an env var). **That assumption was wrong — a
+precedent already exists and is well-established**: `database
+.integration-spec.ts`, `identidad-actor.integration-spec.ts`, and (this
+change's own PR1) `catalogo-provider-catalog-upsert.integration-spec.ts`
+all use the `*.integration-spec.ts` filename convention, picked up
+EXCLUSIVELY by `test/jest-integration.json`
+(`testRegex: "\\.integration-spec\\.ts$"`), run explicitly via
+`pnpm --filter core-api test:integration`. This is safely excluded from
+both `pnpm test` (`jest && jest --config ./test/jest-e2e.json` — the root
+unit config's `rootDir` is `src/`, so `test/` isn't even scanned, and
+`jest-e2e.json`'s `testRegex` requires the literal `e2e-spec.ts` suffix,
+which `.integration-spec.ts` doesn't have) and from CI by construction, with
+zero extra gating code needed (no `describe.skip`, no ad hoc env-var check).
+`consumo-descontar-stock.integration-spec.ts` follows this exact,
+already-proven convention. Flagging this correction explicitly since the
+launch prompt asked me to "clearly flag this as a new pattern" if I
+couldn't find precedent — I found one, so no new pattern was invented.
+
+## Deviations from Design
+
+**One deliberate deviation from the launch prompt's instruction, in favor
+of design.md (the authoritative artifact) — flagged explicitly per the
+"note it, don't silently deviate" rule**: the launch prompt instructed
+"Ownership check (cross-tenant 404) BEFORE entering the transaction (mirror
+`ajustar-precios-por-categoria.use-case.ts`'s 'checked BEFORE
+runInTransaction' pattern)". Verified this against design.md directly and
+found it contradicts two independent, explicit statements in design.md
+itself:
+
+1. **Diagram 2** (`marcarDosisTomada`: la transacción) shows `findById
+   (consumptionId, tx)` as step **4a**, nested INSIDE `runInTransaction
+   (D6) ============`, with the explicit note on the rejection branch (4b):
+   *"Se lanza DENTRO de la transaccion: rollback sin escrituras"* (thrown
+   INSIDE the transaction: rollback without writes).
+2. **"Mapa de transacciones"** table lists `marcarDosisTomada`'s statement
+   count as **"1 select + 1 insert + 1 update"** — the SELECT (the
+   ownership read) is counted as one of the three statements INSIDE the
+   transaction, not a separate pre-transaction read.
+
+`ajustar-precios-por-categoria.use-case.ts`'s "checked before
+`runInTransaction`" gates (`EmpresaNoActivaError`/`PorcentajeInvalidoError`)
+validate **actor-supplied scalars already in hand** (`companyStatus`,
+`porcentaje`) — no repository read is needed to evaluate them, so there is
+nothing to gain from opening the transaction first. `actualizarPrecio`
+(catalogo's closer analog — a mutating use case whose 404 check IS a
+repository read) does its `findById` outside any transaction too, but for a
+different, inapplicable reason: it has only ONE write (`save()`), so there
+is no cross-write atomicity to protect and no `TRANSACTION_MANAGER`
+injected at all. `marcarDosisTomada` has TWO coupled writes needing atomic
+all-or-nothing semantics (D6), and design.md is explicit that the ownership
+read participates in that same atomic unit. Implemented per design.md:
+`findById` runs inside the `runInTransaction` callback, receives the same
+`tx` as `append`/`descontarStock`, and a rejection there throws inside the
+callback (rolling back with zero writes — verified by the unit test
+`transactionManager.runInTransaction` mock actually invoking the callback
+and the cross-tenant case still asserting zero `append`/`descontarStock`/
+`publish` calls). This does not weaken the "zero mutation on reject"
+guarantee the spec requires — it is the SAME guarantee, achieved via
+transaction rollback semantics instead of via ordering relative to
+`runInTransaction`.
+
+**Second, smaller, resolved ambiguity**: `domain/consumo.errors.ts`'s
+`DosisInvalidaError` doc comment (written in PR1) says *"Thrown by
+`MarcarDosisTomadaUseCase`"*, while design.md's Diagram 2 step (2) lists
+`tomadoAt` futuro → 400 as a controller-column item, informally. Resolved
+in favor of the errors.ts doc comment (the more specific, code-level
+commitment) — `tomadoAt` resolution/validation lives in the use case
+(`resolveTomadoAt()`), not the controller, consistent with every other
+domain error in this file being use-case/domain-thrown, never
+controller-thrown, and keeping the controller a thin DTO-mapping layer per
+`core-api-hexagonal-layout`. The controller passes the DTO's raw
+`tomadoAt?: string` straight through unparsed.
+
+Everything else matches design.md verbatim: the exact `descontarStock` SQL
+shape (D-H.2), the exact `DosisRegistrada` payload (D-D), `cantidad` always
+`= consumption.dosisPorToma` (never client-supplied — no such DTO field
+exists), the clamp-at-0 living in the SQL/adapter layer rather than the
+entity (D-H.2's own declared exception to the "entity validates" pattern),
+and `publish(DosisRegistrada)` happening only after the transaction
+resolves (D6).
+
+## Issues Found
+
+None beyond the two deviations documented above (both resolved by
+consulting the authoritative design.md/errors.ts sources, not silently) and
+the recurring formatting-only `prettier --write` step every prior batch has
+also hit. The opt-in integration test's one real finding (Postgres
+`greatest()`'s scale-0 result) is documented above as a genuine discovery,
+not a defect.
+
+## What PR5 (next batch) should know
+
+- `consumo`'s 4 public use cases (`registrarMascota`, `configurarConsumo`,
+  `marcarDosisTomada`, `calcularDiasRestantes`) are ALL implemented now —
+  PR5 is `shared/notifications/` (the kernel), independent of `consumo`'s
+  own module beyond the shared `NOTIFICATION_PORT` token it will bind.
+- `consumo.module.ts`'s `providers` array now has: both repositories bound,
+  `PET_REPOSITORY` bound, and all 4 use cases registered. `exports: []`
+  still holds — PR7's final audit should re-confirm this after PR5/PR6a/
+  PR6b/PR6c land (none of them touch `consumo.module.ts`'s `exports`).
+- `MarcarDosisTomadaUseCase` is the reference shape for the future
+  `ProcesarConsumosVencidosUseCase` (PR6b) on ONE point only —
+  `publish(...)` after the write commits — but NOT on the transaction
+  question: PR6b's use case must NOT inject `TRANSACTION_MANAGER` at all
+  (D4), the opposite of this PR's use case, because the cron has no
+  cross-item invariant to protect.
+- The **D-A debounce-clear gap** named in PR3's own batch (`configurarConsumo`
+  not yet calling `limpiarMarcaStockBajo`) is UNCHANGED by this PR —
+  `marcarDosisTomada` deliberately never calls it either (design.md D-A:
+  "No — Solo puede bajar el stock: jamás puede resolver la condición").
+  Still PR6a's responsibility.
+- Per tasks.md's 10-PR chain, PR5's scope is `shared/notifications/`:
+  `PushTokenResolver`/`NullPushTokenResolver`/`ExpoPushNotificationAdapter`,
+  `NotificationsModule` (`@Global()`, mirrors `AuditModule`'s shape),
+  wiring into `SharedKernelModule`, and a full `identidad`+`catalogo`
+  regression run (R5 — the only PR in this chain with kernel-wide blast
+  radius). Estimated 180-260 lines, Low-Medium risk per tasks.md's own
+  forecast — smaller than every consumo PR so far.
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, per tasks.md's Review Workload
+  Forecast — resolved by the maintainer, "Decision needed before apply: No")
+- Current work unit: Unit 4 "Dosis: `descontarStock` + `marcarDosisTomada`" — PR4
+- Boundary: starts from PR3's write path (`main` @ `bcefbed`); ends with a
+  fully compiling, fully tested dose-tracking commit — atomic SQL-level
+  stock decrement, transactional log+decrement write, `DosisRegistrada`
+  event, `POST .../dosis` route, extended exception filter, module wiring,
+  e2e proof of the transaction/cross-tenant/clamp/future-timestamp
+  scenarios, plus an opt-in integration proof against real Postgres, all
+  gates green
+- Estimated review budget impact: 1271 changed lines (1271 insertions / 40
+  deletions) — ABOVE tasks.md's own 350-450 estimate and above the 400-line
+  default budget; flagged above under "Files Changed"/"Issues Found" for
+  reviewer awareness, no further split taken (scope was fixed by the
+  orchestrator's explicit task assignment, same precedent as PR2b/PR3)
+
+## Status (cumulative)
+
+55/55 tasks complete across PR1 (10/10) + PR2a (6/6) + PR2b (9/9) + PR3
+(16/16) + PR4 (14/14). Ready for next batch: PR5, Phase 5 — kernel de
+notificaciones (`shared/notifications/`).

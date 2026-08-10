@@ -225,4 +225,114 @@ describe('KyselyConsumptionRepository', () => {
       expect(update).not.toHaveProperty('stock_bajo_notificado_at');
     });
   });
+
+  // design.md D-H.2: `UPDATE ... SET stock_actual = greatest(stock_actual -
+  // $2, 0) ... RETURNING stock_actual` — ONE statement, never a prior
+  // SELECT. The clamp-at-0 must live in the SQL itself (Postgres's
+  // `greatest()`), not in application code — that is the ONLY thing that
+  // keeps this immune to a lost update under two concurrent doses (a
+  // read-then-`Math.max(0, ...)`-then-write would not be). `.toOperationNode()`
+  // is public `RawBuilder` API (kysely's own docs use it to inspect a raw
+  // expression's AST without a live DB) — used here, not internals, to
+  // assert the exact SQL shape without needing a real Postgres connection.
+  describe('descontarStock — atomic clamp-at-0 decrement (design.md D-H.2)', () => {
+    function buildUpdateDb(row: { stock_actual: string }) {
+      const calls: Record<string, unknown[][]> = {};
+      const record = (method: string, args: unknown[]) => {
+        (calls[method] ??= []).push(args);
+      };
+      const chain: Record<string, jest.Mock> = {};
+      chain.set = jest.fn((...args: unknown[]) => {
+        record('set', args);
+        return chain;
+      });
+      chain.where = jest.fn((...args: unknown[]) => {
+        record('where', args);
+        return chain;
+      });
+      chain.returning = jest.fn((...args: unknown[]) => {
+        record('returning', args);
+        return chain;
+      });
+      chain.executeTakeFirstOrThrow = jest.fn(async () => row);
+      const updateTable = jest.fn((...args: unknown[]) => {
+        record('updateTable', args);
+        return chain;
+      });
+      const selectFrom = jest.fn();
+      const db = { updateTable, selectFrom } as unknown as Kysely<DB>;
+      return { db, calls, chain, selectFrom };
+    }
+
+    it('issues a single UPDATE targeting user_consumption by id, never a prior SELECT (atomic, not read-then-write)', async () => {
+      const { db, calls, selectFrom } = buildUpdateDb({ stock_actual: '2.50' });
+      const repo = new KyselyConsumptionRepository(db);
+
+      await repo.descontarStock('consumption-1', 3);
+
+      expect(calls['updateTable']).toEqual([['user_consumption']]);
+      expect(calls['where']).toEqual([['id', '=', 'consumption-1']]);
+      expect(calls['returning']).toEqual([['stock_actual']]);
+      expect(selectFrom).not.toHaveBeenCalled();
+    });
+
+    it('SETs stock_actual to a raw SQL expression, never a plain JS-computed value — the clamp must live in the SQL', async () => {
+      const { db, calls } = buildUpdateDb({ stock_actual: '0.00' });
+      const repo = new KyselyConsumptionRepository(db);
+
+      await repo.descontarStock('consumption-1', 3);
+
+      const [setArg] = calls['set']![0] as [Record<string, unknown>];
+      const raw = setArg['stock_actual'] as {
+        isRawBuilder: boolean;
+        toOperationNode(): {
+          sqlFragments: readonly string[];
+          parameters: readonly { value: unknown }[];
+        };
+      };
+      expect(raw.isRawBuilder).toBe(true);
+      // `greatest(stock_actual - $1, 0)` — the exact shape the port's doc
+      // comment pins (D-H.2): one parameter (the amount to subtract),
+      // clamped at 0 by Postgres's own greatest(), never divided/read.
+      const node = raw.toOperationNode();
+      expect(node.sqlFragments.join('')).toBe('greatest(stock_actual - , 0)');
+      expect(node.parameters).toHaveLength(1);
+      expect(node.parameters[0]!.value).toBe('3.00');
+    });
+
+    it('formats cantidad into the numeric-column string shape (design.md gotcha), even for a whole number', async () => {
+      const { db, calls } = buildUpdateDb({ stock_actual: '1.00' });
+      const repo = new KyselyConsumptionRepository(db);
+
+      await repo.descontarStock('consumption-1', 1);
+
+      const [setArg] = calls['set']![0] as [Record<string, unknown>];
+      const raw = setArg['stock_actual'] as {
+        toOperationNode(): { parameters: readonly { value: unknown }[] };
+      };
+      expect(raw.toOperationNode().parameters[0]!.value).toBe('1.00');
+    });
+
+    it('converts the RETURNING stock_actual string back to a number (design.md numeric gotcha)', async () => {
+      const { db } = buildUpdateDb({ stock_actual: '0.00' });
+      const repo = new KyselyConsumptionRepository(db);
+
+      const result = await repo.descontarStock('consumption-1', 5);
+
+      expect(result).toBe(0);
+      expect(typeof result).toBe('number');
+    });
+
+    it('propagates tx to the update (D6/repo-wide convention) — runs against the tx handle, not this.db', async () => {
+      const { db: unusedDb } = buildUpdateDb({ stock_actual: '1.00' });
+      const { db: txDb, chain: txChain } = buildUpdateDb({ stock_actual: '1.00' });
+      const repo = new KyselyConsumptionRepository(unusedDb);
+      const tx =
+        txDb as unknown as import('../../../../shared/database/transaction').TransactionContext;
+
+      await repo.descontarStock('consumption-1', 2, tx);
+
+      expect(txChain.executeTakeFirstOrThrow).toHaveBeenCalledTimes(1);
+    });
+  });
 });

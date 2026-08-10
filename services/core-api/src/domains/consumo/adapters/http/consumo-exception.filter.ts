@@ -8,6 +8,7 @@ import {
 import {
   ConsumoInvalidoError,
   ConsumptionNotFoundError,
+  DosisInvalidaError,
   MascotaInvalidaError,
   PetNotFoundError,
 } from '../../domain/consumo.errors';
@@ -27,10 +28,10 @@ interface StatusAndCode {
 // keyed by constructor, not an instanceof-chain, so a new error class is a
 // one-line append — mirrors `CatalogoExceptionFilter` exactly.
 // `ConsumptionNotFoundError` landed in PR2b (`GET .../dias-restantes`).
-// `PetNotFoundError`/`ConsumoInvalidoError`/`MascotaInvalidaError` land in
-// this PR (3) — `RegistrarMascotaUseCase`/`ConfigurarConsumoUseCase`'s real
-// callers now exist. `DosisInvalidaError` is appended here as PR4's use
-// case/route starts throwing it.
+// `PetNotFoundError`/`ConsumoInvalidoError`/`MascotaInvalidaError` landed in
+// PR3 — `RegistrarMascotaUseCase`/`ConfigurarConsumoUseCase`'s real callers.
+// `DosisInvalidaError` lands in this PR (4) — `MarcarDosisTomadaUseCase`'s
+// real caller now exists.
 type ErrorConstructor = new (...args: never[]) => Error;
 
 const ERROR_STATUS_MAP = new Map<ErrorConstructor, StatusAndCode>([
@@ -38,6 +39,7 @@ const ERROR_STATUS_MAP = new Map<ErrorConstructor, StatusAndCode>([
   [PetNotFoundError, { statusCode: HttpStatus.NOT_FOUND, code: 'PET_NOT_FOUND' }],
   [MascotaInvalidaError, { statusCode: HttpStatus.BAD_REQUEST, code: 'MASCOTA_INVALIDA' }],
   [ConsumoInvalidoError, { statusCode: HttpStatus.BAD_REQUEST, code: 'CONSUMO_INVALIDO' }],
+  [DosisInvalidaError, { statusCode: HttpStatus.BAD_REQUEST, code: 'DOSIS_INVALIDA' }],
 ]);
 
 /**
@@ -54,7 +56,13 @@ const ERROR_STATUS_MAP = new Map<ErrorConstructor, StatusAndCode>([
  * Nest falls through to `main.ts`'s `GlobalExceptionFilter` instead of this
  * filter inventing a second, competing catch-all.
  */
-@Catch(ConsumptionNotFoundError, PetNotFoundError, MascotaInvalidaError, ConsumoInvalidoError)
+@Catch(
+  ConsumptionNotFoundError,
+  PetNotFoundError,
+  MascotaInvalidaError,
+  ConsumoInvalidoError,
+  DosisInvalidaError,
+)
 export class ConsumoExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(ConsumoExceptionFilter.name);
 

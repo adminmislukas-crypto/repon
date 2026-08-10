@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { Kysely, Selectable } from 'kysely';
+import { sql, type Kysely, type Selectable } from 'kysely';
 import type { UserConsumption } from '@repon/types';
 import { DATABASE } from '../../../../shared/database/database.module';
 import type { DB, UserConsumptionTable } from '../../../../shared/database/schema';
@@ -69,10 +69,11 @@ function toUserConsumptionValues(item: UserConsumption) {
  * de módulos y tokens"). Built incrementally across the chained PR sequence,
  * same as design.md's own §"Secuencia de implementación" table plans it:
  * PR 2b landed `findById` — the read path `CalcularDiasRestantesUseCase`
- * needs for the D7 ownership check. This PR (3) lands `save` —
- * `ConfigurarConsumoUseCase`'s only write path. The remaining 4 methods
- * (`findDueForCheck`, `intentarMarcarStockBajo`, `limpiarMarcaStockBajo`,
- * `descontarStock`) still throw a named, loud error until their own PR
+ * needs for the D7 ownership check. PR 3 landed `save` —
+ * `ConfigurarConsumoUseCase`'s only write path. This PR (4) lands
+ * `descontarStock` — `MarcarDosisTomadaUseCase`'s atomic decrement (D-H.2).
+ * The remaining 3 methods (`findDueForCheck`, `intentarMarcarStockBajo`,
+ * `limpiarMarcaStockBajo`) still throw a named, loud error until PR 6a
  * implements them — a silent no-op stub would be worse than a missing
  * provider (same principle `catalogo`'s `KyselyCatalogRepository`
  * established for its own `save`/`saveMany` in its equivalent PR).
@@ -147,15 +148,29 @@ export class KyselyConsumptionRepository implements ConsumptionRepository {
     );
   }
 
+  /**
+   * `marcarDosisTomada`'s atomic decrement (D-H.2): a single
+   * `UPDATE ... SET stock_actual = greatest(stock_actual - $2, 0) ...
+   * RETURNING stock_actual` — never a prior `findById` read. The clamp
+   * lives in the SQL itself (Postgres's `greatest()`), not in application
+   * code: a JS-level `Math.max(0, ...)` computed from a stale in-memory read
+   * would NOT be immune to two concurrent doses both reading the same
+   * `stockActual` before either writes — this single statement is what
+   * makes the decrement immune to that lost update (double-tap, two
+   * devices). Returns the new stock so `DosisRegistrada` gets its
+   * `stockRestante` without a second read.
+   */
   async descontarStock(
     consumptionId: string,
     cantidad: number,
     tx?: TransactionContext,
   ): Promise<number> {
-    throw new Error(
-      `KyselyConsumptionRepository.descontarStock(id=${consumptionId}, cantidad=${cantidad}, ` +
-        `tx=${tx ? 'given' : 'none'}) is implemented in PR 4 (backend-core-api-consumo, design.md ` +
-        'D-H.2) — not yet available.',
-    );
+    const row = await this.executor(tx)
+      .updateTable('user_consumption')
+      .set({ stock_actual: sql<string>`greatest(stock_actual - ${cantidad.toFixed(2)}, 0)` })
+      .where('id', '=', consumptionId)
+      .returning('stock_actual')
+      .executeTakeFirstOrThrow();
+    return Number(row.stock_actual);
   }
 }
