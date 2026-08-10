@@ -221,3 +221,125 @@ None. All 3 RED tests failed for the expected reason (module not found), all 3 G
 
 16/16 tasks complete across PR1 (10/10) + PR2a (6/6). Ready for next batch:
 PR2b, Phase 2b — lectura (persistencia parcial + caso de uso + HTTP + e2e).
+
+---
+
+# Batch: PR2b "Lectura" (Phase 2b, tasks 2b.1–2b.9)
+
+**Mode**: Strict TDD (project-wide `strict_tdd: true`).
+
+## TDD Cycle Evidence
+
+| Task | RED | GREEN | REFACTOR |
+|---|---|---|---|
+| 2b.1/2b.2 `kysely-consumption.repository.ts` (`findById`) | `kysely-consumption.repository.spec.ts` written first; ran `jest kysely-consumption.repository.spec.ts` → `Cannot find module './kysely-consumption.repository'` (suite failed to run) | Implemented `KyselyConsumptionRepository implements ConsumptionRepository` — `findById` real, the other 5 interface methods throw named "not yet available, lands in PR X" errors (mirrors `catalogo`'s `KyselyCatalogRepository` PR-1 convention, verified against `git show` of that file's first commit); re-ran → 4/4 passed | None needed |
+| 2b.3/2b.4 `calcular-dias-restantes.use-case.ts` | `calcular-dias-restantes.use-case.spec.ts` written first (cross-tenant 404 case FIRST, per D16 convention); ran → `Cannot find module './calcular-dias-restantes.use-case'` | Implemented `CalcularDiasRestantesUseCase` — constructor takes only `CONSUMPTION_REPOSITORY`; `findById` miss or foreign `userId` both throw the same `ConsumptionNotFoundError`; re-ran → 6/6 passed | None needed |
+| 2b.6/2b.7 `consumo-exception.filter.ts` | `consumo-exception.filter.spec.ts` written first; ran → `Cannot find module './consumo-exception.filter'` | Implemented `ConsumoExceptionFilter` mirroring `CatalogoExceptionFilter`'s constructor-keyed map shape, `@Catch(ConsumptionNotFoundError)` only (this PR's sole mapped class); re-ran → 1/1 passed | None needed |
+
+11/11 new unit tests passed (4 + 6 + 1). 2b.5 (DTO/mapper/controller) and 2b.8 (module wiring) are not RED/GREEN tasks per tasks.md (no test file named) — built directly, then proven end-to-end by 2b.9's e2e suite (5/5 passed on first run, no fix-up needed).
+
+## Completed Tasks (9/9 in this batch)
+
+- [x] 2b.1 RED `adapters/persistence/kysely-consumption.repository.spec.ts`
+- [x] 2b.2 GREEN `adapters/persistence/kysely-consumption.repository.ts`
+- [x] 2b.3 RED `ports-in/calcular-dias-restantes.use-case.spec.ts`
+- [x] 2b.4 GREEN `ports-in/calcular-dias-restantes.use-case.ts`
+- [x] 2b.5 `adapters/http/dto/dias-restantes-response.dto.ts` + `consumo.mapper.ts` + `adapters/http/consumo.controller.ts`
+- [x] 2b.6 RED `adapters/http/consumo-exception.filter.spec.ts`
+- [x] 2b.7 GREEN `adapters/http/consumo-exception.filter.ts`
+- [x] 2b.8 `consumo.module.ts` real wiring
+- [x] 2b.9 E2e `test/consumo-dias-restantes.e2e-spec.ts`
+
+## Files Changed
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `services/core-api/src/domains/consumo/adapters/persistence/kysely-consumption.repository.spec.ts` | Created | 4 tests: numeric mapper (`dosis_por_toma`/`stock_actual` string→number), `petId` pass-through on `ownerType: 'pet'`, `WHERE id = $1` query shape, `null` on no match |
+| `services/core-api/src/domains/consumo/adapters/persistence/kysely-consumption.repository.ts` | Created | `KyselyConsumptionRepository implements ConsumptionRepository` — `findById` real (with the numeric mapper); `save`/`findDueForCheck`/`intentarMarcarStockBajo`/`limpiarMarcaStockBajo`/`descontarStock` throw named "not yet implemented, lands in PR N" errors, mirroring `catalogo`'s PR-1 `KyselyCatalogRepository` convention (verified against that file's first git commit, not guessed) |
+| `services/core-api/src/domains/consumo/ports-in/calcular-dias-restantes.use-case.spec.ts` | Created | 6 tests: cross-tenant 404 (written first), genuinely-missing 404, byte-identical-error assertion (constructor + message), happy path, `Math.floor` edge (partial day), constructor-arity inspection (`.length === 1`) |
+| `services/core-api/src/domains/consumo/ports-in/calcular-dias-restantes.use-case.ts` | Created | `CalcularDiasRestantesUseCase` — constructor injects ONLY `CONSUMPTION_REPOSITORY` (D2/R4 structural CQS guarantee); `findById` miss or `userId` mismatch → `ConsumptionNotFoundError`; delegates to PR2a's `consumoDiario`/`diasRestantes` pure functions |
+| `services/core-api/src/domains/consumo/adapters/http/dto/dias-restantes-response.dto.ts` | Created | `DiasRestantesResponseDto { diasRestantes: number }` |
+| `services/core-api/src/domains/consumo/adapters/http/consumo.mapper.ts` | Created | `toDiasRestantesResponseDto(diasRestantes: number)` — thin scalar→DTO conversion |
+| `services/core-api/src/domains/consumo/adapters/http/consumo.controller.ts` | Created | `ConsumoController` — `GET mis-consumos/:consumptionId/dias-restantes`, authenticated (no `@Roles`, mirrors `GET /catalogo/productos`'s reasoning), `mis-` URL prefix encodes D8 (`actor.profileId` only, never a path param), `@UseFilters(ConsumoExceptionFilter)` |
+| `services/core-api/src/domains/consumo/adapters/http/consumo-exception.filter.spec.ts` | Created | 1 test (table-driven, extensible): `ConsumptionNotFoundError` → 404 `CONSUMPTION_NOT_FOUND` |
+| `services/core-api/src/domains/consumo/adapters/http/consumo-exception.filter.ts` | Created | `ConsumoExceptionFilter` mirroring `CatalogoExceptionFilter`'s constructor-keyed-map shape exactly; `@Catch(ConsumptionNotFoundError)` only (this PR's scope) |
+| `services/core-api/src/domains/consumo/consumo.module.ts` | Modified | From `@Module({})` placeholder to real wiring: `CONSUMPTION_REPOSITORY`→`KyselyConsumptionRepository`, `CalcularDiasRestantesUseCase` provider, `ConsumoController`, `exports: []` (D9/D14) |
+| `services/core-api/test/consumo-dias-restantes.e2e-spec.ts` | Created | 5 tests: happy path (200 + body shape), 404 cross-tenant, 404 genuinely-missing (byte-identical), 401 no token, 400 non-UUID `consumptionId` (`ParseUUIDPipe`) — real `AuthGuard`/`ValidationPipe`/`ConsumoExceptionFilter`, only `ACTOR_PORT`/`CONSUMPTION_REPOSITORY` overridden, no local Supabase required |
+| `openspec/changes/backend-core-api-consumo/tasks.md` | Modified | Tasks 2b.1–2b.9 marked `[x]` |
+
+## Commands Run and Results
+
+| Command | Result |
+|---|---|
+| `pnpm exec jest <each new .spec.ts>` (RED, before its implementation existed) | 3× `Cannot find module` — suite failed to run, confirming RED, for the repository, use-case, and filter specs |
+| `pnpm exec jest <each new .spec.ts>` (GREEN, after implementation) | 4/4, 6/6, 1/1 — all passed on first run |
+| `pnpm exec jest --config ./test/jest-e2e.json test/consumo-dias-restantes.e2e-spec.ts` | 5/5 passed on first run — no fix-up needed |
+| `pnpm lint` (workspace root) | `eslint .` — clean |
+| `pnpm typecheck` (`services/core-api`) | `tsc -p tsconfig.json --noEmit` — clean |
+| `pnpm test` (`services/core-api`) | 42 unit suites / 270 tests passed (was 39/259 after PR2a — +3 suites/+11 tests, all new); 9 e2e suites / 59 tests passed (was 8/54 — +1 suite/+5 tests). Zero regressions |
+| `pnpm build` (`services/core-api`) | `tsc -p tsconfig.build.json` — clean |
+| `pnpm run format:check` (workspace root) | First run: 5 files flagged (line-wrap issues across the new repository/use-case/filter/DTO/e2e files) → fixed via `npx prettier --write` on those 5 files only → re-ran `format:check`, `lint`, `typecheck`, `pnpm test`, `pnpm build` again — all green (same recurring formatting-only gap as PR1/PR2a's batches) |
+
+## Deviations from Design
+
+**One structural decision NOT explicit in design.md, resolved by direct precedent**: design.md's own PR table describes `KyselyConsumptionRepository`'s `findById` landing in "PR 2" without specifying whether the class declares the full `ConsumptionRepository` interface (with throwing stubs for not-yet-built methods) or only a partial `Pick<...>`. Resolved by inspecting `catalogo`'s actual first commit (`git show 24fe29a:.../kysely-catalog.repository.ts`) rather than guessing: `KyselyCatalogRepository` declared `implements CatalogRepository` (the full interface) from its very first PR, with `save`/`saveMany` throwing named, loud "implemented in PR N" errors. Followed that exact precedent here — `KyselyConsumptionRepository implements ConsumptionRepository` with 5 of 6 methods throwing named errors naming their landing PR (3/4/6a). This is not a deviation from design.md so much as design.md leaving a mechanical detail to "mirror catalogo," which this batch verified against the actual git history instead of assuming.
+
+Everything else matches design.md verbatim: the `numeric`-as-`string` mapper gotcha (flagged explicitly as "el detalle mecánico de mayor riesgo del cambio"), the byte-identical 404 rule for cross-tenant vs. missing (Diagram 3), the CQS structural guarantee (constructor injects only `CONSUMPTION_REPOSITORY`), the `mis-` URL prefix encoding D8, the no-`@Roles` decision (mirrors `GET /catalogo/productos`'s stated reasoning), and `consumo.module.ts`'s `exports: []`.
+
+## Issues Found
+
+None. All 3 RED tests failed for the expected reason (module not found), all 3 GREEN implementations passed on first run, the e2e suite passed 5/5 on first run with zero fix-up, and the only follow-up needed was the same formatting-only `prettier --write` pattern every prior batch has hit.
+
+**Line-count risk flagged for the orchestrator/reviewer**: this batch's actual diff is 798 insertions / 14 deletions = 812 changed lines (`git diff --cached --stat` across the 12 files this batch touches), well above both tasks.md's own PR2b estimate (350-470 lines) and the general 400-line review-budget default. The overage is driven by comprehensive RED-test coverage under strict TDD (11 new unit tests + 5 e2e tests, each asserting the byte-identical-404 property from multiple angles per design.md's explicit emphasis on R1) plus 3 full doc-commented new adapter/port-in files — no scope crept beyond tasks.md's exact 2b.1–2b.9 list, and no file outside this PR's assigned scope was touched. Flagging per the review-workload-guard rule rather than silently exceeding it; the maintainer's `stacked-to-main` chain strategy (already resolved in tasks.md, "Decision needed before apply: No") means this PR is still merged as its own independent, reviewable unit regardless of the overage — no re-split action taken without an explicit maintainer call, since PR2b's task list was fixed by the orchestrator's instructions and further splitting it was out of this batch's authority.
+
+## What PR3 (next batch) should know
+
+- `ConsumptionRepository`'s Kysely adapter now has ONE real method (`findById`)
+  and 5 throwing stubs — PR3 implements `save` (extends this SAME file,
+  `kysely-consumption.repository.ts`, per its own throwing-stub message)
+  and creates the sibling `kysely-pet.repository.ts` (first caller of
+  `PetRepository`).
+- `CalcularDiasRestantesUseCase` is the reference shape for `MarcarDosisTomadaUseCase`'s
+  (PR4) and `ConfigurarConsumoUseCase`'s (PR3) own D7 ownership checks —
+  same `findById` → compare `userId` → throw pattern, different error class
+  for `configurarConsumo`'s `petId` branch (`PetNotFoundError`, D-H.3).
+- `ConsumoExceptionFilter`'s `@Catch()`/`ERROR_STATUS_MAP` is designed to be
+  extended in place (append, not replace) — PR3 adds `PetNotFoundError`→404
+  and `MascotaInvalidaError`/`ConsumoInvalidoError`→400 to the SAME file's
+  spec and implementation, exactly as `catalogo`'s filter grew across its
+  own PRs.
+- `ConsumoController` currently has ONE route — PR3 adds `POST
+  /consumo/mis-mascotas` and `POST /consumo/mis-consumos` to the SAME
+  controller file/class (not a new controller), continuing to inject new
+  use cases via the constructor.
+- `consumo.module.ts`'s `providers` array grows incrementally — PR3 adds
+  `PET_REPOSITORY`→`KyselyPetRepository`, `RegistrarMascotaUseCase`,
+  `ConfigurarConsumoUseCase`. `exports: []` still holds and should keep
+  holding through PR7's final audit.
+- Per tasks.md's 10-PR chain, PR3's scope is `registrarMascota` +
+  `configurarConsumo` (+ D-H.3 `petId` ownership check) + 2 `POST` routes +
+  e2e. Estimated 350-450 lines, Medium risk — given this batch's actual
+  overage vs. its own estimate, PR3 should budget review time
+  generously rather than assume the tasks.md estimate is a hard ceiling.
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, per tasks.md's Review Workload
+  Forecast — resolved by the maintainer to sub-split PR2/PR6, "Decision
+  needed before apply: No")
+- Current work unit: Unit 2b "Lectura: persistencia parcial + `calcularDiasRestantes`
+  + HTTP + e2e" — PR2b
+- Boundary: starts from PR2a's domain layer (`main` @ `2cabbdc`/`10201d0`);
+  ends with a fully compiling, fully tested read-path commit — `findById`
+  read adapter + the query use case + controller/mapper/filter/DTO + module
+  wiring + e2e proof of R1 (cross-tenant 404), all gates green
+- Estimated review budget impact: 812 changed lines (798 insertions / 14
+  deletions) — ABOVE tasks.md's own 350-470 estimate and above the 400-line
+  default budget; flagged above under "Issues Found" for reviewer awareness,
+  no further split taken (scope was fixed by the orchestrator's explicit
+  task assignment)
+
+## Status (cumulative)
+
+25/25 tasks complete across PR1 (10/10) + PR2a (6/6) + PR2b (9/9). Ready for
+next batch: PR3, Phase 3 — escritura (`registrarMascota` + `configurarConsumo`).

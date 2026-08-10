@@ -81,15 +81,15 @@ Depends on Phase 1's ports/constants/errors. Zero adapters, zero I/O — testeab
 
 Depends on Phase 2a's entities.
 
-- [ ] 2b.1 RED: `adapters/persistence/kysely-consumption.repository.spec.ts` — `findById` only this PR; numeric mapper for `dosis_por_toma`/`stock_actual`/`stock_bajo_notificado_at` (the "detalle mecánico de mayor riesgo": 4 numeric columns across this domain).
-- [ ] 2b.2 GREEN: `adapters/persistence/kysely-consumption.repository.ts` — implements `findById` (other methods extend this same file incrementally in PR3/4/6a, mirroring `catalogo`'s `KyselyCatalogRepository` convention).
-- [ ] 2b.3 RED: `ports-in/calcular-dias-restantes.use-case.spec.ts` — cross-tenant 404 written FIRST (core-api-consumo "Cross-tenant read attempt returns 404, not 403" — R1 closes here); happy path; constructor-injection inspection test (no `EVENT_PUBLISHER`/`NOTIFICATION_PORT` — "The pure-query use case cannot reach events or notifications").
-- [ ] 2b.4 GREEN: `ports-in/calcular-dias-restantes.use-case.ts` — constructor takes only `CONSUMPTION_REPOSITORY`.
-- [ ] 2b.5 `adapters/http/dto/dias-restantes-response.dto.ts` + `consumo.mapper.ts` + `adapters/http/consumo.controller.ts`: `GET /consumo/mis-consumos/:consumptionId/dias-restantes` (authenticated, no `@Roles`, `mis-` prefix encodes D8).
-- [ ] 2b.6 RED: `adapters/http/consumo-exception.filter.spec.ts` — `ConsumptionNotFoundError`→404 (others land as their use cases do).
-- [ ] 2b.7 GREEN: `adapters/http/consumo-exception.filter.ts` mirroring `CatalogoExceptionFilter`; `@UseFilters` at controller level.
-- [ ] 2b.8 `consumo.module.ts`: bind `CONSUMPTION_REPOSITORY`→`KyselyConsumptionRepository`; register `CalcularDiasRestantesUseCase` + controller + filter; `exports: []` (D9/D14).
-- [ ] 2b.9 E2e: `test/consumo-dias-restantes.e2e-spec.ts` — 401 no token, 404 cross-tenant, happy path.
+- [x] 2b.1 RED: `adapters/persistence/kysely-consumption.repository.spec.ts` — `findById` only this PR; numeric mapper for `dosis_por_toma`/`stock_actual`/`stock_bajo_notificado_at` (the "detalle mecánico de mayor riesgo": 4 numeric columns across this domain).
+- [x] 2b.2 GREEN: `adapters/persistence/kysely-consumption.repository.ts` — implements `findById` (other methods extend this same file incrementally in PR3/4/6a, mirroring `catalogo`'s `KyselyCatalogRepository` convention).
+- [x] 2b.3 RED: `ports-in/calcular-dias-restantes.use-case.spec.ts` — cross-tenant 404 written FIRST (core-api-consumo "Cross-tenant read attempt returns 404, not 403" — R1 closes here); happy path; constructor-injection inspection test (no `EVENT_PUBLISHER`/`NOTIFICATION_PORT` — "The pure-query use case cannot reach events or notifications").
+- [x] 2b.4 GREEN: `ports-in/calcular-dias-restantes.use-case.ts` — constructor takes only `CONSUMPTION_REPOSITORY`.
+- [x] 2b.5 `adapters/http/dto/dias-restantes-response.dto.ts` + `consumo.mapper.ts` + `adapters/http/consumo.controller.ts`: `GET /consumo/mis-consumos/:consumptionId/dias-restantes` (authenticated, no `@Roles`, `mis-` prefix encodes D8).
+- [x] 2b.6 RED: `adapters/http/consumo-exception.filter.spec.ts` — `ConsumptionNotFoundError`→404 (others land as their use cases do).
+- [x] 2b.7 GREEN: `adapters/http/consumo-exception.filter.ts` mirroring `CatalogoExceptionFilter`; `@UseFilters` at controller level.
+- [x] 2b.8 `consumo.module.ts`: bind `CONSUMPTION_REPOSITORY`→`KyselyConsumptionRepository`; register `CalcularDiasRestantesUseCase` + controller + filter; `exports: []` (D9/D14).
+- [x] 2b.9 E2e: `test/consumo-dias-restantes.e2e-spec.ts` — 401 no token, 404 cross-tenant, happy path.
 
 ## Phase 3: Escritura — Spec: `core-api-consumo`
 
