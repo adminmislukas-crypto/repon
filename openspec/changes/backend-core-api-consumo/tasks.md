@@ -70,12 +70,12 @@ Chain strategy: stacked-to-main, 10 PRs
 
 Depends on Phase 1's ports/constants/errors. Zero adapters, zero I/O — testeable en aislamiento total.
 
-- [ ] 2a.1 RED: `domain/pet.entity.spec.ts` — `crear()` rejects invalid `nombre`/`especie` (`MascotaInvalidaError`).
-- [ ] 2a.2 GREEN: `domain/pet.entity.ts` — `crear()` factory + validations.
-- [ ] 2a.3 RED: `domain/user-consumption.entity.spec.ts` — 3 invariants: `petId ⟺ ownerType==='pet'`, `dosisPorToma > 0`, `horarios` non-empty (`ConsumoInvalidoError`).
-- [ ] 2a.4 GREEN: `domain/user-consumption.entity.ts` — `crear()` factory enforcing all 3.
-- [ ] 2a.5 RED: `domain/consumo.calculos.spec.ts` — `consumoDiario`, `diasRestantes` (`Math.floor`, edges: `stock=0`, exactly at threshold, `frecuenciaDias>1`), `mensajeStockBajo` (pure, no lookups — D-D N+1 avoidance).
-- [ ] 2a.6 GREEN: `domain/consumo.calculos.ts` — the 3 pure functions, sole authority for the formula (D-C's SQL predicate is a superset of this, never the decision).
+- [x] 2a.1 RED: `domain/pet.entity.spec.ts` — `crear()` rejects invalid `nombre`/`especie` (`MascotaInvalidaError`).
+- [x] 2a.2 GREEN: `domain/pet.entity.ts` — `crear()` factory + validations.
+- [x] 2a.3 RED: `domain/user-consumption.entity.spec.ts` — 3 invariants: `petId ⟺ ownerType==='pet'`, `dosisPorToma > 0`, `horarios` non-empty (`ConsumoInvalidoError`).
+- [x] 2a.4 GREEN: `domain/user-consumption.entity.ts` — `crear()` factory enforcing all 3.
+- [x] 2a.5 RED: `domain/consumo.calculos.spec.ts` — `consumoDiario`, `diasRestantes` (`Math.floor`, edges: `stock=0`, exactly at threshold, `frecuenciaDias>1`), `mensajeStockBajo` (pure, no lookups — D-D N+1 avoidance).
+- [x] 2a.6 GREEN: `domain/consumo.calculos.ts` — the 3 pure functions, sole authority for the formula (D-C's SQL predicate is a superset of this, never the decision).
 
 ## Phase 2b: Lectura (persistencia parcial + caso de uso + HTTP + e2e) — Spec: `core-api-consumo`
 
