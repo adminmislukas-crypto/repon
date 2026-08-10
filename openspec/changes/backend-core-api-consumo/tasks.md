@@ -95,22 +95,22 @@ Depends on Phase 2a's entities.
 
 Depends on Phase 2a's entities and 2b's `findById` pattern.
 
-- [ ] 3.1 RED: `ports-in/registrar-mascota.use-case.spec.ts` — `userId` only from `actor.profileId` (core-api-consumo "A client-supplied userId cannot influence the write"); `id` generated via `randomUUID()` in the use case (D-H.1 repo precedent, never a DB default).
-- [ ] 3.2 GREEN: `ports-in/registrar-mascota.use-case.ts`.
-- [ ] 3.3 RED: `adapters/persistence/kysely-pet.repository.spec.ts` (NEW, first caller) — `save()` inserts, numeric mapper for `peso_kg`.
-- [ ] 3.4 GREEN: `adapters/persistence/kysely-pet.repository.ts` — implements `save()`.
-- [ ] 3.5 RED (extend 3.3's file): `findById()` for the ownership check below.
-- [ ] 3.6 GREEN (extend 3.4's file): implements `findById()`.
-- [ ] 3.7 RED (extend Phase 2b's `kysely-consumption.repository.spec.ts`): `save()` upserts a new `UserConsumption`, propagates `tx?`.
-- [ ] 3.8 GREEN (extend Phase 2b's file): implements `save()`.
-- [ ] 3.9 RED: `ports-in/configurar-consumo.use-case.spec.ts` — negative FIRST (D16 convention): foreign `petId` → `PetNotFoundError`/404, no `UserConsumption` created (core-api-consumo "A client-supplied petId belonging to another user is rejected as 404, not 403" — D-H.3); happy path (own pet, core-api-consumo "Configuring a consumption for the caller's own pet succeeds"); `userId` only from actor.
-- [ ] 3.10 GREEN: `ports-in/configurar-consumo.use-case.ts` — `findById` on `PET_REPOSITORY` before `save`, `randomUUID()` for the new id.
-- [ ] 3.11 `adapters/http/dto/nueva-mascota.dto.ts`, `adapters/http/dto/nuevo-consumo.dto.ts` (neither exposes `userId`, D8), `adapters/http/dto/pet-response.dto.ts` (`PetResponseDto`), `adapters/http/dto/user-consumption-response.dto.ts` (`UserConsumptionResponseDto`); `consumo.mapper.ts` additions.
-- [ ] 3.12 `adapters/http/consumo.controller.ts`: `POST /consumo/mis-mascotas` (201), `POST /consumo/mis-consumos` (201), both authenticated, no `@Roles`.
-- [ ] 3.13 RED (extend `consumo-exception.filter.spec.ts`): `PetNotFoundError`→404, `MascotaInvalidaError`/`ConsumoInvalidoError`→400.
-- [ ] 3.14 GREEN (extend the filter).
-- [ ] 3.15 `consumo.module.ts`: bind `PET_REPOSITORY`→`KyselyPetRepository`; register `RegistrarMascotaUseCase`, `ConfigurarConsumoUseCase`.
-- [ ] 3.16 E2e: `test/consumo-mis-mascotas.e2e-spec.ts` + `test/consumo-mis-consumos.e2e-spec.ts` — happy paths, 404 foreign `petId`, DTO rejects a client-supplied `userId` field (400).
+- [x] 3.1 RED: `ports-in/registrar-mascota.use-case.spec.ts` — `userId` only from `actor.profileId` (core-api-consumo "A client-supplied userId cannot influence the write"); `id` generated via `randomUUID()` in the use case (D-H.1 repo precedent, never a DB default).
+- [x] 3.2 GREEN: `ports-in/registrar-mascota.use-case.ts`.
+- [x] 3.3 RED: `adapters/persistence/kysely-pet.repository.spec.ts` (NEW, first caller) — `save()` inserts, numeric mapper for `peso_kg`.
+- [x] 3.4 GREEN: `adapters/persistence/kysely-pet.repository.ts` — implements `save()`.
+- [x] 3.5 RED (extend 3.3's file): `findById()` for the ownership check below.
+- [x] 3.6 GREEN (extend 3.4's file): implements `findById()`.
+- [x] 3.7 RED (extend Phase 2b's `kysely-consumption.repository.spec.ts`): `save()` upserts a new `UserConsumption`, propagates `tx?`.
+- [x] 3.8 GREEN (extend Phase 2b's file): implements `save()`.
+- [x] 3.9 RED: `ports-in/configurar-consumo.use-case.spec.ts` — negative FIRST (D16 convention): foreign `petId` → `PetNotFoundError`/404, no `UserConsumption` created (core-api-consumo "A client-supplied petId belonging to another user is rejected as 404, not 403" — D-H.3); happy path (own pet, core-api-consumo "Configuring a consumption for the caller's own pet succeeds"); `userId` only from actor.
+- [x] 3.10 GREEN: `ports-in/configurar-consumo.use-case.ts` — `findById` on `PET_REPOSITORY` before `save`, `randomUUID()` for the new id.
+- [x] 3.11 `adapters/http/dto/nueva-mascota.dto.ts`, `adapters/http/dto/nuevo-consumo.dto.ts` (neither exposes `userId`, D8), `adapters/http/dto/pet-response.dto.ts` (`PetResponseDto`), `adapters/http/dto/user-consumption-response.dto.ts` (`UserConsumptionResponseDto`); `consumo.mapper.ts` additions.
+- [x] 3.12 `adapters/http/consumo.controller.ts`: `POST /consumo/mis-mascotas` (201), `POST /consumo/mis-consumos` (201), both authenticated, no `@Roles`.
+- [x] 3.13 RED (extend `consumo-exception.filter.spec.ts`): `PetNotFoundError`→404, `MascotaInvalidaError`/`ConsumoInvalidoError`→400.
+- [x] 3.14 GREEN (extend the filter).
+- [x] 3.15 `consumo.module.ts`: bind `PET_REPOSITORY`→`KyselyPetRepository`; register `RegistrarMascotaUseCase`, `ConfigurarConsumoUseCase`.
+- [x] 3.16 E2e: `test/consumo-mis-mascotas.e2e-spec.ts` + `test/consumo-mis-consumos.e2e-spec.ts` — happy paths, 404 foreign `petId`, DTO rejects a client-supplied `userId` field (400).
 
 ## Phase 4: Dosis — Spec: `core-api-consumo`
 

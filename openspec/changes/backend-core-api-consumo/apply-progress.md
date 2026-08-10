@@ -343,3 +343,152 @@ None. All 3 RED tests failed for the expected reason (module not found), all 3 G
 
 25/25 tasks complete across PR1 (10/10) + PR2a (6/6) + PR2b (9/9). Ready for
 next batch: PR3, Phase 3 — escritura (`registrarMascota` + `configurarConsumo`).
+
+---
+
+# Batch: PR3 "Escritura" (Phase 3, tasks 3.1–3.16)
+
+**Mode**: Strict TDD (project-wide `strict_tdd: true`).
+
+## TDD Cycle Evidence
+
+| Task | RED | GREEN | REFACTOR |
+|---|---|---|---|
+| 3.1/3.2 `registrar-mascota.use-case.ts` | `registrar-mascota.use-case.spec.ts` written first; ran `jest registrar-mascota.use-case.spec.ts` → `Cannot find module './registrar-mascota.use-case'` (suite failed to run) | Implemented `RegistrarMascotaUseCase` — `userId` an explicit param, `id` via `randomUUID()`, delegates to Phase 2a's `Pet.crear()`; re-ran → 4/4 passed | None needed |
+| 3.3/3.4 + 3.5/3.6 `kysely-pet.repository.ts` (`save`+`findById`) | `kysely-pet.repository.spec.ts` written first (both methods in one file, per task assignment); ran → `Cannot find module './kysely-pet.repository'` | Implemented `KyselyPetRepository implements PetRepository` — `save()` upserts on `id` (mirrors `KyselyCompanyRepository`'s single-column-conflict shape, `peso_kg` numeric mapper), `findById()` mirrors `KyselyConsumptionRepository.findById`'s null-on-miss contract; re-ran → 8/8 passed | None needed |
+| 3.7/3.8 `kysely-consumption.repository.ts` (`save`, extends PR2b's file) | Extended `kysely-consumption.repository.spec.ts` with a `save` describe block first; ran → 6 new tests failed against the existing "implemented in PR 3 ... not yet available" throwing stub (confirms RED against real code, not a missing module) | Implemented `save()` — upsert on `id`, `DO UPDATE SET` excludes `user_id` (D7) and `stock_bajo_notificado_at` (D-A: only the CAS methods write that column); re-ran → 10/10 passed | None needed |
+| 3.9/3.10 `configurar-consumo.use-case.ts` | `configurar-consumo.use-case.spec.ts` written first, negative case (foreign `petId`) written BEFORE the happy path (D16 convention, same order as PR2b's R1 test); ran → `Cannot find module './configurar-consumo.use-case'` | Implemented `ConfigurarConsumoUseCase` — `petRepository.findById` checked BEFORE `crear()`/`save()` when `petId` is present, `PetNotFoundError` byte-identical for "missing" and "foreign", delegates to Phase 2a's `UserConsumption.crear()`; re-ran → 8/8 passed | None needed |
+| 3.13/3.14 `consumo-exception.filter.ts` (extends PR2b's file) | Extended `consumo-exception.filter.spec.ts`'s `describe.each` table with 3 new rows (`PetNotFoundError`/`MascotaInvalidaError`/`ConsumoInvalidoError`) first; ran → 3 new cases failed (`500` instead of the expected `404`/`400`, confirming the map had no entry yet) | Added the 3 classes to `@Catch()` and `ERROR_STATUS_MAP`; re-ran → 4/4 passed | None needed |
+
+30 new/changed unit tests passed (4 + 8 + 6 + 8 + 4, net of the pre-existing 4 `findById`/1 filter tests already counted in PR2b's batch). 3.11/3.12/3.15 (DTOs, controller routes, module wiring) are not RED/GREEN tasks per tasks.md (no test file named for them individually) — built directly, then proven end-to-end by 3.16's 2 new e2e suites (11/11 passed on first run, no fix-up needed).
+
+## Completed Tasks (16/16 in this batch)
+
+- [x] 3.1 RED `ports-in/registrar-mascota.use-case.spec.ts`
+- [x] 3.2 GREEN `ports-in/registrar-mascota.use-case.ts`
+- [x] 3.3 RED `adapters/persistence/kysely-pet.repository.spec.ts` (`save`)
+- [x] 3.4 GREEN `adapters/persistence/kysely-pet.repository.ts` (`save`)
+- [x] 3.5 RED (same file) `findById()`
+- [x] 3.6 GREEN (same file) `findById()`
+- [x] 3.7 RED (extend `kysely-consumption.repository.spec.ts`) `save()`
+- [x] 3.8 GREEN (extend `kysely-consumption.repository.ts`) `save()`
+- [x] 3.9 RED `ports-in/configurar-consumo.use-case.spec.ts`
+- [x] 3.10 GREEN `ports-in/configurar-consumo.use-case.ts`
+- [x] 3.11 DTOs (`nueva-mascota.dto.ts`, `nuevo-consumo.dto.ts`, `pet-response.dto.ts`, `user-consumption-response.dto.ts`) + `consumo.mapper.ts` additions
+- [x] 3.12 `adapters/http/consumo.controller.ts`: `POST /consumo/mis-mascotas` + `POST /consumo/mis-consumos`
+- [x] 3.13 RED (extend `consumo-exception.filter.spec.ts`)
+- [x] 3.14 GREEN (extend `consumo-exception.filter.ts`)
+- [x] 3.15 `consumo.module.ts`: `PET_REPOSITORY` binding + 2 new use-case providers
+- [x] 3.16 E2e `test/consumo-mis-mascotas.e2e-spec.ts` + `test/consumo-mis-consumos.e2e-spec.ts`
+
+## Files Changed
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `services/core-api/src/domains/consumo/ports-in/registrar-mascota.use-case.spec.ts` | Created | 4 tests: happy path, `userId` derives from the explicit param (D8), fresh `randomUUID()` id per call, minimal-payload happy path |
+| `services/core-api/src/domains/consumo/ports-in/registrar-mascota.use-case.ts` | Created | `RegistrarMascotaUseCase` — `NuevaMascotaInput` (no `userId` field), `id` via `randomUUID()`, delegates invariant checks to `domain/pet.entity.ts`'s `crear()` |
+| `services/core-api/src/domains/consumo/adapters/persistence/kysely-pet.repository.spec.ts` | Created | 8 tests: `save()` conflict-target/numeric-mapper/null-handling/`DO UPDATE SET` exclusions, `findById()` numeric mapper/null-mapping/query-shape/miss-returns-null |
+| `services/core-api/src/domains/consumo/adapters/persistence/kysely-pet.repository.ts` | Created | `KyselyPetRepository implements PetRepository` (D-H.1, first implementer) — `save()` upserts on `id` (mirrors `KyselyCompanyRepository`'s single-column-conflict shape), `findById()` mirrors `KyselyConsumptionRepository`'s null-on-miss-never-throw contract |
+| `services/core-api/src/domains/consumo/adapters/persistence/kysely-consumption.repository.spec.ts` | Modified | Added a `save` describe block: 6 new tests (conflict target, numeric-column formatting, null-handling, `tx` propagation via a swapped mock-db handle, `DO UPDATE SET` excludes `user_id` and `stock_bajo_notificado_at`) |
+| `services/core-api/src/domains/consumo/adapters/persistence/kysely-consumption.repository.ts` | Modified | Implemented `save()` (`toUserConsumptionValues` reverse-mapper added), replacing the PR2b "not yet available" throwing stub; updated the class doc comment |
+| `services/core-api/src/domains/consumo/ports-in/configurar-consumo.use-case.spec.ts` | Created | 8 tests: negative case FIRST (foreign `petId` → `PetNotFoundError`, no `save()` call), genuinely-missing `petId` (byte-identical), byte-identical-error assertion, happy path (own pet), no pet lookup when `ownerType: 'self'`, `userId` from actor only, fresh `randomUUID()` id, entity invariants still enforced |
+| `services/core-api/src/domains/consumo/ports-in/configurar-consumo.use-case.ts` | Created | `ConfigurarConsumoUseCase` — `petRepository.findById` gated BEFORE `crear()`/`save()` whenever `config.petId` is present (D-H.3), delegates invariant checks to `domain/user-consumption.entity.ts`'s `crear()` |
+| `services/core-api/src/domains/consumo/adapters/http/dto/nueva-mascota.dto.ts` | Created | `NuevaMascotaDto` — no `userId` field (D8); `class-validator` decorators mirroring `pet.entity.ts`'s invariants |
+| `services/core-api/src/domains/consumo/adapters/http/dto/nuevo-consumo.dto.ts` | Created | `NuevoConsumoDto` — no `userId` field (D8); `petId` validated for shape only (`@IsUUID()`), ownership is a use-case concern |
+| `services/core-api/src/domains/consumo/adapters/http/dto/pet-response.dto.ts` | Created | `PetResponseDto` |
+| `services/core-api/src/domains/consumo/adapters/http/dto/user-consumption-response.dto.ts` | Created | `UserConsumptionResponseDto` |
+| `services/core-api/src/domains/consumo/adapters/http/consumo.mapper.ts` | Modified | Added `toNuevaMascotaInput`, `toPetResponseDto`, `toNuevoConsumoInput`, `toUserConsumptionResponseDto` |
+| `services/core-api/src/domains/consumo/adapters/http/consumo.controller.ts` | Modified | Added `POST /consumo/mis-mascotas` (201) and `POST /consumo/mis-consumos` (201), both authenticated, no `@Roles` (mirrors the GET route's D8/auth reasoning); constructor now injects the 2 new use cases |
+| `services/core-api/src/domains/consumo/adapters/http/consumo-exception.filter.spec.ts` | Modified | Extended the `describe.each` table with `PetNotFoundError`→404, `MascotaInvalidaError`→400, `ConsumoInvalidoError`→400 |
+| `services/core-api/src/domains/consumo/adapters/http/consumo-exception.filter.ts` | Modified | Added the 3 classes to `@Catch()` and `ERROR_STATUS_MAP` |
+| `services/core-api/src/domains/consumo/consumo.module.ts` | Modified | Bound `PET_REPOSITORY`→`KyselyPetRepository`; registered `RegistrarMascotaUseCase`/`ConfigurarConsumoUseCase`; `exports: []` still holds |
+| `services/core-api/test/consumo-mis-mascotas.e2e-spec.ts` | Created | 4 tests: happy path (201), 400 on a client-supplied `userId` field (real global `ValidationPipe({whitelist:true, forbidNonWhitelisted:true})`), 400 on empty `nombre`, 401 unauthenticated |
+| `services/core-api/test/consumo-mis-consumos.e2e-spec.ts` | Created | 7 tests: happy path `ownerType: 'self'`, happy path `ownerType: 'pet'` (own pet), 404 `PET_NOT_FOUND` on a foreign `petId` (no `save()` call), 404 on a genuinely missing `petId` (byte-identical), 400 on a client-supplied `userId` field, 400 on empty `horarios`, 401 unauthenticated |
+| `openspec/changes/backend-core-api-consumo/tasks.md` | Modified | Tasks 3.1–3.16 marked `[x]` |
+
+## Commands Run and Results
+
+| Command | Result |
+|---|---|
+| `pnpm exec jest <each new .spec.ts>` (RED, before its implementation existed or against the still-throwing PR2b stub) | `registrar-mascota`/`kysely-pet.repository`/`configurar-consumo`: `Cannot find module` — suite failed to run. `kysely-consumption.repository.spec.ts`'s new `save` block: 6/6 new tests failed against the real "not yet available" throwing stub. `consumo-exception.filter.spec.ts`'s 3 new table rows: failed with `500` instead of the expected `404`/`400` |
+| `pnpm exec jest <each new/extended .spec.ts>` (GREEN, after implementation) | 4/4, 8/8, 10/10 (6 new + 4 pre-existing), 8/8, 4/4 (3 new + 1 pre-existing) — all passed on first run after implementation |
+| `pnpm exec jest src/domains/consumo` (full domain) | 9 suites / 64 tests passed |
+| `pnpm exec jest --config ./test/jest-e2e.json test/consumo-mis-mascotas.e2e-spec.ts test/consumo-mis-consumos.e2e-spec.ts` | 2 suites / 11 tests passed on first run — no fix-up needed |
+| `pnpm lint` (workspace root) | `eslint .` — clean |
+| `pnpm typecheck` (`services/core-api`) | `tsc -p tsconfig.json --noEmit` — clean |
+| `pnpm test` (`services/core-api`) | 45 unit suites / 299 tests passed (was 42/270 after PR2b — +3 suites/+29 tests, all new); 11 e2e suites / 70 tests passed (was 9/59 — +2 suites/+11 tests). Zero regressions on `identidad`/`catalogo` |
+| `pnpm build` (`services/core-api`) | `tsc -p tsconfig.build.json` — clean |
+| `pnpm run format:check` (workspace root) | First run: 5 files flagged (line-wrap issues across the new `kysely-consumption.repository.spec.ts`/`kysely-pet.repository.spec.ts`/`configurar-consumo.use-case.spec.ts`/2 e2e files) → fixed via `npx prettier --write` on those 5 files only → re-ran `format:check`/`lint`/`typecheck`/`pnpm test`/`pnpm build` again — all green (same recurring formatting-only gap as every prior batch) |
+
+## Deviations from Design
+
+**One structural gap, deliberately deferred, not fixed in this PR**: design.md D-A states `configurarConsumo` clears the debounce marker (`stock_bajo_notificado_at`) on a full reconfiguration ("Reescribe la configuración completa... Un ítem reconfigurado es un contexto de alerta nuevo"), via `limpiarMarcaStockBajo`. That method still throws "not yet available" (its real implementation lands in PR 6a per design.md's own PR table and tasks.md's Phase 6a scope) — calling it from `ConfigurarConsumoUseCase` in this PR would break every write with a runtime throw. tasks.md's own task 3.10 description does not mention calling `limpiarMarcaStockBajo` either ("`findById` on `PET_REPOSITORY` before `save`, `randomUUID()` for the new id" — no debounce-clear step named). This is consistent with design.md's own dependency ordering (D-A's debounce machinery genuinely cannot exist before PR6a's CAS methods land), and is a no-op gap today regardless: no cron exists yet, so `stock_bajo_notificado_at` can never be non-null on any row `configurarConsumo` might reconfigure. Flagging here so PR6a's implementer wires the call into `ConfigurarConsumoUseCase` (not just the cron) when `limpiarMarcaStockBajo` lands for real — otherwise this D-A requirement stays silently unmet past PR6a.
+
+Everything else matches design.md verbatim: the D-H.3 ownership check order (pet lookup BEFORE `crear()`/`save()`, zero partial writes on the reject path), the byte-identical 404 rule for "missing" vs. "foreign" `petId` (Diagrama 3), the D8 "no DTO exposes `userId`" structural guarantee (enforced by both the DTOs' field absence AND `main.ts`'s global `ValidationPipe({whitelist:true, forbidNonWhitelisted:true})`, proven at the e2e layer), `randomUUID()` id generation in the use case (D-H.1), and `KyselyPetRepository`/`KyselyConsumptionRepository.save()`'s upsert-on-`id` shape (mirroring `KyselyCompanyRepository`'s simplest-case precedent, since neither `Pet` nor `UserConsumption` has `ProviderCatalogItem`'s bifurcated conflict target).
+
+## Issues Found
+
+**Line-count risk flagged for the orchestrator/reviewer, same pattern as PR2b's batch**: this batch's actual diff is ~380 changed lines across 8 modified files plus ~1200 lines across 12 new files (≈1580 total), well above tasks.md's own PR3 estimate (350-450 lines) and the general 400-line review-budget default. The overage is driven by comprehensive RED-test coverage under strict TDD (30 new/changed unit tests across 5 RED/GREEN cycles, plus 11 new e2e tests across 2 new suites) — no scope crept beyond tasks.md's exact 3.1–3.16 list, and no file outside this PR's assigned scope was touched. Flagging per the review-workload-guard rule rather than silently exceeding it; the maintainer's `stacked-to-main` chain strategy (already resolved in tasks.md, "Decision needed before apply: No") means this PR is still merged as its own independent, reviewable unit regardless of the overage — no re-split action taken without an explicit maintainer call, consistent with how PR2b's own overage was handled.
+
+Otherwise none: all RED tests failed for the expected reason (module-not-found, or a real throwing stub / missing map entry), all GREEN implementations passed on first run after being written, and both e2e suites passed on first run with zero fix-up.
+
+## What PR4 (next batch) should know
+
+- `ConsumptionRepository`'s Kysely adapter now has 2 real methods
+  (`findById`, `save`) and 4 throwing stubs — PR4 extends the SAME file
+  (`kysely-consumption.repository.ts`) to implement `descontarStock`
+  (D-H.2, atomic clamp-at-0 decrement).
+- `ConsumptionLogRepository` has ZERO implementers still — PR4 creates
+  `kysely-consumption-log.repository.ts` (first caller), per tasks.md 4.3/4.4.
+- `ConfigurarConsumoUseCase` is the reference shape for
+  `MarcarDosisTomadaUseCase`'s D6 transactional write (same `findById` →
+  compare `userId` → 404-before-any-write pattern, but PR4 additionally
+  needs `TRANSACTION_MANAGER.runInTransaction` wrapping `append`+
+  `descontarStock`, which this PR's use cases do NOT inject — `Mapa de
+  transacciones` table: `configurarConsumo` needs no transaction, only
+  `marcarDosisTomada` does).
+- `ConsumoExceptionFilter`'s `@Catch()`/`ERROR_STATUS_MAP` is designed to be
+  extended in place (append, not replace) — PR4 adds
+  `DosisInvalidaError`→400 to the SAME file's spec and implementation.
+- `ConsumoController` currently has 3 routes (`POST mis-mascotas`,
+  `POST mis-consumos`, `GET .../dias-restantes`) — PR4 adds
+  `POST /consumo/mis-consumos/:consumptionId/dosis` (204) to the SAME
+  controller file/class.
+- `consumo.module.ts`'s `providers` array grows incrementally — PR4 adds
+  `CONSUMPTION_LOG_REPOSITORY`→`KyselyConsumptionLogRepository` and
+  `MarcarDosisTomadaUseCase`. `exports: []` still holds and should keep
+  holding through PR7's final audit.
+- **The D-A debounce-clear gap named above under "Deviations from Design"**:
+  PR6a's `limpiarMarcaStockBajo` implementer should also wire a call into
+  `ConfigurarConsumoUseCase` (not just the cron), or explicitly re-confirm
+  in that batch's own report why deferring it further is still safe.
+- Per tasks.md's 10-PR chain, PR4's scope is `descontarStock` (atomic,
+  D-H.2) + `MarcarDosisTomadaUseCase` (transactional, D6) + `DosisRegistrada`
+  event + `POST .../dosis` route + e2e. Estimated 350-450 lines, Medium
+  risk — given this batch's (and PR2b's) actual overage vs. their own
+  estimates, PR4 should budget review time generously rather than assume
+  the tasks.md estimate is a hard ceiling.
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, per tasks.md's Review Workload
+  Forecast — resolved by the maintainer to sub-split PR2/PR6, "Decision
+  needed before apply: No")
+- Current work unit: Unit 3 "Escritura: `registrarMascota` + `configurarConsumo`" — PR3
+- Boundary: starts from PR2b's read path (`main` @ `7ff9875`); ends with a
+  fully compiling, fully tested write-path commit — `PetRepository`'s first
+  implementer, `ConsumptionRepository.save()`, both mutating use cases, 2
+  new `POST` routes, extended DTOs/mapper/exception-filter/module wiring,
+  plus e2e proof of D-H.3 (404 on a foreign `petId`) and D8 (DTO rejects a
+  client-supplied `userId`), all gates green
+- Estimated review budget impact: ≈1580 changed lines — ABOVE tasks.md's own
+  350-450 estimate and above the 400-line default budget; flagged above
+  under "Issues Found" for reviewer awareness, no further split taken
+  (scope was fixed by the orchestrator's explicit task assignment, same
+  precedent as PR2b)
+
+## Status (cumulative)
+
+41/41 tasks complete across PR1 (10/10) + PR2a (6/6) + PR2b (9/9) + PR3
+(16/16). Ready for next batch: PR4, Phase 4 — dosis (`descontarStock`
+atómico + `marcarDosisTomada` transaccional + evento `DosisRegistrada`).

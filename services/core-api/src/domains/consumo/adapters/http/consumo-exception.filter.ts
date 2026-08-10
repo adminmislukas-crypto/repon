@@ -5,7 +5,12 @@ import {
   type ArgumentsHost,
   type ExceptionFilter,
 } from '@nestjs/common';
-import { ConsumptionNotFoundError } from '../../domain/consumo.errors';
+import {
+  ConsumoInvalidoError,
+  ConsumptionNotFoundError,
+  MascotaInvalidaError,
+  PetNotFoundError,
+} from '../../domain/consumo.errors';
 
 interface ResponseLike {
   status(code: number): { json(body: unknown): void };
@@ -21,15 +26,18 @@ interface StatusAndCode {
 // plain-`Error` subclasses maps to at this domain's HTTP boundary. A lookup
 // keyed by constructor, not an instanceof-chain, so a new error class is a
 // one-line append — mirrors `CatalogoExceptionFilter` exactly.
-// `ConsumptionNotFoundError` is the only mapped class in this PR (2b) — the
-// first HTTP-reachable route/error pair (`GET .../dias-restantes`).
-// `PetNotFoundError`/`ConsumoInvalidoError`/`MascotaInvalidaError`/
-// `DosisInvalidaError` are appended here as PR3/PR4's use cases/routes
-// start throwing them.
+// `ConsumptionNotFoundError` landed in PR2b (`GET .../dias-restantes`).
+// `PetNotFoundError`/`ConsumoInvalidoError`/`MascotaInvalidaError` land in
+// this PR (3) — `RegistrarMascotaUseCase`/`ConfigurarConsumoUseCase`'s real
+// callers now exist. `DosisInvalidaError` is appended here as PR4's use
+// case/route starts throwing it.
 type ErrorConstructor = new (...args: never[]) => Error;
 
 const ERROR_STATUS_MAP = new Map<ErrorConstructor, StatusAndCode>([
   [ConsumptionNotFoundError, { statusCode: HttpStatus.NOT_FOUND, code: 'CONSUMPTION_NOT_FOUND' }],
+  [PetNotFoundError, { statusCode: HttpStatus.NOT_FOUND, code: 'PET_NOT_FOUND' }],
+  [MascotaInvalidaError, { statusCode: HttpStatus.BAD_REQUEST, code: 'MASCOTA_INVALIDA' }],
+  [ConsumoInvalidoError, { statusCode: HttpStatus.BAD_REQUEST, code: 'CONSUMO_INVALIDO' }],
 ]);
 
 /**
@@ -46,7 +54,7 @@ const ERROR_STATUS_MAP = new Map<ErrorConstructor, StatusAndCode>([
  * Nest falls through to `main.ts`'s `GlobalExceptionFilter` instead of this
  * filter inventing a second, competing catch-all.
  */
-@Catch(ConsumptionNotFoundError)
+@Catch(ConsumptionNotFoundError, PetNotFoundError, MascotaInvalidaError, ConsumoInvalidoError)
 export class ConsumoExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(ConsumoExceptionFilter.name);
 

@@ -36,14 +36,45 @@ export function mapUserConsumptionRow(row: Selectable<UserConsumptionTable>): Us
 }
 
 /**
+ * Reverse of `mapUserConsumptionRow` — entity -> `insertInto('user_consumption')`
+ * values. `dosisPorToma`/`stockActual` go back through the same
+ * `numeric`-as-`string` gotcha: `.toFixed(2)`, never a raw `number` — by the
+ * time an item reaches `save()` the domain has already validated it
+ * (`user-consumption.entity.ts`'s `crear()`), this is formatting, not
+ * re-validating. `stock_bajo_notificado_at` is deliberately absent from both
+ * `values` and `update` here — D-A: it is written ONLY by the two narrow CAS
+ * methods (`intentarMarcarStockBajo`/`limpiarMarcaStockBajo`, PR 6a),
+ * `save()` never touches it, on a fresh insert (`null` — the DB column's
+ * default) or an update alike.
+ */
+function toUserConsumptionValues(item: UserConsumption) {
+  return {
+    id: item.id,
+    user_id: item.userId,
+    owner_type: item.ownerType,
+    pet_id: item.petId ?? null,
+    kind: item.kind,
+    nombre: item.nombre,
+    dosis_por_toma: item.dosisPorToma.toFixed(2),
+    unidad: item.unidad ?? null,
+    frecuencia_dias: item.frecuenciaDias,
+    horarios: [...item.horarios],
+    stock_actual: item.stockActual.toFixed(2),
+    auto_crear_refill: item.autoCrearRefill,
+  };
+}
+
+/**
  * `ConsumptionRepository`'s Kysely-backed implementation (design.md "Wiring
  * de módulos y tokens"). Built incrementally across the chained PR sequence,
  * same as design.md's own §"Secuencia de implementación" table plans it:
- * this PR (2b) lands `findById` — the read path `CalcularDiasRestantesUseCase`
- * needs for the D7 ownership check. The other 5 methods are declared here
- * (the interface requires all 6) but throw a named, loud error until their
- * own PR implements them — a silent no-op stub would be worse than a
- * missing provider (same principle `catalogo`'s `KyselyCatalogRepository`
+ * PR 2b landed `findById` — the read path `CalcularDiasRestantesUseCase`
+ * needs for the D7 ownership check. This PR (3) lands `save` —
+ * `ConfigurarConsumoUseCase`'s only write path. The remaining 4 methods
+ * (`findDueForCheck`, `intentarMarcarStockBajo`, `limpiarMarcaStockBajo`,
+ * `descontarStock`) still throw a named, loud error until their own PR
+ * implements them — a silent no-op stub would be worse than a missing
+ * provider (same principle `catalogo`'s `KyselyCatalogRepository`
  * established for its own `save`/`saveMany` in its equivalent PR).
  */
 @Injectable()
@@ -54,11 +85,23 @@ export class KyselyConsumptionRepository implements ConsumptionRepository {
     return tx ? toKyselyTransaction(tx) : this.db;
   }
 
+  /**
+   * `configurarConsumo`'s only write path (D-H): insert-or-update on `id`
+   * (mirrors `KyselyPetRepository.save`/`KyselyCompanyRepository.save`'s
+   * single-column conflict target — `UserConsumption` has no bifurcated
+   * conflict the way `ProviderCatalogItem` does). `user_id` is excluded from
+   * `DO UPDATE SET` (D7: the owner never changes via `save()`), and
+   * `stock_bajo_notificado_at` is excluded too (D-A: only the CAS methods
+   * write that column — see `toUserConsumptionValues`'s doc comment).
+   */
   async save(item: UserConsumption, tx?: TransactionContext): Promise<void> {
-    throw new Error(
-      `KyselyConsumptionRepository.save(id=${item.id}, tx=${tx ? 'given' : 'none'}) is ` +
-        'implemented in PR 3 (backend-core-api-consumo, configurarConsumo) — not yet available.',
-    );
+    const values = toUserConsumptionValues(item);
+    const { id: _id, user_id: _userId, ...update } = values;
+    await this.executor(tx)
+      .insertInto('user_consumption')
+      .values(values)
+      .onConflict((oc) => oc.column('id').doUpdateSet(update))
+      .execute();
   }
 
   /**
