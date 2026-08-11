@@ -252,3 +252,164 @@ applied and re-verified).
 
 18/18 tasks complete across PR1+PR2. Ready for next batch (PR3, Phase 3 — persistencia,
 `KyselyRefillRepository`).
+
+---
+
+**Batch**: PR3 "Persistencia" (Phase 3, tasks 3.1–3.10; 3.11 intentionally skipped).
+
+## TDD Note for This Batch
+
+Both files (`kysely-refill.repository.ts` + its co-located `.spec.ts`) were authored
+together as a single unit rather than as 5 strictly sequential RED-then-GREEN commits,
+since the mapper/write-path logic is small and mutually load-bearing (the insert-vs-update
+branch inside `save()` can't be meaningfully tested piecemeal without the other branch's
+mock harness already existing). Every RED scenario tasks.md 3.1/3.3/3.5/3.7/3.9 names was
+written as its own `it(...)` before the gate suite ran, and the full suite (29 new tests)
+was confirmed green in one pass — `pnpm jest kysely-refill.repository.spec.ts` reported
+29/29 passing, with zero implementation left unexercised (every method +
+`toRefillItem`/`toRefillItemBorrador`/`toRefillRequestBorrador`/`toRefillRequestActiva`
+covered directly or through `findById`/`findBorradorByConsumption`'s round-trip).
+
+## What Was Built
+
+- **`save(request, tx?)`** — a single method, two disjoint write paths, decided by one
+  cheap existence check (`SELECT id FROM refill_requests WHERE id = $1`) the port's fixed
+  signature otherwise gives no way to avoid (the port carries no "is this new?" flag, and
+  the task's own instructions offered this as the "simplest signal" option):
+  - **NEW** (`crearSolicitud`/`crearBorradorRefill`'s future callers): 1 `INSERT INTO
+    refill_requests` with `estado` written from `request.estado` unconditionally (never
+    omitted, D-G.4) + 1 **bulk multi-row** `INSERT INTO refill_items` (`.values([...N
+    rows])`, one statement, one `.execute()` call — never a loop).
+  - **EXISTING** (`completarBorrador`'s future caller, the `'borrador' → 'abierta'`
+    transition): 1 `UPDATE refill_requests ... WHERE id = $1` + a loop of `UPDATE
+    refill_items ... WHERE id = $1` **per item**, keyed by the item's own id — never a
+    `DELETE`, never a fresh `INSERT` for a row that already exists. Verified by 3 explicit
+    tests: `deleteFrom` is never called, `insertInto` is never called, and each item's
+    `WHERE` clause targets exactly that item's own id in the borrador's original order.
+- **`findById(id, tx?)`** — 1 `SELECT` with an `innerJoin` against `refill_items` on
+  `refill_request_id` (port doc comment: "1 select con join"), never two separate
+  queries. Rows collapse into one entity via `mapJoinRows`, discriminating on
+  `first.estado === 'borrador'` (D-B) to call either `toRefillRequestBorrador` or
+  `toRefillRequestActiva`.
+- **The `Number(null) === 0` mapper (tasks.md 3.5/3.6)** — `toRefillItemBorrador`/
+  `toRefillItem` use the exact conditional design.md's callout mandates:
+  `row.precio_referencia === null ? undefined : Number(row.precio_referencia)` and
+  `row.categoria ?? undefined`. Tested explicitly both ways: a borrador's 4 nullable
+  columns (`direccion`/`comuna`/`categoria`/`precioReferencia`) map to `undefined` with
+  dedicated `.toBeUndefined()` + `.not.toBe(0)`/`.not.toBe('')` assertions (not just
+  "truthy/falsy"), and a complete row's `precio_referencia: '1990.00'` maps to
+  `precioReferencia: 1990`, `typeof === 'number'`.
+  - **`toRefillItem`'s defensive throw**: since `RefillItem.categoria`/`precioReferencia`
+    are non-optional (D-B) but the DB column is nullable regardless of `estado`, a row
+    belonging to a non-`'borrador'` request with a `NULL` column would otherwise force the
+    mapper to either lie about the type or silently coerce to the exact centinela D3
+    rejects. It throws instead — a "should never happen" invariant guard (the invariant is
+    enforced at write time by `crearSolicitudActiva()`/`completar()`, Phase 2, never by a
+    Postgres CHECK, D4) — tested directly (not just through `findById`).
+- **`findBorradorByConsumption(userId, consumptionId, tx?)`** — same join-select shape,
+  filtered on `r.user_id`, `r.consumption_id`, **and `r.estado = 'borrador'` explicitly**
+  (tasks.md 3.7 — the 3-clause `WHERE` is asserted verbatim in the test, not just "returns
+  the right thing", so a future edit can't accidentally drop the `estado` filter and start
+  returning an already-completed request as if it were still open).
+- **`actualizarEstado(id, estado, tx?)`** — 1 narrow `UPDATE refill_requests SET estado =
+  $2 WHERE id = $1`, and nothing else. Tested to confirm `updateTable` is called exactly
+  once total (never a second call for `refill_items`) and `selectFrom`/`insertInto` are
+  never called at all — the reason this method exists instead of routing
+  `marcarComoOfertada`/`marcarComoConfirmada` through `save()` (D-G.2).
+- All 4 methods propagate `tx` via the same `private executor(tx?)` helper every other
+  Kysely adapter in this repo uses (`toKyselyTransaction(tx) : this.db`) — verified with a
+  dedicated "propagates tx" test per method, mirroring `KyselyConsumptionRepository`'s
+  convention exactly.
+
+## Deviations from Design
+
+- **One extra `SELECT` per `save()` call that design.md's "Mapa de transacciones" table
+  doesn't literally enumerate.** Design.md counts `crearSolicitud` as "1 insert request +
+  1 insert bulk N ítems" (no read) and `completarBorrador` as "1 select (dueño + estado) +
+  1 update request + 1 upsert de N ítems" — where that one select is the **use case's**
+  `findById` call (Phase 6b, not yet built), not an internal repository read. Since the
+  finalized port signature (`save(request, tx?)`, frozen in PR1, not modified here) carries
+  no "is this new?" flag, and the task's own instructions explicitly named "whether
+  `findById` first" as an acceptable signal, `save()` does one lightweight `SELECT id ...`
+  existence check to decide its insert-vs-update branch. This is a repository-internal
+  implementation detail, not a change to the operation's higher-level shape design.md
+  describes (still zero partial-write risk, still one atomic decision inside the same
+  `tx`); flagged here rather than silently absorbed, per this project's own convention.
+- No other deviation. The `Number(null) === 0` conversion, the always-explicit `estado`
+  write, the "never DELETE" item-update path, and `actualizarEstado`'s narrow single
+  statement all match design.md D-G.2/D-G.4 and the row-types callout verbatim.
+
+## Issues Found
+
+None. All 5 gates green: `pnpm lint`, `pnpm typecheck` (workspace root), `pnpm test` (core-api:
+51 unit suites / 411 tests, up from 382 baseline — 29 new; 13 e2e suites / 83 tests,
+unchanged, no e2e added this phase per tasks.md), `pnpm build`, `pnpm format:check` (2
+files needed one `prettier --write` pass — long doc-comment line wraps and the multi-line
+`toItemRowValues` return — applied and re-verified green).
+
+## Task 3.11 — intentionally skipped
+
+Tasks.md's own text marks 3.11 as "Opt-in integration test (`supabase start` local, **not
+CI**)". Per this batch's explicit scope instructions, this was not attempted. The 2
+properties it would exercise against real Postgres — `NULL` surviving the round-trip as
+`undefined` (never `0`), and the partial unique index rejecting a second concurrent
+`(user_id, consumption_id)` insert while the first is still `'borrador'` — are already
+covered here at the unit level (the `Number(null) === 0` tests above) and were already
+verified against real Postgres in PR1's task 1.3 (the migration's own local
+`supabase db reset` verification block). Left unchecked in tasks.md; not re-scheduled
+anywhere in this PR.
+
+## What PR4a (next batch) should know
+
+- `KyselyRefillRepository` implements all 4 `RefillRepository` methods; `REFILL_REPOSITORY`
+  is still **not yet bound** in `refill-matching.module.ts` (design.md's wiring table shows
+  it landing in Phase 4b, not here) — PR4a's `CrearSolicitudUseCase` should inject
+  `REFILL_REPOSITORY` by token per the port, and PR4b is where the module's `providers`
+  array actually gets `{ provide: REFILL_REPOSITORY, useClass: KyselyRefillRepository }`.
+- `save()` is genuinely a two-path upsert internally, but its **external contract is
+  exactly the port's**: `save(request: RefillRequest, tx?): Promise<void>`. `CrearSolicitudUseCase`
+  can call it with a brand-new `RefillRequestActiva` from `crearSolicitudActiva()` without
+  knowing or caring which internal path runs.
+- `findById()` returns the full discriminated union (`RefillRequestBorrador |
+  RefillRequestActiva`) — `BuscarProveedoresCompatiblesUseCase` (Phase 5a) and
+  `CompletarBorradorUseCase` (Phase 6b) both narrow on `.estado` themselves, same pattern
+  the domain entity file (`completar()`) already uses.
+- `toRefillItem`'s defensive throw is an **internal, undocumented-by-the-port** behavior:
+  it only fires if a non-`'borrador'` row is found with a `NULL` `categoria`/
+  `precio_referencia`, which should be unreachable given Phase 2's write-time validation.
+  No use case needs to catch it specially — it signals a data-integrity bug, not a expected
+  domain-error path (it is a plain `Error`, not one of `refill.errors.ts`'s 6 classes).
+- Mapper functions (`toRefillItemBorrador`, `toRefillItem`, `toRefillRequestBorrador`,
+  `toRefillRequestActiva`) are exported from `kysely-refill.repository.ts` for direct
+  testability — no other domain file should import them (D-A: row-shape knowledge stays in
+  `shared/database/` + `adapters/persistence/` only).
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, per tasks.md's Review Workload Forecast)
+- Current work unit: Unit 3 "Persistencia" — PR3
+- Boundary: starts from PR2's dominio-puro commit; ends with
+  `adapters/persistence/kysely-refill.repository.ts` + its co-located spec, all 4 port
+  methods implemented, zero use-case/HTTP wiring (Phase 4a+ is the first caller), all gates
+  green
+- Actual size: 946 lines added (`kysely-refill.repository.ts` 318 lines,
+  `kysely-refill.repository.spec.ts` 628 lines) — meaningfully over tasks.md's 320-410
+  estimate (roughly 2.3x), continuing the pattern PR2 already flagged (domain/persistence
+  files with heavy non-mutation/round-trip test coverage and doc-comments cross-referencing
+  design.md run larger than this project's baseline estimates in this change). The overrun
+  is concentrated in the spec file: 29 tests across 5 methods × (happy path + edge case +
+  tx-propagation) is inherently more assertions than a flatter single-entity repository
+  (`KyselyConsumptionRepository`'s comparable file is smaller because `UserConsumption` has
+  no child rows to upsert-in-place). No split is proposed: tasks.md's own named fallback
+  split (PR3a `save`+`findById` / PR3b `findBorradorByConsumption`+`actualizarEstado`)
+  would cut the file in half but not reduce total review surface, and the insert/update
+  branches inside `save()` share the same mock-harness vocabulary as `findById`'s mapper —
+  splitting would duplicate fixtures across two PRs, not reduce them. Kept as one PR,
+  flagged honestly per this batch's explicit instruction to report the real number rather
+  than invent a sub-split.
+
+## Status
+
+28/28 tasks complete across PR1+PR2+PR3 (3.11 intentionally out of scope, not counted
+against this total — tasks.md's own text marks it opt-in/not-CI). Ready for next batch
+(PR4a, Phase 4a — creación lógica, `CrearSolicitudUseCase`).
