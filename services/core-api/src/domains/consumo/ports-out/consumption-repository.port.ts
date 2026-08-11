@@ -84,10 +84,14 @@ export interface ConsumptionRepository {
 
   /**
    * Idempotent on purpose: 0 rows affected (already clear) is success, not
-   * an error — called both by the cron (stock replenished above threshold)
-   * and by `configurarConsumo` (a full reconfiguration is a new alert
-   * context). Never called by `marcarDosisTomada`, which can only lower
-   * stock and can never resolve the alert condition.
+   * an error — called by the cron (stock replenished above threshold).
+   * NOT called by `configurarConsumo`: that use case is create-only
+   * (`NuevoConsumoInput`, no `consumptionId` param), so there is no
+   * "reconfigure an existing item" path in this change for it to clear the
+   * marker from (`consumo/SPEC.md`'s declared delta, "el marcador de
+   * debounce y `configurarConsumo`"). Never called by `marcarDosisTomada`
+   * either, which can only lower stock and can never resolve the alert
+   * condition.
    */
   limpiarMarcaStockBajo(consumptionId: string, tx?: TransactionContext): Promise<void>;
 
