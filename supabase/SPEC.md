@@ -132,6 +132,7 @@ Migrado en `supabase/migrations/20260803120200_02_consumo.sql`.
 | horarios | text[] | NOT NULL |
 | stock_actual | numeric | NOT NULL |
 | auto_crear_refill | boolean | NOT NULL |
+| stock_bajo_notificado_at | timestamptz | NULL (backend-core-api-consumo D5/D-A: marcador de debounce del cron diario; NULL = sin alerta abierta) |
 | created_at / updated_at | timestamptz | NOT NULL DEFAULT `now()` |
 
 `owner_type`: `'self' \| 'pet'`. `consumption_kind`: `'medicamento' \| 'alimento' \| 'vacuna' \| 'suplemento'`.
@@ -421,7 +422,7 @@ Runbook completo en `openspec/changes/backend-supabase-migrations/design.md` D-5
 | Función | Dispara | Hace |
 |---|---|---|
 | `match-refill-request` | Al crear una `refill_request` | Busca `provider_catalog` compatible por categoría + zona, genera ofertas automáticas para proveedores con auto-oferta activada |
-| `check-consumption-stock` | Cron diario (`pg_cron`) | Recalcula días de stock restante por `user_consumption`, dispara notificación si está bajo, o genera `refill_request` automática si el usuario lo activó |
+| `check-consumption-stock` | ~~Cron diario (`pg_cron`)~~ **Superseded (backend-core-api-consumo D11)**: no es una Edge Function ni corre vía `pg_cron` — es `ProcesarConsumosVencidosUseCase`, invocado in-process por `@nestjs/schedule`'s `@Cron('0 9 * * *', tz=America/Santiago)` dentro de `core-api` (`adapters/scheduling/consumption-check.job.ts`) | Recalcula días de stock restante por `user_consumption`, dispara notificación si está bajo, o genera `refill_request` automática si el usuario lo activó |
 | `find-proactive-opportunities` | Cron diario | Detecta usuarios próximos a refill (por `user_consumption`) y las expone a proveedores en su sección de "solicitudes proactivas" |
 | `payment-webhook` | Callback de Webpay/MercadoPago | Verifica el pago, crea el `order` a partir de la `offer` aceptada, notifica al proveedor |
 

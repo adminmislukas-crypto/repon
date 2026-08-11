@@ -214,9 +214,13 @@ export class KyselyConsumptionRepository implements ConsumptionRepository {
    * stock_bajo_notificado_at = NULL WHERE id = $1` affects 0 rows when the
    * marker is already clear, and that is success, not an error; no
    * special-casing needed. Called by the cron (stock replenished above
-   * threshold) and by `configurarConsumo` (a full reconfiguration is a new
-   * alert context) — never by `marcarDosisTomada`, which can only lower
-   * stock and can never resolve the alert condition.
+   * threshold). NOT called by `configurarConsumo`: that use case is
+   * create-only (`NuevoConsumoInput`, no `consumptionId` param), so there is
+   * no "reconfigure an existing item" path in this change for it to clear
+   * the marker from (`consumo/SPEC.md`'s declared delta, "el marcador de
+   * debounce y `configurarConsumo`"). Never called by `marcarDosisTomada`
+   * either, which can only lower stock and can never resolve the alert
+   * condition.
    */
   async limpiarMarcaStockBajo(consumptionId: string, tx?: TransactionContext): Promise<void> {
     await this.executor(tx)
