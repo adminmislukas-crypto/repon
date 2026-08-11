@@ -80,4 +80,21 @@ describe('validateEnv', () => {
   it('rejects an AUTH_JWT_MODE outside the hs256|jwks union', () => {
     expect(() => validateEnv({ ...validHs256Env, AUTH_JWT_MODE: 'none' })).toThrow(InvalidEnvError);
   });
+
+  // consumo design.md D-E: CONSUMO_CRON_ENABLED is a STRING enum
+  // ('true'|'false'), deliberately never z.coerce.boolean() (Boolean('false')
+  // === true in JS — the exact footgun D-E rejects). Any value outside the
+  // two-literal union is a fail-fast boot error, same as an invalid
+  // AUTH_JWT_MODE above.
+  it('rejects a CONSUMO_CRON_ENABLED value outside the true|false union', () => {
+    expect(() => validateEnv({ ...validHs256Env, CONSUMO_CRON_ENABLED: 'yes' })).toThrow(
+      InvalidEnvError,
+    );
+  });
+
+  it('defaults CONSUMO_CRON_ENABLED to "true" when absent', () => {
+    const result = validateEnv(validHs256Env);
+
+    expect(result.CONSUMO_CRON_ENABLED).toBe('true');
+  });
 });

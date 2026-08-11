@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { validateEnv } from './config/env.schema';
 import { CatalogoModule } from './domains/catalogo/catalogo.module';
 import { ConsumoModule } from './domains/consumo/consumo.module';
@@ -35,6 +36,13 @@ import { SharedKernelModule } from './shared/shared-kernel.module';
       // itself, before `app.listen()` is ever reached (see env.schema.ts).
       validate: validateEnv,
     }),
+    // consumo design.md D1: activates `@Cron()`/`@Interval()`/`@Timeout()`
+    // decorator processing repo-wide via reflection — without this,
+    // `adapters/scheduling/consumption-check.job.ts`'s `@Cron()` decorator
+    // is inert. First scheduled adapter in the repo (`consumo`); no
+    // dependency on `SharedKernelModule` in either direction, so ordering
+    // here is not load-bearing.
+    ScheduleModule.forRoot(),
     SharedKernelModule,
     IdentidadModule,
     CatalogoModule,

@@ -168,15 +168,15 @@ Depende de 6a (métodos del repo) y Phase 5 (`NOTIFICATION_PORT` real).
 
 Depende de 6b (el caso de uso que el `@Cron()` invoca).
 
-- [ ] 6c.1 Add `@nestjs/schedule` to `services/core-api/package.json` — the ONE new dependency this change adds (D-G confirms no Expo client).
-- [ ] 6c.2 `config/env.schema.ts`: add `CONSUMO_CRON_ENABLED: z.enum(['true','false']).default('true')` (D-E; `z.coerce.boolean()` explicitly rejected).
-- [ ] 6c.3 RED (extend `config/env.schema.spec.ts`): invalid value for `CONSUMO_CRON_ENABLED` fails startup validation.
-- [ ] 6c.4 GREEN: confirm 6c.2's schema addition satisfies 6c.3.
-- [ ] 6c.5 `app.module.ts`: add `ScheduleModule.forRoot()` to `imports` (D1).
-- [ ] 6c.6 `adapters/scheduling/consumption-check.job.ts` (NEW — first scheduled adapter in the repo): `@Cron('0 9 * * *', { name, timeZone: 'America/Santiago', disabled: process.env.CONSUMO_CRON_ENABLED === 'false' })`, exactly one call to `procesarConsumosVencidos.execute()`, zero other logic (D1 — no dedicated unit test by design; verifiable by inspection).
-- [ ] 6c.7 `consumo.module.ts`: register `ProcesarConsumosVencidosUseCase`, `ConsumptionCheckJob` (in `providers`, not `controllers`); confirm `exports: []` still holds.
-- [ ] 6c.8 Opt-in integration test (`supabase start` local): two concurrent `intentarMarcarStockBajo` calls on the same row — one `true`, one `false` (the CAS row-lock proof, D-E/R10).
-- [ ] 6c.9 E2e: confirm no HTTP route reaches `procesarConsumosVencidos` (core-api-consumo "procesarConsumosVencidos has no HTTP surface" — route-enumeration assertion).
+- [x] 6c.1 Add `@nestjs/schedule` to `services/core-api/package.json` — the ONE new dependency this change adds (D-G confirms no Expo client).
+- [x] 6c.2 `config/env.schema.ts`: add `CONSUMO_CRON_ENABLED: z.enum(['true','false']).default('true')` (D-E; `z.coerce.boolean()` explicitly rejected).
+- [x] 6c.3 RED (extend `config/env.schema.spec.ts`): invalid value for `CONSUMO_CRON_ENABLED` fails startup validation.
+- [x] 6c.4 GREEN: confirm 6c.2's schema addition satisfies 6c.3.
+- [x] 6c.5 `app.module.ts`: add `ScheduleModule.forRoot()` to `imports` (D1).
+- [x] 6c.6 `adapters/scheduling/consumption-check.job.ts` (NEW — first scheduled adapter in the repo): `@Cron('0 9 * * *', { name, timeZone: 'America/Santiago', disabled: process.env.CONSUMO_CRON_ENABLED === 'false' })`, exactly one call to `procesarConsumosVencidos.execute()`, zero other logic (D1 — no dedicated unit test by design; verifiable by inspection).
+- [x] 6c.7 `consumo.module.ts`: register `ProcesarConsumosVencidosUseCase`, `ConsumptionCheckJob` (in `providers`, not `controllers`); confirm `exports: []` still holds.
+- [x] 6c.8 Opt-in integration test (`supabase start` local): two concurrent `intentarMarcarStockBajo` calls on the same row — one `true`, one `false` (the CAS row-lock proof, D-E/R10).
+- [x] 6c.9 E2e: confirm no HTTP route reaches `procesarConsumosVencidos` (core-api-consumo "procesarConsumosVencidos has no HTTP surface" — route-enumeration assertion).
 
 ## Phase 7: Cierre — Spec: all 5 delta specs
 

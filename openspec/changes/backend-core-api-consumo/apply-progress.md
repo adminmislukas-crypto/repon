@@ -1257,3 +1257,196 @@ under-reporting it.
 batch: PR6c, Phase 6c — scheduling adapter (`@nestjs/schedule`,
 `CONSUMO_CRON_ENABLED`, the thin `@Cron()` class, and
 `consumo.module.ts`'s final wiring for both new providers).
+
+---
+
+# Batch: PR6c "Adaptador de scheduling + dependencia + env" (Phase 6c, tasks 6c.1–6c.9)
+
+**Mode**: Strict TDD (project-wide `strict_tdd: true`). This batch introduces
+the FIRST scheduled/cron adapter in the entire repository.
+
+## TDD Cycle Evidence
+
+| Task | RED | GREEN | REFACTOR |
+|---|---|---|---|
+| 6c.3/6c.4 `CONSUMO_CRON_ENABLED` env validation | Wrote 2 new tests in `env.schema.spec.ts` first; then temporarily `git stash`-reverted 6c.2's `baseEnvSchema` addition (the only way to get a genuine failing state, since an unknown key is silently ignored by a non-`.strict()` Zod object) and ran `jest env.schema.spec.ts` → 2/2 new tests failed for the right reason (`'yes'` did not throw; `CONSUMO_CRON_ENABLED` was `undefined` instead of defaulting to `'true'`) — confirmed RED against real pre-6c.2 code, not a typo | `git stash pop` restored 6c.2's `CONSUMO_CRON_ENABLED: z.enum(['true','false']).default('true')` field; re-ran → 11/11 passed (9 pre-existing + 2 new) | None needed |
+
+Tasks 6c.1 (`@nestjs/schedule` dependency), 6c.2 (the schema field itself),
+6c.5 (`ScheduleModule.forRoot()`), 6c.6 (`ConsumptionCheckJob`), and 6c.7
+(`consumo.module.ts` wiring) are explicitly NOT RED/GREEN tasks per the
+launch scope ("non-behavioral wiring/config... no RED/GREEN split needed,
+just implement them correctly") — same class as PR1's groundwork tasks.
+6c.6 in particular is, per tasks.md's own text, "no dedicated unit test by
+design; verifiable by inspection" — no `.spec.ts` was written for
+`consumption-check.job.ts`, deliberately. 6c.8 (opt-in integration test) and
+6c.9 (e2e) are not RED/GREEN either (no prior "not yet implemented" stub to
+fail against — `intentarMarcarStockBajo` was already fully implemented in
+PR6a) — both were written directly and passed on first run against this
+sandbox's live local Supabase / full `AppModule` boot respectively (5/5 and
+2/2 — see "Commands Run and Results").
+
+## Completed Tasks (9/9 in this batch)
+
+- [x] 6c.1 Added `@nestjs/schedule` to `services/core-api/package.json` (via `pnpm --filter core-api add @nestjs/schedule`, real install, not a hand-edited lockfile)
+- [x] 6c.2 `config/env.schema.ts`: `CONSUMO_CRON_ENABLED: z.enum(['true','false']).default('true')` added to `baseEnvSchema`
+- [x] 6c.3 RED (extended `config/env.schema.spec.ts`): invalid `CONSUMO_CRON_ENABLED` value fails validation
+- [x] 6c.4 GREEN: confirmed 6c.2's schema addition alone satisfies 6c.3 (verified via the stash/pop revert-and-restore cycle above)
+- [x] 6c.5 `app.module.ts`: `ScheduleModule.forRoot()` added to `imports`
+- [x] 6c.6 `adapters/scheduling/consumption-check.job.ts` (NEW — first `adapters/scheduling/` folder and first `@Cron()` in the repo)
+- [x] 6c.7 `consumo.module.ts`: registered `ProcesarConsumosVencidosUseCase` and `ConsumptionCheckJob` in `providers` (not `controllers`); confirmed `exports: []` still holds
+- [x] 6c.8 Opt-in integration test `test/consumo-cron-cas-race.integration-spec.ts` — executed for real against this sandbox's live local Supabase (not just written and left unexecuted)
+- [x] 6c.9 E2e `test/consumo-cron-no-http-surface.e2e-spec.ts` — route-enumeration assertion via Nest's own route/module decorator metadata
+
+## Files Changed
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `services/core-api/package.json` | Modified | Added `"@nestjs/schedule": "^6.1.3"` to `dependencies`, same caret-range pinning style as every other dependency in the file |
+| `pnpm-lock.yaml` | Modified | Real `pnpm --filter core-api add @nestjs/schedule` install (35-line lockfile diff) — the corporate CodeArtifact registry configured in `~/.npmrc` returned `401 Unauthorized` (expired token) on the first attempt; the install succeeded by pointing at the public registry explicitly (`--registry=https://registry.npmjs.org/`), an environment workaround, not a design decision |
+| `services/core-api/src/config/env.schema.ts` | Modified | Added `CONSUMO_CRON_ENABLED: z.enum(['true','false']).default('true')` to `baseEnvSchema` (D-E) — a STRING enum, deliberately never `z.coerce.boolean()`, doc-commented with the `Boolean('false') === true` footgun rationale |
+| `services/core-api/src/config/env.schema.spec.ts` | Modified | 2 new tests: invalid value rejected (`InvalidEnvError`), default `'true'` when absent |
+| `services/core-api/src/app.module.ts` | Modified | Imported `ScheduleModule` from `@nestjs/schedule`; added `ScheduleModule.forRoot()` to `imports`, placed after `ConfigModule.forRoot(...)` and before `SharedKernelModule`, doc-commented (D1) |
+| `services/core-api/src/domains/consumo/adapters/scheduling/consumption-check.job.ts` | Created (NEW folder) | `ConsumptionCheckJob` — one constructor-injected `ProcesarConsumosVencidosUseCase`, one `@Cron('0 9 * * *', { name: 'consumo.chequeo-stock-diario', timeZone: 'America/Santiago', disabled: process.env.CONSUMO_CRON_ENABLED === 'false' })`-decorated `ejecutar()` method, one `await` call — zero other logic (D1). No `.spec.ts` (deliberate, per tasks.md 6c.6's own text) |
+| `services/core-api/src/domains/consumo/consumo.module.ts` | Modified | Registered `ProcesarConsumosVencidosUseCase` and `ConsumptionCheckJob` in `providers` (never `controllers`); rewrote the class doc comment to explain how `@Cron()` is discovered via reflection over providers (same mechanism as `catalogo`'s `@OnEvent` listener); `exports: []` unchanged |
+| `services/core-api/test/consumo-cron-cas-race.integration-spec.ts` | Created | 2 tests against real local Postgres: two concurrent `intentarMarcarStockBajo` calls on the same row resolve exactly one `true`/one `false` (the CAS row-lock proof, D-A/D-E/R10); a third sequential claim after the row is already marked always loses |
+| `services/core-api/test/consumo-cron-no-http-surface.e2e-spec.ts` | Created | 5 tests: `ConsumoModule.controllers` is exactly `[ConsumoController]`; `ConsumoModule.providers` contains `ConsumptionCheckJob`/`ProcesarConsumosVencidosUseCase`; `ConsumoController`'s entire real route table (via `PATH_METADATA`/`METHOD_METADATA` reflection — the same metadata Nest's own `RoutesResolver` reads) is exactly the 4 routes design.md's Superficie HTTP table names, none cron-related; `ConsumptionCheckJob`'s own methods carry no `PATH_METADATA`; a full `AppModule` boot proves `SchedulerRegistry` actually holds the `'consumo.chequeo-stock-diario'` cron job once wired end to end |
+| `openspec/changes/backend-core-api-consumo/tasks.md` | Modified | Tasks 6c.1–6c.9 marked `[x]` |
+
+## Commands Run and Results
+
+| Command | Result |
+|---|---|
+| `pnpm --filter core-api add @nestjs/schedule` | First attempt: `[ERR_PNPM_FETCH_401]` against the corporate CodeArtifact registry configured in `~/.npmrc` (expired `_authToken`) — an environment issue, not a task blocker. Retried with `--registry=https://registry.npmjs.org/` → succeeded, `@nestjs/schedule@6.1.3` installed, `package.json`/`pnpm-lock.yaml` both updated for real |
+| Inspected installed `@nestjs/schedule@6.1.3`'s `.d.ts` (`cron.decorator.d.ts`, `schedule.module.d.ts`) | Confirmed `timeZone` (capital Z, not `timezone`) is the correct `CronOptions` key; `disabled?: boolean` defaults to `false`; `ScheduleModule.forRoot(options?)` takes no required args — design.md's own code sample matches this version's real API exactly, no adjustment needed |
+| `jest env.schema.spec.ts` (RED, `CONSUMO_CRON_ENABLED` field temporarily reverted via `git stash`) | 2/2 new tests failed for the right reason: `'yes'` did not throw; `CONSUMO_CRON_ENABLED` was `undefined` |
+| `git stash pop` + `jest env.schema.spec.ts` (GREEN) | 11/11 passed (9 pre-existing + 2 new) |
+| `pnpm typecheck` (`services/core-api`) | `tsc -p tsconfig.json --noEmit` — clean |
+| `pnpm exec jest --config ./test/jest-integration.json test/consumo-cron-cas-race.integration-spec.ts` | 2/2 passed against this sandbox's live local Supabase (`docker ps` confirmed `supabase_db_repon-monorepo` healthy) |
+| `pnpm exec jest --config ./test/jest-integration.json` (full integration suite, all 5 files) | 5 suites / 15 tests passed — zero regressions on PR4's `descontarStock` integration test or any other pre-existing integration suite |
+| `pnpm exec jest --config ./test/jest-e2e.json test/consumo-cron-no-http-surface.e2e-spec.ts` | 5/5 passed on first run — no fix-up needed |
+| `pnpm test` (`services/core-api`, root of both jest configs) | 49 unit suites / 356 tests passed (was 49/354 after PR6b — +0 suites/+2 tests, the 2 new `env.schema.spec.ts` tests); 13 e2e suites / 83 tests passed (was 12/78 — +1 suite/+5 tests). Zero regressions |
+| `pnpm build` (`services/core-api`) | `tsc -p tsconfig.build.json` — clean |
+| `pnpm lint` (workspace root) | `eslint .` — clean |
+| `pnpm run format:check` (workspace root) | First run: 2 files flagged (`env.schema.spec.ts`, `consumo-cron-no-http-surface.e2e-spec.ts`) → fixed via `npx prettier --write` on those 2 files only → re-ran `format:check`/`lint`/`typecheck`/`pnpm test`/`pnpm build` again — all green (same recurring formatting-only gap as every prior batch) |
+
+## Deviations from Design
+
+**Method name and cron `name` option value**: the launch instructions'
+illustrative code sample used `async execute(): Promise<void>` and a cron
+`name` like `'consumo-check-stock-bajo'` ("or similar descriptive name").
+design.md's own authoritative code block (§"El adaptador de scheduling,
+completo") is explicit and different: `async ejecutar(): Promise<void>` and
+`name: 'consumo.chequeo-stock-diario'`. Followed design.md verbatim, not the
+illustrative snippet, per the standing rule ("ALWAYS follow the design
+decisions — don't freelance a different approach") — design.md is the
+resolved Choice, the launch prompt's inline snippet was explicitly flagged
+as illustrative ("or similar").
+
+**No dedicated route-table-introspection precedent existed for task 6c.9**:
+confirmed via `grep` across `test/` and `src/` for
+`router.stack`/`getRouterPathes`/`PATH_METADATA`/`Object.getOwnPropertyNames`
+— zero precedent for walking Express's live router stack, and this
+sandbox's Express version (5.2.1, via `@nestjs/platform-express`) changed
+its internal router implementation enough that depending on undocumented
+internals felt fragile. Took the "simplest CORRECT alternative" the launch
+instructions explicitly named: read the SAME `PATH_METADATA`/
+`METHOD_METADATA`/`MODULE_METADATA` decorator metadata Nest's own
+`RoutesResolver` reads to build the Express route table in the first place.
+This is exhaustive (walks every one of `ConsumoController`'s own methods,
+not a hand-picked subset) and precise (asserts the exact 4-route set,
+byte-matched against design.md's own Superficie HTTP table), plus a second
+describe block boots the full `AppModule` for real and asserts
+`SchedulerRegistry` actually holds the named cron job — genuine end-to-end
+proof the wiring is live, not just statically declared.
+
+**Registry auth workaround**: `~/.npmrc`'s corporate CodeArtifact registry
+token had expired (`401` on the very first install attempt) — resolved by
+pointing `pnpm add` at the public npm registry explicitly for this one
+install. Purely an environment/tooling workaround, not a design or scope
+decision; flagged here per the "note deviations" rule even though it isn't
+a design deviation.
+
+Everything else matches design.md verbatim: the exact `@Cron()` options
+shape (`timeZone`, `disabled`, evaluated once at class-decoration time per
+D-E's own documented caveat), the file/folder placement (first
+`adapters/scheduling/` in the repo, closing `core-api-hexagonal-layout`'s
+already-written delta spec scenario for real), `consumo.module.ts`'s
+`providers`-not-`controllers` placement, and `app.module.ts`'s
+`ScheduleModule.forRoot()` placement (D1: "`ConsumoModule` ya está
+importado desde PR 9 de la fundación — no se toca esa línea").
+
+## Issues Found
+
+None beyond the registry/environment workaround described above. All RED
+tests failed for the expected reason (a genuine stash-reverted schema
+field, not a typo-shaped false RED), the GREEN restoration passed
+immediately, and both the opt-in integration suite and the e2e suite passed
+on first run with zero fix-up — this sandbox happened to have a live local
+Supabase running (`docker ps` confirmed `supabase_db_repon-monorepo`
+healthy), so 6c.8's integration test was actually EXECUTED against real
+Postgres, not merely written and left unverified.
+
+**The D-A debounce-clear gap flagged in PR3/PR6a/PR6b's batches remains
+open**: `ConfigurarConsumoUseCase` still does not call `limpiarMarcaStockBajo`
+on a full reconfiguration. Out of scope for PR6c (a scheduling-only batch,
+per its own tasks.md 6c.1–6c.9 list) — flagging a fourth time, now for
+PR7's closure audit to either resolve or explicitly carry forward as a
+documented follow-up (tasks.md 7.9's "13 open items" list).
+
+## What PR7 (next batch) should know
+
+- All 7 PR6c files are in their final, working, fully-tested state — the
+  `consumo` domain's entire behavioral surface (Phases 1 through 6c) is now
+  complete: 83/83 tasks across PR1+PR2a+PR2b+PR3+PR4+PR5+PR6a+PR6b+PR6c.
+- PR7 is **docs-only** per its own tasks.md scope (7.1–7.9): 5 `SPEC.md`/
+  capability-doc deltas, an `exports: []` audit (already re-confirmed empty
+  in this batch, still holds), and a full workspace verification pass
+  (`pnpm lint`/`typecheck`/`test`/`build`/`format:check` — all already
+  green as of this batch; plus the opt-in integration suite, also already
+  green as of this batch).
+- `core-api-hexagonal-layout`'s delta spec (`specs/core-api-hexagonal-
+  layout/spec.md`) already declared the `adapters/scheduling/` conditional-
+  presence rule and consumo's scenario in an earlier planning phase — this
+  batch is what makes that spec's claims TRUE in actual code for the first
+  time (task 7.4 is confirming/cross-checking, not writing new rules).
+- The D-A debounce-clear gap (see "Issues Found" above) is the most
+  consequential open item for PR7's tasks.md 7.9 "carry forward" list — it
+  is a real, currently-unclosed design requirement (D-A: "`configurarConsumo`
+  ... Sí [limpia]"), not merely a residual risk.
+- `@nestjs/schedule@6.1.3` is now the sole new dependency this whole
+  `consumo` change introduces, confirmed by inspection of `package.json`'s
+  diff — matches D-G's enmienda ("`@nestjs/schedule` es la única
+  dependencia nueva de este cambio") exactly.
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, per tasks.md's Review Workload
+  Forecast — resolved by the maintainer, "Decision needed before apply: No")
+- Current work unit: Unit 6c "Adaptador de scheduling" — PR6c, the last
+  behavioral PR in the 10-PR chain (PR7 is docs-only closure)
+- Boundary: starts from PR6b's cron business-logic commit (`main` @
+  `bac6e0b`); ends with a fully compiling, fully tested commit that adds
+  the repo's first scheduled adapter, its one new dependency, its env
+  kill-switch, and closes `consumo.module.ts`'s wiring for good — all gates
+  green
+- Estimated review budget impact: 345 insertions / 19 deletions = 364
+  changed lines across 10 files. Breakdown: `pnpm-lock.yaml` (35, auto-
+  generated) + `tasks.md`'s 18-line checkbox diff (9 ins/9 del) + 311 lines
+  of actual application/test code — 108 non-test (42 the new job class, 32
+  the module wiring, 17+8 the env schema/spec, 8 `app.module.ts`, 1
+  `package.json`) + 203 across the 2 new test files (98 integration + 105
+  e2e). Comfortably WITHIN the 400-line default budget; above tasks.md's own
+  140-200 estimate mainly because of the 2 comprehensive new test files —
+  same overage pattern every prior batch has hit under strict TDD's
+  RED-first discipline — but still by far the smallest behavioral PR in the
+  whole chain, matching its own "Low risk... by far the smallest remaining
+  PR" forecast
+
+## Status (cumulative)
+
+82/82 tasks complete across PR1 (10/10) + PR2a (6/6) + PR2b (9/9) + PR3
+(16/16) + PR4 (14/14) + PR5 (8/8) + PR6a (8/8) + PR6b (2/2) + PR6c (9/9).
+Ready for next batch: PR7, Phase 7 — cierre (docs-only: 5 `SPEC.md`/
+capability-doc deltas, `exports:` audit, full workspace verification) — the
+LAST PR before `sdd-verify`/`sdd-archive` close out the entire `consumo`
+domain.

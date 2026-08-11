@@ -25,6 +25,14 @@ const baseEnvSchema = z.object({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   AUTH_JWT_ISSUER: z.string().min(1, 'AUTH_JWT_ISSUER is required'),
   AUTH_JWT_AUDIENCE: z.string().min(1, 'AUTH_JWT_AUDIENCE is required'),
+  // consumo design.md D-E: the cron kill-switch. A STRING enum on purpose,
+  // never `z.coerce.boolean()` — `Boolean('false') === true` in JS, which
+  // would make `CONSUMO_CRON_ENABLED=false` silently fail to disable the
+  // job. Consuming code (adapters/scheduling/consumption-check.job.ts)
+  // compares the raw string against `'false'`/`'true'`, never treats this
+  // as a real boolean. Validated here so an out-of-union value is a
+  // fail-fast boot error, not a silent default (D-E).
+  CONSUMO_CRON_ENABLED: z.enum(['true', 'false']).default('true'),
 });
 
 const hs256EnvSchema = baseEnvSchema.extend({
