@@ -21,7 +21,7 @@ Panel admin (Next.js)─┘   monolito modular, hexagonal por dominio
 | Auth | Registro y sesión de usuarios y proveedores |
 | Postgres + RLS | Toda la data: perfiles, mascotas, consumo, catálogos, solicitudes, ofertas, pedidos |
 | Realtime | Las ofertas de proveedores llegan a la bandeja del usuario sin recargar |
-| Edge Functions | Motor de matching (solicitud ↔ catálogo de proveedores), cron diario de stock/consumo, webhooks de pago |
+| Edge Functions | Motor de matching (solicitud ↔ catálogo de proveedores), webhooks de pago |
 | Storage | Fotos de productos, comprobantes |
 
 ## Servicios externos
@@ -47,7 +47,9 @@ Cuando un dominio necesite escalar distinto a los demás — típicamente `ofert
 
 ## Automatización de consumo
 
-El cálculo de "cuántos días de stock quedan" (dosis × frecuencia vs. stock actual) vive en una Edge Function programada (`pg_cron`), no en el cliente, para que funcione aunque el usuario no tenga la app abierta. Si el usuario activó "auto-crear refill", esta misma función genera la solicitud automáticamente al llegar al mínimo.
+El cálculo de "cuántos días de stock quedan" (dosis × frecuencia vs. stock actual) corre en `core-api`, no en el cliente: un `@Cron('0 9 * * *', { timeZone: 'America/Santiago' })` en proceso (`@nestjs/schedule`, `domains/consumo/adapters/scheduling/consumption-check.job.ts`) invoca diariamente el caso de uso interno `procesarConsumosVencidos`, que recorre las candidatas del repositorio y compara contra el umbral configurado — así funciona aunque el usuario no tenga la app abierta. Si el usuario activó "auto-crear refill", el mismo caso de uso dispara la solicitud automáticamente al llegar al mínimo. Un flag de entorno (`CONSUMO_CRON_ENABLED`) permite apagar el job por instancia.
+
+**Corrección declarada (`backend-core-api-consumo`, D11)**: la prosa original de esta sección, y la fila de Edge Functions de la tabla de arriba, ubicaban este mecanismo en una Edge Function programada vía `pg_cron`. Eso no se construyó así: el diseño final lo resolvió como un job en proceso dentro del monolito `core-api` (`@nestjs/schedule`), sin necesidad de una función serverless separada ni de configurar `pg_cron` en Postgres.
 
 ## Estado en el cliente (apps móviles)
 

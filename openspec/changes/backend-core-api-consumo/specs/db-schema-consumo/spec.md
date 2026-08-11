@@ -23,3 +23,13 @@
 - GIVEN the currently applied migrations that define `user_consumption` with no debounce marker
 - WHEN the marker for D5 lands
 - THEN it ships as a new migration file, and no line of an already-applied migration is edited
+
+### Requirement: user_consumption has no activo/status column — there is no way to pause an item
+
+`user_consumption` MUST NOT gain an `activo`/`status` column as part of this change. A row `procesarConsumosVencidos` finds via `findDueForCheck` is processed identically regardless of whether the user still actively tracks it — there is no "paused" state distinct from any other row. Pausing an item is a deferred product decision, not built here (D-C).
+
+#### Scenario: Every row findDueForCheck returns is processed the same way, with no notion of an inactive item
+
+- GIVEN two `user_consumption` rows below threshold, one the user actively uses and one they stopped using
+- WHEN the daily cron runs
+- THEN both rows are evaluated identically — no column or flag distinguishes them, and both may emit `StockBajoDetectado`

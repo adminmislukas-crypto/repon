@@ -1450,3 +1450,114 @@ Ready for next batch: PR7, Phase 7 — cierre (docs-only: 5 `SPEC.md`/
 capability-doc deltas, `exports:` audit, full workspace verification) — the
 LAST PR before `sdd-verify`/`sdd-archive` close out the entire `consumo`
 domain.
+
+---
+
+# Batch: PR7 "Cierre" (Phase 7, tasks 7.1–7.9) — docs-only, FINAL batch
+
+**Mode**: Docs-only (no TDD cycle — this batch introduces zero `.ts`/test
+changes, per its own tasks.md scope and the launch instructions' hard
+requirement). All behavioral code (Phases 1–6c) was already complete and
+green entering this batch.
+
+## Completed Tasks (9/9 in this batch — 91/91 cumulative)
+
+- [x] 7.1 `services/core-api/domains/consumo/SPEC.md` rewritten to apply every declared delta from design.md's "Deltas de SPEC.md" table (rows targeting this file: D2, D5, D7, D-H.1, D-A/D-C/D-H.2, D-H.3, D-B, D-H.2-clamp, D-D — see "Files Changed" for the itemized list) plus the `configurarConsumo`/marker-clearing follow-up (see "Genuine Discovery" below).
+- [x] 7.2 `packages/types/SPEC.md`: `src/consumo.ts` row annotated with the D15 delta (`UserConsumption` gains `userId: string`).
+- [x] 7.3 `docs/ARCHITECTURE.md`: Edge Function/`pg_cron` framing corrected to `@nestjs/schedule` in-process (D11), in both the "Backend — Supabase" table's Edge Functions row and the "Automatización de consumo" section.
+- [x] 7.4 `core-api-hexagonal-layout` capability doc: verified the delta spec (`openspec/changes/backend-core-api-consumo/specs/core-api-hexagonal-layout/spec.md`) already fully covers the `adapters/scheduling/` conditional-presence rule (written in an earlier planning phase, pending merge to `openspec/specs/` at archive) — AND found a genuinely separate product-level doc that also needed the correction now: `services/core-api/SPEC.md`'s own "Convención de carpetas por dominio" paragraph (not an openspec/ file, not merged at archive) still listed only `adapters/{http,persistence,events}/`. Added the D1/D14 delta there too.
+- [x] 7.5 `db-schema-consumo` delta spec (`specs/db-schema-consumo/spec.md`): confirmed the `stock_bajo_notificado_at` marker requirement + scenarios were already complete and accurate; the "`user_consumption` has no `activo` column" clarification was genuinely missing — added as a new `### Requirement` with a Given/When/Then scenario (RFC 2119 style, per `openspec/config.yaml`'s `rules.specs`).
+- [x] 7.6 `shared-notifications` capability doc (`specs/shared-notifications/spec.md`): cross-checked every requirement/scenario against the actual PR5 code (`shared/notifications/{notifications.module,expo-push-notification.adapter,push-token-resolver.port,null-push-token.resolver}.ts`, `shared/shared-kernel.module.ts`, `shared/audit/audit.module.ts` for the "mirrors AuditModule" claim) — **verification-only, zero mismatches found, no file changed**. `NotificationsModule` is `@Global()`, binds `NOTIFICATION_PORT`→`ExpoPushNotificationAdapter`, exports only `NOTIFICATION_PORT`, byte-for-byte mirrors `AuditModule`'s shape; `consumo.module.ts` never references `NOTIFICATION_PORT`; `sendPush` never throws (try/catch wraps the entire body, logs omission/error, never rethrows).
+- [x] 7.7 Audited `services/core-api/src/domains/consumo/consumo.module.ts`: `exports: []` confirmed exactly, unchanged since PR6c — nothing crosses the module boundary. No file changed (re-confirmation only).
+- [x] 7.8 Full workspace verification — see "Commands Run and Results" below. All 5 gates green, plus the opt-in integration suite (both named proofs).
+- [x] 7.9 All 13 open items from design.md's "Riesgos residuales y preguntas abiertas" carried forward below, PLUS the `configurarConsumo`/marker-clearing item as a 14th, newly-surfaced item — none silently dropped. **Precedent correction**: the launch instructions suggested checking `catalogo/SPEC.md` for where `catalogo` tasks.md 9.6 put its own carry-forward list, expecting it to be in that file. It is not — `catalogo/SPEC.md` has zero "riesgo"/"seguimiento" text (grepped to confirm). The verified actual precedent, from the archived `backend-core-api-catalogo` change (`tasks.md` line 200 + `apply-progress.md` line 1056), is that the 6 open items were carried forward as a compact paragraph inside **`apply-progress.md`'s own PR9 closure entry** — not in any product `SPEC.md`. Followed the VERIFIED precedent (this file, below) rather than the launch prompt's unverified assumption about where it landed.
+
+## Genuine Discovery: the `configurarConsumo`/debounce-marker item is real and was NOT yet a named residual risk
+
+Verified directly against `services/core-api/src/domains/consumo/ports-in/configurar-consumo.use-case.ts`: `execute(userId, config: NuevoConsumoInput)` always does `crear({ id: randomUUID(), userId, ...config })` then `consumptionRepository.save(...)` — there is no `consumptionId` parameter anywhere, no lookup-then-update path, and it never calls `limpiarMarcaStockBajo`. This matches what PR3/PR6a/PR6b/PR6c's batches already flagged repeatedly (most recently PR6c's own "What PR7 should know" section, quoted above in this file) as an open gap against design.md's D-A table ("Qué limpia el marcador" lists `configurarConsumo` as a required clearer). Cross-checked design.md's "Riesgos residuales y preguntas abiertas" (13 items, `design.md` lines 1017–1029) end to end: none of the 13 names this specific unreachability (item 4, "No hay forma de pausar un `UserConsumption`," is adjacent but distinct — it's about the missing `activo` column, not about `configurarConsumo`'s create-only shape making D-A's clearing clause unreachable). This is genuinely a **14th, newly-surfaced item**, not a duplicate of an existing one. Per the launch instructions' explicit resolution (verified correct, not "fixed" by inventing an update/reconfigure endpoint — that would be out of scope for a docs-only PR and not part of the approved 10-PR chain): documented as a declared delta directly in `consumo/SPEC.md`'s "Job programado" section (task 7.1) AND listed in the carry-forward below (task 7.9).
+
+## Files Changed
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `services/core-api/domains/consumo/SPEC.md` | Modified (full rewrite, 57 → 132 lines) | `ConsumoInboundPort`: `marcarDosisTomada`/`calcularDiasRestantes` gain `userId`, `tomadoAtRaw?: string` replaces `timestamp: Date`; new "`configurarConsumo` verifica la propiedad de `petId`" subsection (D-H.3) documenting the create-only shape; `ConsumptionRepository` rewritten with `tx?`, `findById`, the `findDueForCheck(umbralDias)`→`ConsumptionCandidata[]` signature change, `intentarMarcarStockBajo`/`limpiarMarcaStockBajo`/`descontarStock`; new `PetRepository` interface (D-H.1); `NotificationPort`/`EventPublisher` reclassified as shared-kernel ports, not `consumo`-owned; new "Constante de dominio: `UMBRAL_STOCK_BAJO_DIAS`" section (D-B); "Job programado" rewritten to name `ProcesarConsumosVencidosUseCase`/`ConsumptionCheckJob`/the cron schedule/`CONSUMO_CRON_ENABLED`, correct the "cada `UserConsumption` activo" claim, and add the `configurarConsumo`/marker-clearing declared-delta note; `StockBajoPayload`'s exact shape + the "consumo publishes only what it owns" rule added under "Eventos que publica" (D-D) |
+| `packages/types/SPEC.md` | Modified | `src/consumo.ts` row: annotated `UserConsumption` with the D15 delta (`userId: string`) |
+| `docs/ARCHITECTURE.md` | Modified | Edge Functions table row no longer lists "cron diario de stock/consumo"; "Automatización de consumo" section rewritten to name the real mechanism (`@nestjs/schedule`, `ConsumptionCheckJob`, `procesarConsumosVencidos`, `CONSUMO_CRON_ENABLED`) with an explicit "Corrección declarada (D11)" note |
+| `services/core-api/SPEC.md` | Modified | "Convención de carpetas por dominio" paragraph: added a "Delta `backend-core-api-consumo` (D1/D14)" note documenting `adapters/scheduling/`'s conditional presence — a product-level doc the design.md delta table did not explicitly name, found by grepping for the folder-shape convention outside the openspec-managed spec files |
+| `openspec/changes/backend-core-api-consumo/specs/db-schema-consumo/spec.md` | Modified | Added `### Requirement: user_consumption has no activo/status column` with a Given/When/Then scenario — the "no way to pause an item" clarification design.md's delta table names but this delta spec had not yet stated |
+| `openspec/changes/backend-core-api-consumo/specs/shared-notifications/spec.md` | Verified, not modified | Cross-checked against PR5's actual code — accurate, no drift |
+| `openspec/changes/backend-core-api-consumo/specs/core-api-hexagonal-layout/spec.md` | Verified, not modified | Already covers the `adapters/scheduling/` scenario in full; merges to `openspec/specs/` at archive, per this change's own file-ownership rule |
+| `services/core-api/src/domains/consumo/consumo.module.ts` | Verified, not modified | `exports: []` confirmed exactly (D9/D14) |
+| `openspec/changes/backend-core-api-consumo/tasks.md` | Modified | Tasks 7.1–7.9 marked `[x]` — 91/91 complete |
+| `openspec/changes/backend-core-api-consumo/apply-progress.md` | Modified | This PR7 entry appended (merge, not overwrite) |
+
+## Commands Run and Results
+
+| Command | Result |
+|---|---|
+| `pnpm lint` (workspace root) | `eslint .` — clean, 0 errors/warnings |
+| `pnpm typecheck` (`services/core-api`) | `tsc -p tsconfig.json --noEmit` — clean |
+| `pnpm test` (workspace root, fans out to `services/core-api`) | 49 unit suites / 356 tests passed; 13 e2e suites / 83 tests passed — byte-identical to PR6c's baseline (49/356, 13/83), confirming zero regressions from a docs-only batch, including the `identidad`/`catalogo` regression baseline (Phase 5's R5 mitigation) still intact |
+| `pnpm build` (`services/core-api`) | `tsc -p tsconfig.build.json` — clean |
+| `pnpm run format:check` (workspace root) | `prettier --check .` — clean on the FIRST run (no fix-up needed, unlike every prior batch — expected, since Markdown-only edits with no long-line/JSDoc wrapping concerns) |
+| `docker ps` | Confirmed this sandbox's local Supabase stack is up and healthy (`supabase_db_repon-monorepo`, 16h uptime) |
+| `pnpm exec jest --config ./test/jest-integration.json` (`services/core-api`, full opt-in suite) | 5 suites / 15 tests passed against real local Postgres: `consumo-descontar-stock.integration-spec.ts` (PR4's clamp-at-0 proof), `consumo-cron-cas-race.integration-spec.ts` (PR6c's CAS-race proof), plus 3 pre-existing suites (`database`, `identidad-actor`, `catalogo-provider-catalog-upsert`) — zero regressions, both named proofs (task 7.8's explicit ask) re-confirmed green |
+
+## Riesgos residuales y preguntas abiertas — carry-forward (design.md, 13 + 1 items, task 7.9)
+
+None silently dropped. Each is either mitigated structurally, named as an explicit future SDD change, or (for the 14th) a documented scope boundary of this change:
+
+1. **`RefillItem.catalogProductId` no derivable desde `consumo`** (D-D) — `user_consumption` has no `catalog_product_id`; `refill-matching` will only be able to fuzzy-match by name. Highest-value follow-up of the whole change; purely additive (nullable column + optional field). Out of scope here — no product decision, no proposal authority.
+2. **`RefillRequest.direccion`/`comuna` exist in no table of this repo** — an entire `refill-matching` problem, named here so that domain's own SDD doesn't discover it mid-flight.
+3. **¿El umbral es por usuario? ¿Por `kind`?** (D-B) — genuine product decision; per-`kind` is more likely and needs no migration.
+4. **No hay forma de pausar un `UserConsumption`** (D-C) — no `activo` column; an item the user stopped using keeps alerting until they edit its stock. Product decision, not invented here (also now explicit in `db-schema-consumo`'s delta spec, task 7.5).
+5. **La alerta perdida no se re-emite** (D-E) — a crash between the CAS claim and the `publish` call means that episode never alerts again until stock rises above threshold and drops again. Accepted trade-off (never duplicate); the fix (re-alert-by-age policy on the `timestamptz`) is designed but not built, needs no migration.
+6. **Una fila degenerada (`horarios` vacío o `dosisPorToma = 0`) se excluye del cron en silencio** (D-C) — the multiplicative predicate excludes it by construction, but it stays invisible forever. The entity invariant makes it unconstructible via `core-api` (the only writer with grants). Named follow-up: a one-off integrity check, not a daily alert nobody could act on.
+7. **`POST .../dosis` no es idempotente** — a double tap = double decrement + two logs. No spec requires idempotency; the available mitigations (idempotency key, or dedupe on `(consumption_id, tomado_at)`) are named, not built.
+8. **El clamp de stock en 0 vive en el adaptador, no en la entidad** (D-H.2) — conscious exception to the "entity validates" pattern; the alternative isn't safe under concurrency. Tested at the adapter level.
+9. **Seq scan diario de `user_consumption`** (D-C) — accepted at launch scale. Named, measurement-triggered escape hatch: a `stored` generated column + b-tree, or `findDueForCheck` with batching/cursor.
+10. **`UMBRAL_STOCK_BAJO_DIAS = 7` es un default declarado, no medido** (D-B) — the non-negotiable part is the reasoning (≥ a refill's realistic lead time), not the number.
+11. **Ninguna push llega a ningún dispositivo** (R7/D10/D-G) — accepted consequence: no mobile client can receive one yet. Mitigated with an explicit log per omitted send and `PushTokenResolver` as a **named** missing capability, not an implicit one.
+12. **Nada verifica que corra una sola réplica** (D-E) — the CAS makes N replicas correct, not free: N daily seq scans get paid for. `CONSUMO_CRON_ENABLED` is the lever, but it's deploy discipline, not a system invariant.
+13. **El caveat de `process.env` en el decorador** (D-E) — `@Cron`'s `disabled` evaluates at class-load time, before Nest's DI container exists, so it reads `process.env` directly even though the same variable is also declared in `env.schema.ts`. Conscious duplication: the schema declaration is what makes it validated and documented.
+14. **(Newly surfaced this batch) `configurarConsumo` cannot clear the debounce marker on "reconfiguration," because there is no reconfiguration path** — design.md's D-A table ("Qué limpia el marcador") states `configurarConsumo` clears `stock_bajo_notificado_at` "al reconfigurar el ítem." But `configurarConsumo`'s actual, implemented signature (`NuevoConsumoInput`, no `consumptionId` param) is create-only — there is no code path that reconfigures an existing `UserConsumption`, so that clearing behavior is unreachable, not a missed implementation. Documented as a declared delta directly in `consumo/SPEC.md` (task 7.1). Named follow-up: whichever future change adds an update/reconfigure capability to `UserConsumption` must also wire this clear. Building that capability now would be inventing scope outside the approved 10-PR chain — explicitly not done here.
+
+## Deviations from Design
+
+None — this batch is a straight application of design.md's own declared delta table (task 7.1–7.3, 7.5) plus two verification-only passes (7.6, 7.7) that confirmed prior batches already match their specs exactly, plus one additional product-level doc correction (`services/core-api/SPEC.md`, task 7.4) that design.md's delta table did not explicitly name but is squarely the same D1/D14 correction landing in a second, genuinely separate file.
+
+## Issues Found
+
+No code bugs. Two doc-accuracy gaps discovered during this audit that are **explicitly out of this PR's declared scope** (not part of design.md's delta table, not part of tasks.md 7.1–7.9) and were deliberately left unedited rather than silently "fixed" by inventing scope:
+
+1. **`supabase/SPEC.md` has two stale entries related to this change, neither declared as a delta anywhere**: (a) the "Columnas reales — lote `02` (`consumo`)" table for `user_consumption` (lines 119–135) does not list `stock_bajo_notificado_at` at all — it predates the PR1 migration; (b) the "Edge Functions" table's `check-consumption-stock` row (line 424) still frames the daily stock check as a Supabase Edge Function triggered by `pg_cron` — the same D11 framing corrected in `docs/ARCHITECTURE.md` this batch, but `supabase/SPEC.md` is a separate product-level doc that design.md's delta table never names. Flagging for the orchestrator to decide whether this needs its own small follow-up delta (likely, since it's the same root correction) or a dedicated future change.
+2. **`ports-out/consumption-repository.port.ts`'s own doc comment on `limpiarMarcaStockBajo`** (lines 85–92, code, not touched this batch — docs-only PR) still says it is "called both by the cron ... and by `configurarConsumo` (a full reconfiguration is a new alert context)" — this is the same aspirational claim `consumo/SPEC.md` had and this batch corrected. The code comment itself is now inconsistent with `consumo/SPEC.md`'s corrected text. Not fixed here (editing `.ts` files is outside this PR's hard requirement); flagged for a trivial follow-up comment edit whenever a `.ts` file in this domain is next touched.
+3. **`services/core-api/SPEC.md` line ~39** ("Notificaciones push — adaptador hacia Expo Push, usado como puerto de salida desde `consumo`, `ofertas` y `pedidos-pagos`") is technically accurate for `consumo` (it does inject `NOTIFICATION_PORT`) but reads as implying live delivery; per D10/D-G, delivery is currently unreachable (`NullPushTokenResolver` always returns `null`, residual risk #11 above). Minor, debatable, not edited — noted for completeness, not treated as a delta-table gap.
+
+Neither of these are code bugs — both are documentation staleness in files this PR's declared scope (design.md's delta table, tasks.md 7.1–7.9) did not name. No `.ts`/test file was read-and-found-buggy during this audit; `configurarConsumo`'s create-only shape (the one behavior-adjacent finding) is confirmed correct-as-scoped, not a bug (see "Genuine Discovery" above).
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, per tasks.md's Review Workload
+  Forecast — resolved by the maintainer, "Decision needed before apply: No")
+- Current work unit: Unit 7 "Cierre" — PR7, the LAST PR in the 10-PR chain
+- Boundary: starts from PR6c's scheduling-adapter commit (`main` @ latest
+  PR6c commit); ends with a fully green, docs-only commit that reconciles
+  every product-level SPEC.md/capability doc named in tasks.md 7.1–7.9
+  against the actually-implemented code, and re-verifies the entire
+  workspace (all 5 gates + the opt-in integration suite) — closing out
+  `backend-core-api-consumo`'s implementation entirely
+- Estimated review budget impact: 6 files changed (`consumo/SPEC.md`,
+  `packages/types/SPEC.md`, `docs/ARCHITECTURE.md`, `services/core-api/
+  SPEC.md`, `specs/db-schema-consumo/spec.md`, `tasks.md`) plus this
+  `apply-progress.md` append — all Markdown, zero `.ts`/test files. Well
+  within tasks.md's own 150-220 estimate and comfortably under the 400-line
+  default budget
+
+## Status (cumulative)
+
+**91/91 tasks complete** across PR1 (10/10) + PR2a (6/6) + PR2b (9/9) + PR3
+(16/16) + PR4 (14/14) + PR5 (8/8) + PR6a (8/8) + PR6b (2/2) + PR6c (9/9) +
+PR7 (9/9). `backend-core-api-consumo`'s entire 10-PR chain is now complete.
+Ready for `sdd-verify`, then `sdd-archive` to formally close the `consumo`
+domain — mirroring exactly how `backend-core-api-catalogo` was closed.

@@ -182,15 +182,15 @@ Depende de 6b (el caso de uso que el `@Cron()` invoca).
 
 Depends on Phase 6c; SPEC.md deltas describe behavior that must already exist.
 
-- [ ] 7.1 `services/core-api/domains/consumo/SPEC.md`: apply all declared deltas from design.md's table (13 total): CQS split (D2), debounce marker ownership (D5), 404 cross-tenant on `marcarDosisTomada`/`calcularDiasRestantes` (D7), `PetRepository` new port (D-H.1), `ConsumptionRepository` additions incl. `findDueForCheck` returning candidates-not-decisions (D-A/D-C/D-H.2), `configurarConsumo` petId 404 (D-H.3), umbral = domain constant (D-B), stock clamp-at-0 (D-H.2), exact 3-event payloads + the "consumo publishes only what it owns" rule (D-D).
-- [ ] 7.2 `packages/types/SPEC.md`: append `UserConsumption.userId` (D15).
-- [ ] 7.3 `docs/ARCHITECTURE.md`: correct the Edge Function/`pg_cron` framing to `@nestjs/schedule` in-process (D11).
-- [ ] 7.4 `core-api-hexagonal-layout` capability doc: `adapters/scheduling/` conditional-presence rule; `consumo`'s deliberate absence of `contracts/`/`adapters/events/` (D14, closes WARNING-2 formally).
-- [ ] 7.5 `db-schema-consumo` delta doc: `stock_bajo_notificado_at` column + explicit note that `user_consumption` has no `activo` column (no way to pause an item — product decision, not built here).
-- [ ] 7.6 `shared-notifications` capability doc: cross-check Phase 5's module doc comments match the written spec (D9/D10/D-G).
-- [ ] 7.7 Audit `consumo.module.ts` `exports:` — confirm exactly `[]`, nothing crosses the module boundary (D9/D14).
-- [ ] 7.8 Full workspace verification: `pnpm lint`, `pnpm typecheck`, `pnpm test` (unit+e2e, incl. Phase 5's identidad/catalogo regression baseline), `pnpm build`, `pnpm format:check`; opt-in integration suite against local Supabase (Phase 4's clamp proof + Phase 6c's CAS-race proof).
-- [ ] 7.9 Carry forward the 13 open items from design.md's "Riesgos residuales y preguntas abiertas" as documented follow-ups (mirrors `catalogo` tasks.md 9.6's precedent) — none silently dropped.
+- [x] 7.1 `services/core-api/domains/consumo/SPEC.md`: apply all declared deltas from design.md's table (13 total): CQS split (D2), debounce marker ownership (D5), 404 cross-tenant on `marcarDosisTomada`/`calcularDiasRestantes` (D7), `PetRepository` new port (D-H.1), `ConsumptionRepository` additions incl. `findDueForCheck` returning candidates-not-decisions (D-A/D-C/D-H.2), `configurarConsumo` petId 404 (D-H.3), umbral = domain constant (D-B), stock clamp-at-0 (D-H.2), exact 3-event payloads + the "consumo publishes only what it owns" rule (D-D).
+- [x] 7.2 `packages/types/SPEC.md`: append `UserConsumption.userId` (D15).
+- [x] 7.3 `docs/ARCHITECTURE.md`: correct the Edge Function/`pg_cron` framing to `@nestjs/schedule` in-process (D11).
+- [x] 7.4 `core-api-hexagonal-layout` capability doc: `adapters/scheduling/` conditional-presence rule; `consumo`'s deliberate absence of `contracts/`/`adapters/events/` (D14, closes WARNING-2 formally).
+- [x] 7.5 `db-schema-consumo` delta doc: `stock_bajo_notificado_at` column + explicit note that `user_consumption` has no `activo` column (no way to pause an item — product decision, not built here).
+- [x] 7.6 `shared-notifications` capability doc: cross-check Phase 5's module doc comments match the written spec (D9/D10/D-G).
+- [x] 7.7 Audit `consumo.module.ts` `exports:` — confirm exactly `[]`, nothing crosses the module boundary (D9/D14).
+- [x] 7.8 Full workspace verification: `pnpm lint`, `pnpm typecheck`, `pnpm test` (unit+e2e, incl. Phase 5's identidad/catalogo regression baseline), `pnpm build`, `pnpm format:check`; opt-in integration suite against local Supabase (Phase 4's clamp proof + Phase 6c's CAS-race proof).
+- [x] 7.9 Carry forward the 13 open items from design.md's "Riesgos residuales y preguntas abiertas" as documented follow-ups (mirrors `catalogo` tasks.md 9.6's precedent) — none silently dropped.
 
 ---
 
