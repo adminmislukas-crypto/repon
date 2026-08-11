@@ -717,3 +717,187 @@ one long JSDoc/decorator line in `refill.controller.ts` — applied, then `forma
 `POST /refill/mis-solicitudes` is live, authenticated, and exception-mapped. Ready for
 next batch (PR5a, Phase 5a — matching lógica: `BuscarProveedoresCompatiblesUseCase`,
 `MatchEncontrado`, the R2/R3-closing negative tests, zero HTTP).
+
+---
+
+**Batch**: PR5a "Matching (lógica)" (Phase 5a, tasks 5a.1–5a.10). **NO HTTP in this
+batch** — Phase 5b (route/DTO/filter extension/`CatalogoModule` wiring/e2e) is a
+separate PR, out of scope here per this batch's explicit instructions. This is the
+**first real consumer of `catalogo`'s frozen `CatalogQueryPort`** anywhere in the repo.
+
+## TDD Note for This Batch
+
+Followed tasks.md's literal, deliberately-ordered sequence: the spec file
+(`ports-in/buscar-proveedores-compatibles.use-case.spec.ts`) was written FIRST with
+all 8 tests covering 5a.3 through 5a.9 (in that literal order — 5a.3's cross-tenant
+404 is "the first negative, written FIRST per D17/R2"), confirmed RED
+(`Cannot find module './buscar-proveedores-compatibles.use-case'`, run via
+`pnpm exec jest ports-in/buscar-proveedores-compatibles.use-case.spec.ts`) BEFORE
+`ports-in/buscar-proveedores-compatibles.use-case.ts` (5a.10) existed. The two event
+files (5a.1/5a.2, `match-encontrado.payload.ts`/`match-encontrado.event.ts`) were
+created just ahead of the RED run — they have no RED/GREEN pair of their own (same
+"costuras" category as `refill-creado.event.ts` in PR4a: pure type/class declarations
+copied from design.md D-C), but the RED run genuinely needed them to exist first so
+the failure would isolate to the missing use case module specifically, not a missing
+event import. After the RED confirmation, the GREEN implementation was written and the
+same command re-run: 8/8 passing in one pass, zero test edits needed afterward.
+
+## What Was Built
+
+- **`events/match-encontrado.payload.ts`** — `MatchEncontradoPayload extends
+  RefillSolicitudPayload` (imported from PR4a's `refill-solicitud.payload.ts`, never
+  redeclared) + `companyIds: readonly string[]` + `providerCatalogItemIds: readonly
+  string[]`. **No `ProviderCatalogItem` snapshot anywhere** — no `precioBase`,
+  `precioMaximo`, `stock`, `disponible` (design.md D-C Decisión 2, verified directly in
+  the happy-path test via a full `.toEqual()` against the exact expected payload shape,
+  not just a subset check).
+- **`events/match-encontrado.event.ts`** — `MatchEncontrado implements DomainEvent`,
+  `type = 'refill.match_encontrado'`, `occurredAt = new Date()`, `constructor(readonly
+  payload: MatchEncontradoPayload)` — same shape as PR4a's `RefillCreado`, used as the
+  direct structural template per this batch's instructions.
+- **`ports-in/buscar-proveedores-compatibles.use-case.ts`** —
+  `BuscarProveedoresCompatiblesUseCase.execute(profileId, refillRequestId):
+  Promise<ProviderCatalogItem[]>`:
+  - Constructor injects **exactly 3** tokens: `REFILL_REPOSITORY`, `CATALOG_QUERY_PORT`
+    (from `catalogo/contracts/catalog-query.port.ts` — the one legitimate cross-domain
+    import this domain makes, D15), `EVENT_PUBLISHER`. **`TRANSACTION_MANAGER` is
+    absent** — not omitted by oversight, structurally impossible to add back without
+    the constructor-inspection test (5a.6) failing. There is nothing to wrap in a
+    transaction: this use case performs zero writes.
+  - `findById(refillRequestId)` — called with a single argument, no `tx` (there is
+    none to pass).
+  - `entity === null || entity.userId !== profileId` → `RefillRequestNotFoundError`,
+    constructed identically (`new RefillRequestNotFoundError(refillRequestId)`) in both
+    branches — verified byte-for-byte via a dedicated test comparing `.name`/`.message`
+    across both paths, not just `toBeInstanceOf` on each independently.
+  - `entity.estado === 'borrador'` → `SolicitudEnBorradorError`, checked **strictly
+    after** the ownership/existence check — a borrador belonging to another user hits
+    the 404 branch above and never reaches this line at all (order encoded structurally
+    by two sequential `if`s, not a flag).
+  - Past the borrador check, TypeScript narrows `entity` to `RefillRequestActiva`
+    (D-B): `entity.items` is `RefillItem[]`, `entity.comuna`/`entity.urgencia` are
+    non-optional. A borrador's `RefillItemBorrador[]` items are structurally impossible
+    to reach `buscarCoincidencias(itemsSolicitados: RefillItem[])` from this point —
+    noted as a comment directly above the call site, not just in the spec file.
+  - `buscarCoincidencias(entity.items)` — no try/catch around it. A rejected
+    `CatalogQueryUnavailableError` propagates straight out of `execute()` uncaught
+    (verified with `.rejects.toBe(outage)` — the exact same error instance, not a
+    wrapped/rethrown one — plus an explicit assertion that `publish` was never called
+    on that path).
+  - `companyIds = Array.from(new Set(matches.map((item) => item.companyId)))` — `Set`
+    iteration order is insertion order for strings in JS, so this one line **is** the
+    entire "deduplicated, first-appearance order" requirement; no extra bookkeeping
+    array needed. Verified with a 3-item fixture where the 3rd match repeats the 1st's
+    company later in the array, asserting the result keeps only 2 entries in the order
+    the first two distinct companies appeared, not sorted.
+  - `providerCatalogItemIds = matches.map((item) => item.id)` — the full matched set,
+    no dedup (matches `providerCatalogItemIds`' own doc comment: "el conjunto COMPLETO
+    que devolvió el puerto").
+  - Payload's `items` mapping reuses the exact same `refillItemId`/`catalogProductId ??
+    null` conversion PR4a's `CrearSolicitudUseCase` already established — same shared
+    base type, same conversion, not reinvented.
+  - `publish(new MatchEncontrado(payload))` fires unconditionally, including when
+    `matches` is `[]` — no early return, no guard clause skips it (verified: the
+    zero-match test asserts `publish` was called exactly once with `companyIds: []`/
+    `providerCatalogItemIds: []`, not that it was skipped).
+  - Returns the raw `matches` array (`ProviderCatalogItem[]`) — Phase 5b's controller
+    will map this to `ProveedorCompatibleDto[]` for the 200 response; this use case
+    does not know about DTOs at all (`adapters/http/` is not imported here).
+
+## Deviations from Design
+
+None. Constructor injection order (`REFILL_REPOSITORY`, `CATALOG_QUERY_PORT`,
+`EVENT_PUBLISHER`), the check ordering (existence/ownership before state), the
+zero-transaction structure, and the payload shape all match design.md Diagrama 2 and
+D-C's code block verbatim.
+
+## Issues Found
+
+None. All 5 gates green: `pnpm lint` (workspace root, 0 errors/warnings), `pnpm
+typecheck` (workspace root — `packages/types` + `core-api` both `Done`; `git status
+--porcelain services/core-api/src/domains/catalogo/` confirmed empty both before and
+after this batch — `catalogo` compiles with zero diff), `pnpm test:unit` (core-api: 55
+unit suites / 442 tests, up from 54/434 baseline — 8 new; e2e intentionally NOT run,
+per this batch's explicit scope — that's Phase 5b), `pnpm build` (`tsc -p
+tsconfig.build.json`, clean), `pnpm run format:check` (1 file —
+`buscar-proveedores-compatibles.use-case.spec.ts` — needed one `prettier --write` pass
+for its long `describe()` string-concatenation lines; applied and re-verified
+`format:check`/`lint`/`typecheck`/`test`/`build` all green afterward, in that order).
+
+## What PR5b (next batch) should know
+
+- `BuscarProveedoresCompatiblesUseCase` is exported from
+  `services/core-api/src/domains/refill-matching/ports-in/buscar-proveedores-compatibles.use-case.ts`.
+  Constructor signature, in order: `(refillRepository: RefillRepository /*
+  @Inject(REFILL_REPOSITORY) */, catalogQueryPort: CatalogQueryPort /*
+  @Inject(CATALOG_QUERY_PORT) */, eventPublisher: EventPublisher /*
+  @Inject(EVENT_PUBLISHER) */)`. It is `@Injectable()` but **not yet provided** in
+  `refill-matching.module.ts` — PR5b's `providers` array addition is where that
+  happens, together with adding `CatalogoModule` to `imports` (design.md's own wiring
+  table places both in Phase 5b, not here — `refill-matching.module.ts` was
+  deliberately NOT touched in this batch, confirmed by `git status --porcelain`
+  showing it absent from this diff).
+- `execute(profileId: string, refillRequestId: string): Promise<ProviderCatalogItem[]>`
+  — 5b's controller calls this as `execute(actor.profileId, refillRequestId)` behind
+  `ParseUUIDPipe` on the route param (design.md D-E). The return value is the raw
+  `ProviderCatalogItem[]` from `catalogo`'s `buscarCoincidencias` — 5b's
+  `refill.mapper.ts` needs a new `toProveedorCompatibleDto`-shaped function to build
+  the 200 `ProveedorCompatibleDto[]` response; nothing in this batch maps it.
+- **3 new error mappings are needed in `refill-exception.filter.ts`** (currently only
+  maps `SolicitudInvalidaError` → 400, from PR4b): `RefillRequestNotFoundError` → 404
+  `REFILL_REQUEST_NOT_FOUND`, `SolicitudEnBorradorError` → 409
+  `REFILL_REQUEST_EN_BORRADOR`, and `CatalogQueryUnavailableError` → 503
+  `CATALOG_UNAVAILABLE` — the last one imported from
+  `catalogo/contracts/catalog-query.port.ts` (already imported by this batch's use
+  case and its spec; 5b's filter/filter-spec need their own import, this batch doesn't
+  export or re-export it for them).
+- `MatchEncontrado`/`MatchEncontradoPayload` are now real, exported types/classes under
+  `events/` — 5b's e2e spec (`test/refill-buscar-proveedores.e2e-spec.ts`, task 5b.6)
+  can reuse PR4b's established "assert on the real event bus" pattern
+  (`app.get(EventEmitter2, { strict: false })` + `.on('refill.match_encontrado', spy)`)
+  to prove the zero-match case still publishes with `companyIds: []`, per that task's
+  own explicit instruction to assert via the bus, not just the HTTP response.
+- The constructor-inspection test pattern (5a.6, `SELF_DECLARED_DEPS_METADATA =
+  'self:paramtypes'`) is now used identically in 2 places in this repo
+  (`ProcesarConsumosVencidosUseCase` in `consumo`, `BuscarProveedoresCompatiblesUseCase`
+  here) — a real precedent, not a one-off, if a future domain needs the same structural
+  guarantee.
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, per tasks.md's Review Workload Forecast)
+- Current work unit: Unit 5a "Matching (lógica)" — PR5a
+- Boundary: starts from PR4b's creación-HTTP commit; ends with
+  `events/match-encontrado.payload.ts`, `events/match-encontrado.event.ts`,
+  `ports-in/buscar-proveedores-compatibles.use-case.ts` + its co-located spec — zero
+  HTTP surface, zero module wiring (`refill-matching.module.ts` untouched, confirmed),
+  zero `catalogo/` files touched (confirmed via `git status --porcelain`), all gates
+  green
+- Actual size: 485 lines added across 4 new files (`match-encontrado.payload.ts` 40,
+  `match-encontrado.event.ts` 20, `buscar-proveedores-compatibles.use-case.ts` 115,
+  `buscar-proveedores-compatibles.use-case.spec.ts` 310) + 20 lines changed in
+  `tasks.md` (10 checkbox flips) — roughly 505 lines changed total. This is over
+  tasks.md's own 270-320 estimate for 5a (Medium risk, explicitly flagged as "the PR
+  that most deserves dedicated review"), continuing this change's established pattern
+  (PR2 ~2x, PR3 ~2.3x, PR4b ~2.5x over their respective baselines). The overrun is
+  concentrated in the spec file (310 lines — 8 tests covering 7 distinct named spec
+  scenarios plus the constructor-inspection test, each with a `describe()` block
+  cross-referencing the exact spec scenario name per this codebase's established
+  convention, plus 3 fixture builders) and in the use case's own doc comment (a
+  60-line block walking through design.md Diagrama 2's numbered steps 1-6, deliberately
+  thorough given this file's "PR que más merece review dedicada" status per design.md
+  itself). No split is proposed: tasks.md's own task list treats 5a.3-5a.9 as one
+  RED file extended across 7 scenarios specifically so the constructor-inspection test
+  (5a.6) sits directly alongside the behavioral tests it structurally backs — splitting
+  the spec file would separate a test from the fixtures/mocks it shares with its
+  siblings for no reviewability gain. Reported honestly per this batch's explicit
+  instruction to report the real diff size rather than invent a sub-split.
+
+## Status
+
+49/49 tasks complete across PR1+PR2+PR3+PR4a+PR4b+PR5a (3.11 still intentionally out of
+scope, not counted against this total). `BuscarProveedoresCompatiblesUseCase` exists,
+is fully unit-tested, has zero HTTP surface, and is the first real consumer of
+`catalogo`'s frozen `CatalogQueryPort` in the repo. Ready for next batch (PR5b, Phase
+5b — matching HTTP: `ProveedorCompatibleDto`, `POST .../matching` route, the 3 filter
+extensions, `CatalogoModule` wiring, e2e).
