@@ -146,3 +146,109 @@ one is written (Phase 3 for `save`/`findById`/`findBorradorByConsumption`, Phase
 ## Status
 
 10/10 tasks in this batch complete. Ready for next batch (PR2, Phase 2 — dominio puro).
+
+---
+
+**Batch**: PR2 "Dominio puro" (Phase 2, tasks 2.1–2.8).
+
+## TDD Note for This Batch
+
+Genuinely strict-TDD from the first task: RED (`domain/refill-request.entity.spec.ts`)
+before GREEN (`domain/refill-request.entity.ts`), across 4 RED/GREEN pairs — 26 tests
+total. `completar()`'s 3 negative scenarios (missing `direccion`, missing `comuna`, an
+item missing `categoria`/`precioReferencia`) were written before its happy path, per
+convention. The sub-agent that wrote this batch died mid-flight (spend limit) right
+after confirming "All 26 tests GREEN" and before checking off tasks or running the full
+gate suite — the orchestrator picked up from there: reviewed both files in full,
+re-ran the unit suite in isolation (26/26 green), then all 5 gates workspace-wide.
+
+## What Was Built
+
+- `crearSolicitudActiva(userId, items, direccion, comuna, urgencia)` — manual-path
+  factory. Validates the full `SolicitudInvalidaError` surface named in that error
+  class's own doc-comment (empty `items`/`direccion`/`comuna`, plus per-item empty
+  `nombre`/`categoria` or negative `precioReferencia`) — a superset of tasks.md 2.1's
+  minimum, justified as defense-in-depth ahead of Phase 4b's DTO validation, mirroring
+  `provider-catalog-item.entity.ts`'s `assertProductoValido` precedent. Returns
+  `RefillRequestActiva` with `estado: 'abierta'` by construction; ids via `randomUUID()`
+  for the request and every item.
+- `crearBorrador(input: CrearBorradorInput)` — automatic-path factory. Signature has no
+  `direccion`/`comuna`/`categoria`/`precioReferencia` at all (the listener has none of
+  those, D3). Caller supplies `id`/item ids already generated. Returns
+  `RefillRequestBorrador` with `estado: 'borrador'` by construction, no completeness
+  check (a borrador is defined as incomplete).
+- `completar(borrador, input: CompletarInput)` — the `'borrador' → 'abierta'` transition.
+  Pure function, never mutates `borrador`/`input` (verified in tests via
+  `structuredClone` snapshots compared after a thrown rejection). Items are updated
+  in place: output array has the same length/ids/order as `borrador.items`, values come
+  from `input.items` when present, else fall back to whatever the borrador item already
+  carried (a borrador item legally can carry `categoria`/`precioReferencia` — D-B).
+  Unknown `refillItemId` in the input → `RefillItemDesconocidoError`, checked before the
+  completeness pass. Missing `direccion`/`comuna`/any item's `categoria`/`precioReferencia`
+  → `SolicitudIncompletaError`. Return type is `RefillRequestActiva` with no cast — the
+  literal object shape (`estado: 'abierta'`, `items: RefillItem[]`) satisfies the
+  discriminated union directly (D-B's compile-time guarantee, exercised for the first
+  time here since PR1 only proved it in the type-test fixture).
+- `marcarOfertada(activa)` / `marcarConfirmada(ofertada)` — the remaining 2 state-machine
+  transitions. Both pure (return a new object via spread, never mutate the input), both
+  reject out-of-order calls with `TransicionInvalidaError`. No caller in this change
+  (D6) — `KyselyRefillRepository.actualizarEstado` (Phase 7) will persist their output.
+
+## Deviations from Design
+
+None. `CompletarRefillItemInput`/`CompletarInput` were declared in
+`refill-request.entity.ts` itself rather than `@repon/types` — consistent with D-B
+(cross-domain-shared types only go in `@repon/types`; this shape is internal to
+`completar()`'s own caller, Phase 6b's `CompletarBorradorUseCase`, one file away from
+where design.md originally placed it).
+
+## Issues Found
+
+None beyond the sub-agent's spend-limit interruption (process issue, not a code issue —
+see TDD Note above). All 5 gates green: `pnpm lint`, `pnpm typecheck` (workspace root,
+`catalogo`/PR1 unaffected), `pnpm test` (382 unit tests total, up from 356 baseline —
+26 new), `pnpm build`, `pnpm format:check` (2 files needed a `prettier --write` pass,
+applied and re-verified).
+
+## What PR3 (next batch) should know
+
+- `domain/refill-request.entity.ts` now exports: `crearSolicitudActiva`,
+  `crearBorrador` (+ `CrearBorradorInput`), `completar` (+ `CompletarInput`,
+  `CompletarRefillItemInput`), `marcarOfertada`, `marcarConfirmada`. `RefillRequest` is
+  re-exported from this file too (`export type { RefillRequest }`) — Phase 3's
+  `KyselyRefillRepository` should import the entity/type from here, not duplicate a
+  type-only import from `@repon/types` for `RefillRequest` specifically.
+- `RefillRepository`'s 4 methods (`save`, `findById`, `findBorradorByConsumption`,
+  `actualizarEstado`) still have zero implementers — Phase 3 is where that changes.
+  `save`/`findById` need to persist/rehydrate the full discriminated union (borrador vs.
+  activa) — the mapper must read `estado` to decide which shape to build, matching how
+  `completar()`'s return type narrowing works here at the domain layer.
+- The `Number(null) === 0` mapper callout design.md flagged as PR3's highest
+  mechanical-risk item is still unaddressed — nothing in PR2 touches persistence.
+- No adapters, no HTTP, no I/O were added in this batch — `refill-matching.module.ts`
+  still only wires PR1's groundwork; Phase 3 is the first batch that touches
+  `adapters/`.
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, per tasks.md's Review Workload Forecast)
+- Current work unit: Unit 2 "Dominio puro" — PR2
+- Boundary: starts from PR1's groundwork commit; ends with `domain/refill-request.entity.ts`
+  + its spec file, zero adapters/I/O, all gates green
+- Actual size: 715 lines added (entity.ts 291 lines, entity.spec.ts 424 lines) —
+  meaningfully over tasks.md's 260-340 estimate (roughly 2x). Flagged honestly rather
+  than silently absorbed: the overrun is concentrated in the spec file (26 tests,
+  several with `structuredClone` snapshot assertions for non-mutation, plus heavy
+  doc-comments cross-referencing design.md/tasks.md per this codebase's convention) and
+  in doc-comments in the entity file itself (e.g. `assertSolicitudValida`'s comment
+  justifying the superset validation). No split is proposed: both files are already the
+  minimum structural unit design.md specifies (one entity file across 4 RED/GREEN pairs,
+  its one co-located spec) — splitting either would cut across a single cohesive
+  RED/GREEN sequence, not along a real seam. Kept as one PR; noting for `sdd-tasks`'
+  future estimates that domain files with heavy non-mutation test coverage in this repo
+  tend to run larger than the 260-340 baseline.
+
+## Status
+
+18/18 tasks complete across PR1+PR2. Ready for next batch (PR3, Phase 3 — persistencia,
+`KyselyRefillRepository`).
