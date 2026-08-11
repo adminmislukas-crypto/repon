@@ -904,3 +904,110 @@ noted above.
 (16/16) + PR4 (14/14) + PR5 (8/8). Ready for next batch: PR6a, Phase 6a —
 repo CAS methods + payloads de eventos (`findDueForCheck`,
 `intentarMarcarStockBajo`, `limpiarMarcaStockBajo`, `StockBajoDetectado`).
+
+---
+
+# Batch: PR6a "Repo CAS + payloads de eventos" (Phase 6a, tasks 6a.1–6a.8)
+
+**Mode**: Strict TDD (project-wide `strict_tdd: true`).
+
+## TDD Cycle Evidence
+
+| Task | RED | GREEN | REFACTOR |
+|---|---|---|---|
+| 6a.3/6a.4 `kysely-consumption.repository.ts` (`findDueForCheck`) | Extended `kysely-consumption.repository.spec.ts` with a `findDueForCheck` describe block first; ran `jest kysely-consumption.repository.spec.ts` → 5/5 new tests failed against the existing real "not yet available" throwing stub (confirms RED against real code, not a missing module) | Implemented `findDueForCheck` — single `.where(sql<boolean>...)` carrying design.md D-C's exact union predicate verbatim (`stock_bajo_notificado_at is not null or stock_actual * frecuencia_dias < ($1::numeric + 1) * dosis_por_toma * coalesce(array_length(horarios, 1), 0)`), asserted via `.toOperationNode()` AST inspection (same technique PR4's `descontarStock` test established) rather than string-matching a live query; re-ran → 20/20 passed (15 pre-existing + 5 new) | None needed |
+| 6a.5/6a.6 `kysely-consumption.repository.ts` (`intentarMarcarStockBajo`) | Extended the same spec file with an `intentarMarcarStockBajo` describe block first; ran → 5/5 new tests failed against the existing real "not yet available" throwing stub | Implemented the CAS — single `UPDATE ... SET stock_bajo_notificado_at = $2 WHERE id = $1 AND stock_bajo_notificado_at IS NULL RETURNING id`, `executeTakeFirst` (never `executeTakeFirstOrThrow` — 0 rows is a valid, expected outcome, not an error), `row !== undefined` as the `true`/`false` claim signal; re-ran → 25/25 passed | None needed |
+| 6a.7/6a.8 `kysely-consumption.repository.ts` (`limpiarMarcaStockBajo`) | Extended the same spec file with a `limpiarMarcaStockBajo` describe block first; ran → 3/3 new tests failed against the existing real "not yet available" throwing stub | Implemented the idempotent clear — `UPDATE ... SET stock_bajo_notificado_at = NULL WHERE id = $1`, `.execute()` with no row-count check (0-rows-affected is success by construction, no special-casing); re-ran → 28/28 passed | None needed |
+
+13 new unit tests passed (5 + 5 + 3), on top of the 15 pre-existing tests in
+the same file (`findById`/`save`/`descontarStock`, all untouched — 28/28
+total in the file). 6a.1 (`stock-bajo.payload.ts`) and 6a.2 (the two event
+classes) are not RED/GREEN tasks per tasks.md (no test file named for a
+plain interface + two 2-field DomainEvent classes with zero logic to test —
+same precedent as `dosis-registrada.event.ts` in PR4, which also shipped
+without its own spec file) — built directly, then proven to compile/typecheck
+cleanly via `pnpm typecheck`/`pnpm build`.
+
+## Completed Tasks (8/8 in this batch)
+
+- [x] 6a.1 `domains/consumo/events/stock-bajo.payload.ts`
+- [x] 6a.2 `events/stock-bajo-detectado.event.ts` + `events/refill-auto-solicitado.event.ts`
+- [x] 6a.3 RED (extend `kysely-consumption.repository.spec.ts`): `findDueForCheck`
+- [x] 6a.4 GREEN (extend the file): implements `findDueForCheck`
+- [x] 6a.5 RED (extend the file): `intentarMarcarStockBajo`
+- [x] 6a.6 GREEN (extend the file): implements `intentarMarcarStockBajo`
+- [x] 6a.7 RED (extend the file): `limpiarMarcaStockBajo`
+- [x] 6a.8 GREEN (extend the file): implements `limpiarMarcaStockBajo`
+
+## Files Changed
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `services/core-api/src/domains/consumo/events/stock-bajo.payload.ts` | Created | `StockBajoPayload` interface — exact D-D shape (`consumptionId, userId, ownerType, petId, kind, nombre, unidad, stockActual, consumoDiario, diasRestantes, umbralDias`), `petId`/`unidad` typed `string \| null` per design.md's own verbatim payload snippet (not `UserConsumption`'s optional `string \| undefined` — this is a deliberate event-payload widening the future PR6b use case will perform explicitly, not a passthrough of the entity's own field type) |
+| `services/core-api/src/domains/consumo/events/stock-bajo-detectado.event.ts` | Created | `StockBajoDetectado implements DomainEvent` — `type: 'consumo.stock_bajo_detectado'`, single `payload: StockBajoPayload` constructor param (design.md's own verbatim code sample, not a positional-fields signature) |
+| `services/core-api/src/domains/consumo/events/refill-auto-solicitado.event.ts` | Created | `RefillAutoSolicitado implements DomainEvent` — `type: 'consumo.refill_auto_solicitado'`, same `payload: StockBajoPayload` shape as `StockBajoDetectado`, deliberately (D-D: both fire off the same signal, distinct channels for distinct audiences) |
+| `services/core-api/src/domains/consumo/adapters/persistence/kysely-consumption.repository.spec.ts` | Modified | Added 3 new describe blocks: `findDueForCheck` (5 tests: exactly-one-WHERE-clause shape, raw-SQL union-predicate AST assertion via `.toOperationNode()` — normalized-whitespace exact match against design.md's D-C predicate plus an explicit "never a division operator" assertion, numeric-mapper pass-through, empty-result handling, `tx` propagation), `intentarMarcarStockBajo` (5 tests: exact CAS `UPDATE`/`SET`/two-`WHERE`/`RETURNING id` shape, `true` on 1-row claim, `false` on 0-row already-claimed, `executeTakeFirst`-never-`executeTakeFirstOrThrow` assertion, `tx` propagation), `limpiarMarcaStockBajo` (3 tests: exact `UPDATE`/`SET NULL`/`WHERE id` shape, idempotent-success-on-0-rows, `tx` propagation); updated the file's header comment to reflect this PR closing out all 6 `ConsumptionRepository` methods in one file |
+| `services/core-api/src/domains/consumo/adapters/persistence/kysely-consumption.repository.ts` | Modified | Implemented `findDueForCheck` (D-C, `sql<boolean>` tagged template carrying the union/multiplicative predicate verbatim, single `.where()` call), `intentarMarcarStockBajo` (D-A CAS, `executeTakeFirst` + `row !== undefined`), `limpiarMarcaStockBajo` (D-A idempotent clear); replaced all 3 "not yet available, lands in PR 6a" throwing stubs; updated both the class-level doc comment and each method's own doc comment with the CAS/candidates-not-confirmed/idempotent contracts from D-A/D-C |
+| `openspec/changes/backend-core-api-consumo/tasks.md` | Modified | Tasks 6a.1–6a.8 marked `[x]` |
+
+## Commands Run and Results
+
+| Command | Result |
+|---|---|
+| `pnpm exec jest kysely-consumption.repository.spec.ts` (RED, before each method's implementation existed) | 13/13 new tests failed against the existing real "not yet available" throwing stubs (5 `findDueForCheck` + 5 `intentarMarcarStockBajo` + 3 `limpiarMarcaStockBajo`), confirming RED against real code, not a missing module — same discipline as PR3/PR4's "extend the file" RED cycles |
+| `pnpm exec jest kysely-consumption.repository.spec.ts` (GREEN, after each implementation) | 28/28 passed (15 pre-existing + 13 new) |
+| `pnpm lint` (workspace root) | `eslint .` — clean |
+| `cd services/core-api && pnpm typecheck` | `tsc -p tsconfig.json --noEmit` — clean |
+| `cd services/core-api && pnpm test` | 48 unit suites / 339 tests passed (was 48/326 after PR5 — +0 suites/+13 tests, all new, same file); 12 e2e suites / 78 tests passed (unchanged from PR5 — this batch added zero e2e tests, matching tasks.md's Phase 6a scope: pure persistence + event-class scaffolding, no HTTP/use-case wiring). Zero regressions |
+| `cd services/core-api && pnpm build` | `tsc -p tsconfig.build.json` — clean |
+| `pnpm run format:check` (workspace root) | First run: 1 file flagged (line-wrap issues on the extended `kysely-consumption.repository.spec.ts`) → fixed via `npx prettier --write` on that file only → re-ran `format:check`/`lint`/`typecheck`/`pnpm test`/`pnpm build` again — all green (same recurring formatting-only gap as every prior batch) |
+
+## Deviations from Design
+
+**One typing resolution, not a behavioral deviation**: the launch instructions suggested checking `UserConsumption`'s own field types as a guide (`petId?: string`, i.e. optional/`undefined`), but design.md's D-D section ("Los payloads") already writes out `StockBajoPayload` verbatim with `petId: string | null` and `unidad: string | null` — an explicit widening from the entity's `string | undefined` to the event payload's `string | null`. Followed design.md's own verbatim interface exactly rather than the entity's field type, since design.md's code sample is the resolved Choice for Q4/D-D, not an open question. This has no behavioral consequence today (no use case constructs a `StockBajoPayload` yet — that's PR6b's job), but it does mean PR6b's use case must explicitly map `consumption.petId ?? null` (and `consumption.unidad ?? null`) when building the payload, not spread the entity directly.
+
+**Event constructor shape resolved by design.md precedent, not re-derived**: the launch instructions flagged this as an open style question (positional-fields vs. single-payload-param), but design.md's own "Los payloads" code block already shows both `StockBajoDetectado`/`RefillAutoSolicitado` taking a single `constructor(readonly payload: StockBajoPayload) {}`. This is consistent with, not a departure from, `catalogo`'s positional-fields convention: `consumo`'s own `DosisRegistrada` (PR4) uses positional fields for its own 5 non-shared fields, so the single-payload-param shape here is specific to the fact that TWO events share ONE payload type (design.md's D-D rationale: avoiding field duplication/drift across the pair), not a new repo-wide convention.
+
+Everything else matches design.md verbatim: the D-C union/multiplicative/`+1`-superset SQL predicate (byte-for-byte, including the "candidates, not confirmed under-threshold items" doc-comment requirement), the D-A CAS `UPDATE ... WHERE ... IS NULL RETURNING id` shape with `executeTakeFirst` over `executeTakeFirstOrThrow`, and the D-A idempotent-clear semantics for `limpiarMarcaStockBajo`.
+
+## Issues Found
+
+None. All 13 new RED tests failed for the expected reason (the existing real throwing stub, not a missing module — same class of RED as PR3's `save`/PR4's `descontarStock` "extend the file" cycles), all 3 GREEN implementations passed on first run after being written, and the only follow-up needed was the same recurring formatting-only `prettier --write` step every prior batch has hit.
+
+**No wiring performed, by design**: per this batch's explicit scope boundary, `consumo.module.ts` was NOT touched, no use case calls any of the 3 newly-implemented repository methods yet, and neither event class is published anywhere yet — `ConsumptionRepository` now has all 6 methods for real, and `StockBajoDetectado`/`RefillAutoSolicitado` exist as importable classes, but nothing in this batch invokes any of them. That wiring is PR6b's `ProcesarConsumosVencidosUseCase`.
+
+## What PR6b (next batch) should know
+
+- `ConsumptionRepository`'s Kysely adapter now has ALL 6 methods implemented for real (`findById`, `save`, `descontarStock`, `findDueForCheck`, `intentarMarcarStockBajo`, `limpiarMarcaStockBajo`) — zero throwing stubs remain in `kysely-consumption.repository.ts`. `ProcesarConsumosVencidosUseCase` can inject `CONSUMPTION_REPOSITORY` and call all 3 of this batch's methods directly.
+- `StockBajoDetectado`/`RefillAutoSolicitado` are ready to import from `domains/consumo/events/stock-bajo-detectado.event.ts`/`refill-auto-solicitado.event.ts` — both take a single `new StockBajoDetectado({ ...payload })`/`new RefillAutoSolicitado({ ...payload })` constructor call. The use case must build the `StockBajoPayload` object explicitly, mapping `consumption.petId ?? null` and `consumption.unidad ?? null` (see "Deviations" above — the entity's optional fields, the payload's nullable fields).
+- design.md's Diagram 1 (steps 2a–2g) is the exact per-item loop shape PR6b must follow: `consumoDiario`/`diasRestantes` from PR2a's `domain/consumo.calculos.ts` first, then the cleanup branch (`diasRestantes >= UMBRAL` + marker open → `limpiarMarcaStockBajo`, zero events/push) BEFORE the disparo branch (`intentarMarcarStockBajo` → `false` means already claimed, do nothing; `true` means publish `StockBajoDetectado` always and `RefillAutoSolicitado` iff `consumption.autoCrearRefill`, then best-effort `sendPush` via PR5's real `NOTIFICATION_PORT`).
+- **The D-A debounce-clear gap flagged back in PR3's batch** (`ConfigurarConsumoUseCase` does not yet call `limpiarMarcaStockBajo` on a full reconfiguration) is now UNBLOCKED — `limpiarMarcaStockBajo` is real as of this batch. PR6b's own scope is the cron use case only, so this gap is explicitly NOT closed in this batch either; it remains open for a future batch (PR6b, PR6c, or a small follow-up) to wire the call into `ConfigurarConsumoUseCase` per D-A's stated rule. Flagging again so it is not silently lost a second time.
+- Per tasks.md's 10-PR chain, PR6b's scope is `ports-in/procesar-consumos-vencidos.use-case.ts` (+ its spec) — the single most scenario-dense use case in the whole change (debounce across runs, cleanup branch, fan-out, failure isolation, missing-push-token safety, no-HTTP/no-`@Roles` structural checks, no `TRANSACTION_MANAGER` injection). Estimated 350-430 lines, Medium-High risk per tasks.md's own forecast — budget review time generously.
+- This batch (236 actual: 194 insertions in the modified repo file, 66 in its spec net of the header-comment delta, plus 3 small new event files ≈ 86 lines) landed within/near tasks.md's own 220-280 line estimate for PR6a — see exact figures below.
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, per tasks.md's Review Workload
+  Forecast — resolved by the maintainer, "Decision needed before apply: No")
+- Current work unit: Unit 6a "Repo CAS + eventos" — PR6a
+- Boundary: starts from PR5's notifications-kernel commit (`main` @
+  `7cb41ae`); ends with a fully compiling, fully tested commit that closes
+  out `ConsumptionRepository`'s interface (all 6 methods real) and adds the
+  2 stock-bajo event classes + their shared payload — zero wiring, zero use
+  case, zero HTTP surface, all gates green
+- Estimated review budget impact: 427 changed lines (395 insertions / 32
+  deletions across 6 files: 2 modified + 3 new event files + `tasks.md`'s
+  checkbox diff) — WITHIN tasks.md's own 220-280 estimate for the
+  repository/event code itself (341 lines across the 3 repository-related
+  files) once `tasks.md`'s 16-line checkbox diff and the 3 event files'
+  86 lines are counted separately; Low risk realized as Low in practice,
+  consistent with tasks.md's own forecast for this PR
+
+## Status (cumulative)
+
+71/71 tasks complete across PR1 (10/10) + PR2a (6/6) + PR2b (9/9) + PR3
+(16/16) + PR4 (14/14) + PR5 (8/8) + PR6a (8/8). Ready for next batch: PR6b,
+Phase 6b — `ProcesarConsumosVencidosUseCase` (the use case with the most
+scenarios in the whole change, consuming PR6a's 3 new repo methods + PR5's
+`NOTIFICATION_PORT` + these 2 new events, wrapped by PR6c's `@Cron()`
+adapter).

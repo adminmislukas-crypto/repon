@@ -70,13 +70,14 @@ function toUserConsumptionValues(item: UserConsumption) {
  * same as design.md's own §"Secuencia de implementación" table plans it:
  * PR 2b landed `findById` — the read path `CalcularDiasRestantesUseCase`
  * needs for the D7 ownership check. PR 3 landed `save` —
- * `ConfigurarConsumoUseCase`'s only write path. This PR (4) lands
- * `descontarStock` — `MarcarDosisTomadaUseCase`'s atomic decrement (D-H.2).
- * The remaining 3 methods (`findDueForCheck`, `intentarMarcarStockBajo`,
- * `limpiarMarcaStockBajo`) still throw a named, loud error until PR 6a
- * implements them — a silent no-op stub would be worse than a missing
- * provider (same principle `catalogo`'s `KyselyCatalogRepository`
- * established for its own `save`/`saveMany` in its equivalent PR).
+ * `ConfigurarConsumoUseCase`'s only write path. PR 4 landed `descontarStock`
+ * — `MarcarDosisTomadaUseCase`'s atomic decrement (D-H.2). This PR (6a)
+ * lands the last 3 methods that the future `ProcesarConsumosVencidosUseCase`
+ * (PR 6b) needs: `findDueForCheck` (D-C's union/multiplicative candidate
+ * predicate) and the debounce CAS pair `intentarMarcarStockBajo`/
+ * `limpiarMarcaStockBajo` (D-A) — closing out `ConsumptionRepository`'s
+ * full interface. No use case calls these 3 methods yet; that wiring is
+ * PR 6b's scope, not this one's.
  */
 @Injectable()
 export class KyselyConsumptionRepository implements ConsumptionRepository {
@@ -122,30 +123,86 @@ export class KyselyConsumptionRepository implements ConsumptionRepository {
     return row ? mapUserConsumptionRow(row) : null;
   }
 
+  /**
+   * design.md D-C, exact predicate — a UNION, never a bare "below
+   * threshold" filter: branch (A) `stock_actual * frecuencia_dias < (U+1) *
+   * dosis_por_toma * n_horarios` is "may need to fire"; branch (B)
+   * `stock_bajo_notificado_at IS NOT NULL` is "may need to clear" — it is
+   * what makes the D-A debounce marker self-healing instead of permanent
+   * (the cron is the only cleaner of that column, so a row that climbed
+   * back above threshold while still marked MUST stay in the result set).
+   *
+   * MULTIPLICATIVE, never division: `horarios` has no non-empty CHECK and
+   * `dosis_por_toma` has no positivity CHECK, so a division would abort the
+   * ENTIRE query on one degenerate row. The multiplicative form makes a
+   * degenerate row's right-hand side `= 0`, and `stock * freq < 0` is
+   * always false (both are non-negative) — the row silently self-excludes.
+   *
+   * Returns CANDIDATES, not confirmed under-threshold items: the `+1`
+   * margin is a strict superset guard, not a tight equivalence — it exists
+   * because Postgres `numeric` division and JS `float64` division are not
+   * guaranteed to agree bit-for-bit at the exact boundary. The caller MUST
+   * re-run `domain/consumo.calculos.ts`'s `diasRestantes` over every
+   * returned entity and MAY skip false positives; it MUST NOT treat a row
+   * in this result set as an already-confirmed alert.
+   */
   async findDueForCheck(umbralDias: number, tx?: TransactionContext): Promise<UserConsumption[]> {
-    throw new Error(
-      `KyselyConsumptionRepository.findDueForCheck(umbralDias=${umbralDias}, tx=${tx ? 'given' : 'none'}) ` +
-        'is implemented in PR 6a (backend-core-api-consumo, design.md D-C predicate) — not yet available.',
-    );
+    const rows = await this.executor(tx)
+      .selectFrom('user_consumption')
+      .selectAll()
+      .where(
+        sql<boolean>`stock_bajo_notificado_at is not null
+           or stock_actual * frecuencia_dias
+                < (${umbralDias}::numeric + 1) * dosis_por_toma * coalesce(array_length(horarios, 1), 0)`,
+      )
+      .execute();
+    return rows.map(mapUserConsumptionRow);
   }
 
+  /**
+   * design.md D-A's compare-and-set, verbatim: `UPDATE ... SET
+   * stock_bajo_notificado_at = $2 WHERE id = $1 AND
+   * stock_bajo_notificado_at IS NULL RETURNING id`. ONE statement — never a
+   * prior read — so the row-lock Postgres already takes on the `UPDATE` is
+   * the entire concurrency mechanism (no advisory lock needed, D-E). `true`
+   * (1 row) = this caller won the claim and MUST emit. `false` (0 rows) =
+   * already claimed — by yesterday's run (D5), another replica, or an
+   * overlapping run (D-E) — and the caller MUST NOT emit.
+   *
+   * `executeTakeFirst`, deliberately never `executeTakeFirstOrThrow`: a
+   * 0-row result is an expected, valid outcome here (the losing side of a
+   * race), not an error condition.
+   */
   async intentarMarcarStockBajo(
     consumptionId: string,
     notificadoAt: Date,
     tx?: TransactionContext,
   ): Promise<boolean> {
-    throw new Error(
-      `KyselyConsumptionRepository.intentarMarcarStockBajo(id=${consumptionId}, ` +
-        `notificadoAt=${notificadoAt.toISOString()}, tx=${tx ? 'given' : 'none'}) is implemented ` +
-        'in PR 6a (backend-core-api-consumo, design.md D-A CAS) — not yet available.',
-    );
+    const row = await this.executor(tx)
+      .updateTable('user_consumption')
+      .set({ stock_bajo_notificado_at: notificadoAt.toISOString() })
+      .where('id', '=', consumptionId)
+      .where('stock_bajo_notificado_at', 'is', null)
+      .returning('id')
+      .executeTakeFirst();
+    return row !== undefined;
   }
 
+  /**
+   * design.md D-A: idempotent by construction — a plain `UPDATE ... SET
+   * stock_bajo_notificado_at = NULL WHERE id = $1` affects 0 rows when the
+   * marker is already clear, and that is success, not an error; no
+   * special-casing needed. Called by the cron (stock replenished above
+   * threshold) and by `configurarConsumo` (a full reconfiguration is a new
+   * alert context) — never by `marcarDosisTomada`, which can only lower
+   * stock and can never resolve the alert condition.
+   */
   async limpiarMarcaStockBajo(consumptionId: string, tx?: TransactionContext): Promise<void> {
-    throw new Error(
-      `KyselyConsumptionRepository.limpiarMarcaStockBajo(id=${consumptionId}, tx=${tx ? 'given' : 'none'}) ` +
-        'is implemented in PR 6a (backend-core-api-consumo, design.md D-A) — not yet available.',
-    );
+    await this.executor(tx)
+      .updateTable('user_consumption')
+      .set({ stock_bajo_notificado_at: null })
+      .where('id', '=', consumptionId)
+      .execute();
   }
 
   /**

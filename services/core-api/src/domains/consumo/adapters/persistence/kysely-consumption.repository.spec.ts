@@ -12,10 +12,11 @@ import { KyselyConsumptionRepository } from './kysely-consumption.repository';
 // spec asserts all three conversions explicitly so a missing `Number(...)`
 // call fails loudly here instead of corrupting `diasRestantes` in silence.
 //
-// `findById` landed in PR 2b.2; `save` lands in this PR (3.7/3.8, D-H) —
-// the rest of `ConsumptionRepository` (`findDueForCheck`,
-// `intentarMarcarStockBajo`, `limpiarMarcaStockBajo`, `descontarStock`)
-// extend this SAME file incrementally in PR4/6a, mirroring `catalogo`'s
+// `findById` landed in PR 2b.2, `save` in PR 3 (3.7/3.8, D-H),
+// `descontarStock` in PR 4 (4.1/4.2, D-H.2). This PR (6a) lands the last 3
+// methods — `findDueForCheck` (D-C), `intentarMarcarStockBajo`,
+// `limpiarMarcaStockBajo` (both D-A) — closing out `ConsumptionRepository`.
+// All 6 methods now live in this SAME file, mirroring `catalogo`'s
 // `KyselyCatalogRepository` convention (one file per domain repository, not
 // one file per method).
 
@@ -333,6 +334,257 @@ describe('KyselyConsumptionRepository', () => {
       await repo.descontarStock('consumption-1', 2, tx);
 
       expect(txChain.executeTakeFirstOrThrow).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // design.md D-C: the exact union predicate, verbatim, and its 3
+  // non-negotiable properties: (1) UNION, never a bare "below threshold"
+  // filter — the `stock_bajo_notificado_at IS NOT NULL` branch is what lets
+  // the cron self-heal the debounce marker on a row that climbed back above
+  // threshold; excluding it would make the marker permanent instead of
+  // temporary. (2) MULTIPLICATIVE, never division — `horarios` has no
+  // non-empty CHECK and `dosis_por_toma` has no positivity CHECK, so a
+  // divide-by-zero would abort the ENTIRE daily query for every user, not
+  // just the bad row; the multiplicative form makes a degenerate row's RHS
+  // `= 0`, which self-excludes since `stock * freq < 0` is always false.
+  // (3) the `+1` margin makes this a STRICT SUPERSET of the domain's own
+  // decision (`domain/consumo.calculos.ts`), never the decision itself —
+  // `findDueForCheck` returns candidates, the caller re-evaluates each one.
+  describe('findDueForCheck — D-C union predicate (candidates, not confirmed under-threshold items)', () => {
+    function buildSelectDb(rows: unknown[]) {
+      const calls: Record<string, unknown[][]> = {};
+      const record = (method: string, args: unknown[]) => {
+        (calls[method] ??= []).push(args);
+      };
+      const chain: Record<string, jest.Mock> = {};
+      chain.selectAll = jest.fn((...args: unknown[]) => {
+        record('selectAll', args);
+        return chain;
+      });
+      chain.where = jest.fn((...args: unknown[]) => {
+        record('where', args);
+        return chain;
+      });
+      chain.execute = jest.fn(async () => rows);
+      const selectFrom = jest.fn((...args: unknown[]) => {
+        record('selectFrom', args);
+        return chain;
+      });
+      const db = { selectFrom } as unknown as Kysely<DB>;
+      return { db, calls, chain };
+    }
+
+    it('selects from user_consumption with exactly one WHERE clause (the union predicate, not two ANDed calls)', async () => {
+      const { db, calls } = buildSelectDb([buildRow()]);
+      const repo = new KyselyConsumptionRepository(db);
+
+      await repo.findDueForCheck(7);
+
+      expect(calls['selectFrom']).toEqual([['user_consumption']]);
+      expect(calls['where']).toHaveLength(1);
+    });
+
+    it('the WHERE predicate is raw SQL: stock_bajo_notificado_at IS NOT NULL OR the multiplicative comparison — never a division', async () => {
+      const { db, calls } = buildSelectDb([]);
+      const repo = new KyselyConsumptionRepository(db);
+
+      await repo.findDueForCheck(7);
+
+      const [whereArg] = calls['where']![0] as [
+        {
+          isRawBuilder: boolean;
+          toOperationNode(): {
+            sqlFragments: readonly string[];
+            parameters: readonly { value: unknown }[];
+          };
+        },
+      ];
+      expect(whereArg.isRawBuilder).toBe(true);
+      const node = whereArg.toOperationNode();
+      const sqlText = node.sqlFragments.join('').replace(/\s+/g, ' ').trim();
+      expect(sqlText).toBe(
+        'stock_bajo_notificado_at is not null or stock_actual * frecuencia_dias ' +
+          '< (::numeric + 1) * dosis_por_toma * coalesce(array_length(horarios, 1), 0)',
+      );
+      expect(sqlText).not.toMatch(/[^a-z]\/[^a-z]/); // never a division operator
+      expect(node.parameters).toHaveLength(1);
+      expect(node.parameters[0]!.value).toBe(7);
+    });
+
+    it('maps every returned row through the numeric mapper (dosis_por_toma/stock_actual)', async () => {
+      const { db } = buildSelectDb([buildRow({ id: 'consumption-2' })]);
+      const repo = new KyselyConsumptionRepository(db);
+
+      const result = await repo.findDueForCheck(7);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]!.id).toBe('consumption-2');
+      expect(result[0]!.dosisPorToma).toBe(2.5);
+      expect(typeof result[0]!.stockActual).toBe('number');
+    });
+
+    it('returns an empty array when nothing is due — not an error', async () => {
+      const { db } = buildSelectDb([]);
+      const repo = new KyselyConsumptionRepository(db);
+
+      await expect(repo.findDueForCheck(7)).resolves.toEqual([]);
+    });
+
+    it('propagates tx (D6/repo-wide convention) — runs against the tx handle, not this.db', async () => {
+      const { db: unusedDb } = buildSelectDb([]);
+      const { db: txDb, chain: txChain } = buildSelectDb([]);
+      const repo = new KyselyConsumptionRepository(unusedDb);
+      const tx =
+        txDb as unknown as import('../../../../shared/database/transaction').TransactionContext;
+
+      await repo.findDueForCheck(7, tx);
+
+      expect(txChain.execute).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // design.md D-A: the compare-and-set that makes the debounce marker safe
+  // under concurrency AND across cron runs in ONE statement — never a
+  // read-then-write. `true` (1 row) = this caller won the claim and MUST
+  // emit. `false` (0 rows) = already claimed (yesterday's run, another
+  // replica, or an overlapping run) and the caller MUST NOT emit.
+  describe('intentarMarcarStockBajo — CAS (design.md D-A)', () => {
+    function buildCasDb(row: { id: string } | undefined) {
+      const calls: Record<string, unknown[][]> = {};
+      const record = (method: string, args: unknown[]) => {
+        (calls[method] ??= []).push(args);
+      };
+      const chain: Record<string, jest.Mock> = {};
+      chain.set = jest.fn((...args: unknown[]) => {
+        record('set', args);
+        return chain;
+      });
+      chain.where = jest.fn((...args: unknown[]) => {
+        record('where', args);
+        return chain;
+      });
+      chain.returning = jest.fn((...args: unknown[]) => {
+        record('returning', args);
+        return chain;
+      });
+      chain.executeTakeFirst = jest.fn(async () => row);
+      const updateTable = jest.fn((...args: unknown[]) => {
+        record('updateTable', args);
+        return chain;
+      });
+      const db = { updateTable } as unknown as Kysely<DB>;
+      return { db, calls, chain };
+    }
+
+    it('issues UPDATE ... SET stock_bajo_notificado_at = $2 WHERE id = $1 AND stock_bajo_notificado_at IS NULL RETURNING id', async () => {
+      const { db, calls } = buildCasDb({ id: 'consumption-1' });
+      const repo = new KyselyConsumptionRepository(db);
+      const notificadoAt = new Date('2026-08-10T09:00:00.000Z');
+
+      await repo.intentarMarcarStockBajo('consumption-1', notificadoAt);
+
+      expect(calls['updateTable']).toEqual([['user_consumption']]);
+      expect(calls['set']).toEqual([[{ stock_bajo_notificado_at: notificadoAt.toISOString() }]]);
+      expect(calls['where']).toEqual([
+        ['id', '=', 'consumption-1'],
+        ['stock_bajo_notificado_at', 'is', null],
+      ]);
+      expect(calls['returning']).toEqual([['id']]);
+    });
+
+    it('returns true when the row was claimed (1 row affected) — the caller MUST emit', async () => {
+      const { db } = buildCasDb({ id: 'consumption-1' });
+      const repo = new KyselyConsumptionRepository(db);
+
+      await expect(repo.intentarMarcarStockBajo('consumption-1', new Date())).resolves.toBe(true);
+    });
+
+    it('returns false when already claimed (0 rows affected) — the caller MUST NOT emit, and this is NOT an error', async () => {
+      const { db } = buildCasDb(undefined);
+      const repo = new KyselyConsumptionRepository(db);
+
+      await expect(repo.intentarMarcarStockBajo('consumption-1', new Date())).resolves.toBe(false);
+    });
+
+    it('uses executeTakeFirst, never executeTakeFirstOrThrow — a 0-row result is an expected outcome, not an error', async () => {
+      const { db, chain } = buildCasDb(undefined);
+      const repo = new KyselyConsumptionRepository(db);
+
+      await repo.intentarMarcarStockBajo('consumption-1', new Date());
+
+      expect(chain.executeTakeFirst).toHaveBeenCalledTimes(1);
+      expect(chain.executeTakeFirstOrThrow).toBeUndefined();
+    });
+
+    it('propagates tx (D6/repo-wide convention) — runs against the tx handle, not this.db', async () => {
+      const { db: unusedDb } = buildCasDb({ id: 'consumption-1' });
+      const { db: txDb, chain: txChain } = buildCasDb({ id: 'consumption-1' });
+      const repo = new KyselyConsumptionRepository(unusedDb);
+      const tx =
+        txDb as unknown as import('../../../../shared/database/transaction').TransactionContext;
+
+      await repo.intentarMarcarStockBajo('consumption-1', new Date(), tx);
+
+      expect(txChain.executeTakeFirst).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // design.md D-A: idempotent by construction — 0 rows affected (already
+  // clear) is success, not an error. Called both by the cron (stock
+  // replenished above threshold) and by `configurarConsumo` (a full
+  // reconfiguration is a new alert context).
+  describe('limpiarMarcaStockBajo — idempotent clear (design.md D-A)', () => {
+    function buildClearDb() {
+      const calls: Record<string, unknown[][]> = {};
+      const record = (method: string, args: unknown[]) => {
+        (calls[method] ??= []).push(args);
+      };
+      const chain: Record<string, jest.Mock> = {};
+      chain.set = jest.fn((...args: unknown[]) => {
+        record('set', args);
+        return chain;
+      });
+      chain.where = jest.fn((...args: unknown[]) => {
+        record('where', args);
+        return chain;
+      });
+      chain.execute = jest.fn(async () => []);
+      const updateTable = jest.fn((...args: unknown[]) => {
+        record('updateTable', args);
+        return chain;
+      });
+      const db = { updateTable } as unknown as Kysely<DB>;
+      return { db, calls, chain };
+    }
+
+    it('issues UPDATE user_consumption SET stock_bajo_notificado_at = NULL WHERE id = $1', async () => {
+      const { db, calls } = buildClearDb();
+      const repo = new KyselyConsumptionRepository(db);
+
+      await repo.limpiarMarcaStockBajo('consumption-1');
+
+      expect(calls['updateTable']).toEqual([['user_consumption']]);
+      expect(calls['set']).toEqual([[{ stock_bajo_notificado_at: null }]]);
+      expect(calls['where']).toEqual([['id', '=', 'consumption-1']]);
+    });
+
+    it('resolves successfully even when 0 rows are affected (already clear) — idempotent, never an error', async () => {
+      const { db } = buildClearDb();
+      const repo = new KyselyConsumptionRepository(db);
+
+      await expect(repo.limpiarMarcaStockBajo('already-clear')).resolves.toBeUndefined();
+    });
+
+    it('propagates tx (D6/repo-wide convention) — runs against the tx handle, not this.db', async () => {
+      const { db: unusedDb } = buildClearDb();
+      const { db: txDb, chain: txChain } = buildClearDb();
+      const repo = new KyselyConsumptionRepository(unusedDb);
+      const tx =
+        txDb as unknown as import('../../../../shared/database/transaction').TransactionContext;
+
+      await repo.limpiarMarcaStockBajo('consumption-1', tx);
+
+      expect(txChain.execute).toHaveBeenCalledTimes(1);
     });
   });
 });

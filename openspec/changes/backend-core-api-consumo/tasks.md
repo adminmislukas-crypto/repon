@@ -148,14 +148,14 @@ Independent of Phases 3-4; must land before Phase 6a (el cron inyecta `NOTIFICAT
 
 Depende de Phase 1 (columna de debounce) y 2a (fórmulas).
 
-- [ ] 6a.1 `domains/consumo/events/stock-bajo.payload.ts`: `StockBajoPayload` — exact D-D shape (`consumptionId, userId, ownerType, petId, kind, nombre, unidad, stockActual, consumoDiario, diasRestantes, umbralDias`).
-- [ ] 6a.2 `events/stock-bajo-detectado.event.ts` + `events/refill-auto-solicitado.event.ts` — both share `StockBajoPayload`, distinct `type` (`consumo.stock_bajo_detectado` / `consumo.refill_auto_solicitado`).
-- [ ] 6a.3 RED (extend `kysely-consumption.repository.spec.ts`): `findDueForCheck(umbralDias)` — exact D-C union predicate (`stock_bajo_notificado_at IS NOT NULL OR stock_actual * frecuencia_dias < (umbral+1) * dosis_por_toma * n_horarios`), multiplicative, never division.
-- [ ] 6a.4 GREEN (extend the file): implements `findDueForCheck`.
-- [ ] 6a.5 RED (extend the file): `intentarMarcarStockBajo` — CAS `UPDATE ... WHERE stock_bajo_notificado_at IS NULL RETURNING id`; 0 rows→`false`, 1 row→`true`.
-- [ ] 6a.6 GREEN (extend the file): implements `intentarMarcarStockBajo`.
-- [ ] 6a.7 RED (extend the file): `limpiarMarcaStockBajo` — idempotent, 0-rows-affected is success.
-- [ ] 6a.8 GREEN (extend the file): implements `limpiarMarcaStockBajo`.
+- [x] 6a.1 `domains/consumo/events/stock-bajo.payload.ts`: `StockBajoPayload` — exact D-D shape (`consumptionId, userId, ownerType, petId, kind, nombre, unidad, stockActual, consumoDiario, diasRestantes, umbralDias`).
+- [x] 6a.2 `events/stock-bajo-detectado.event.ts` + `events/refill-auto-solicitado.event.ts` — both share `StockBajoPayload`, distinct `type` (`consumo.stock_bajo_detectado` / `consumo.refill_auto_solicitado`).
+- [x] 6a.3 RED (extend `kysely-consumption.repository.spec.ts`): `findDueForCheck(umbralDias)` — exact D-C union predicate (`stock_bajo_notificado_at IS NOT NULL OR stock_actual * frecuencia_dias < (umbral+1) * dosis_por_toma * n_horarios`), multiplicative, never division.
+- [x] 6a.4 GREEN (extend the file): implements `findDueForCheck`.
+- [x] 6a.5 RED (extend the file): `intentarMarcarStockBajo` — CAS `UPDATE ... WHERE stock_bajo_notificado_at IS NULL RETURNING id`; 0 rows→`false`, 1 row→`true`.
+- [x] 6a.6 GREEN (extend the file): implements `intentarMarcarStockBajo`.
+- [x] 6a.7 RED (extend the file): `limpiarMarcaStockBajo` — idempotent, 0-rows-affected is success.
+- [x] 6a.8 GREEN (extend the file): implements `limpiarMarcaStockBajo`.
 
 ## Phase 6b: `ProcesarConsumosVencidosUseCase` — Spec: `core-api-consumo`
 
