@@ -1011,3 +1011,249 @@ Phase 6b — `ProcesarConsumosVencidosUseCase` (the use case with the most
 scenarios in the whole change, consuming PR6a's 3 new repo methods + PR5's
 `NOTIFICATION_PORT` + these 2 new events, wrapped by PR6c's `@Cron()`
 adapter).
+
+---
+
+# Batch: PR6b `ProcesarConsumosVencidosUseCase` (Phase 6b, tasks 6b.1–6b.2)
+
+**Mode**: Strict TDD (project-wide `strict_tdd: true`).
+
+## A gap discovered before RED/GREEN could start (must-read before anything else)
+
+design.md Diagram 1, step 2b requires the use case to branch on
+`candidata.stockBajoNotificadoAt !== null` for every row `findDueForCheck`
+returns — that's the ONLY way to tell the cleanup branch (2b) apart from the
+no-op branch (2c) when both share `diasRestantes >= UMBRAL`. But PR6a's
+`findDueForCheck` returned plain `UserConsumption[]`, and
+`mapUserConsumptionRow` (shared by `findById`) never mapped
+`stock_bajo_notificado_at` at all — PR6a's own class-level doc comment even
+said so ("no read path until `findDueForCheck` lands"), a promise PR6a
+landed `findDueForCheck` without actually keeping.
+
+Fix considered and rejected: add `stockBajoNotificadoAt` to
+`@repon/types.UserConsumption`. Rejected because design.md's own D15 delta
+table for `@repon/types` is explicit — *"el resto sin cambios"* (only
+`userId` was ever meant to land there, PR1). The marker is `consumo`'s own
+internal debounce bookkeeping (D-A: "Ningún otro dominio lo lee ni lo
+escribe"), never a client-facing fact.
+
+Fix applied instead — scoped entirely to `services/core-api`, never
+touching `@repon/types`:
+
+- **`ports-out/consumption-repository.port.ts`**: new exported type
+  `ConsumptionCandidata extends UserConsumption { readonly
+  stockBajoNotificadoAt: string | null }`, doc-commented with the full
+  rationale above. `findDueForCheck`'s return type changed from
+  `Promise<UserConsumption[]>` to `Promise<ConsumptionCandidata[]>`.
+- **`adapters/persistence/kysely-consumption.repository.ts`**:
+  `findDueForCheck`'s mapping now widens `mapUserConsumptionRow(row)` with
+  `stockBajoNotificadoAt: row.stock_bajo_notificado_at` at the call site
+  ONLY — `mapUserConsumptionRow` itself is untouched, so `findById`'s
+  return shape (and its existing `toEqual({...})` assertion, which has no
+  `stockBajoNotificadoAt` key) stays byte-identical to before. `save()`'s
+  value-mapping was already correctly excluding the column (D-A); no change
+  there.
+- RED-first: extended `kysely-consumption.repository.spec.ts`'s
+  `findDueForCheck` describe block with one new test asserting
+  `stockBajoNotificadoAt` propagates per-row; ran it against the
+  pre-fix code → failed (`Received: undefined`), confirming real RED; then
+  implemented the fix → 29/29 passed in that file (28 pre-existing + 1 new).
+
+This is a declared deviation from the strict "only touch
+`ports-in/procesar-consumos-vencidos.use-case.(spec.)ts`" file list implied
+by the launch scope — necessary because PR6b's own core branching logic
+(2b vs 2c) is impossible to implement correctly without it. Flagged here
+explicitly rather than silently widening scope, per the "note deviations,
+don't silently freelance" rule.
+
+## TDD Cycle Evidence
+
+| Task | RED | GREEN | REFACTOR |
+|---|---|---|---|
+| Prerequisite fix: `findDueForCheck` → `ConsumptionCandidata` | Extended `kysely-consumption.repository.spec.ts` with a `stockBajoNotificadoAt` propagation test first; ran `jest kysely-consumption.repository.spec.ts` → failed (`undefined` vs the expected ISO string), confirming RED against the real pre-fix mapping | Widened `findDueForCheck`'s per-row mapping to include `stockBajoNotificadoAt: row.stock_bajo_notificado_at`, changed the port's return type to the new `ConsumptionCandidata`; re-ran → 29/29 passed (28 pre-existing + 1 new), zero change to any other test in the file | None needed |
+| 6b.1/6b.2 `ProcesarConsumosVencidosUseCase` | Wrote `ports-in/procesar-consumos-vencidos.use-case.spec.ts` first (14 tests across 9 describe blocks) importing a `.use-case.ts` that did not exist yet; ran `jest procesar-consumos-vencidos.use-case.spec.ts` → failed with `Cannot find module './procesar-consumos-vencidos.use-case'` — RED against a genuinely missing module, not a typo | Implemented `ports-in/procesar-consumos-vencidos.use-case.ts` — the full design.md Diagram 1 flow (steps 1 through 3), constructor injecting only `CONSUMPTION_REPOSITORY`/`EVENT_PUBLISHER`/`NOTIFICATION_PORT`; re-ran → 14/14 passed on first full run after the implementation was complete | None needed |
+
+14 new tests for the use case + 1 new test for the repository fix = 15 new
+tests total this batch, on top of the 339 pre-existing (48 unit suites).
+Final count: 49 unit suites / 354 tests, 12 e2e suites / 78 tests (e2e
+count unchanged — this use case has zero HTTP surface by design, see
+below).
+
+## Completed Tasks (2/2 in this batch)
+
+- [x] 6b.1 RED: `ports-in/procesar-consumos-vencidos.use-case.spec.ts` — all
+  9 scenario categories from tasks.md's own enumeration: debounce (D5, two
+  consecutive runs → one event pair total), full debounce lifecycle
+  (trigger → cleanup → re-trigger), cleanup branch (2b) + no-op branch (2c),
+  fan-out (D3, N items → N separate `StockBajoDetectado`),
+  `RefillAutoSolicitado` conditionality (`autoCrearRefill`), failure
+  isolation (D4, one item throws → caught+logged, others still process —
+  covered for both `intentarMarcarStockBajo` and `limpiarMarcaStockBajo`
+  throwing), constructor-injection inspection (no `TRANSACTION_MANAGER`,
+  exactly 3 tokens), missing-push-token-safety (sendPush resolving normally
+  doesn't fail the item), reclaim-before-emit ordering (D-E, 2 tests: call
+  order assertion + "false claim → zero publish/sendPush calls"), plus 2
+  extra payload-shape tests (D-D: exact `StockBajoPayload` fields incl.
+  `petId`/`unidad` null-mapping; both events share the identical payload
+  object).
+- [x] 6b.2 GREEN: `ports-in/procesar-consumos-vencidos.use-case.ts` — the
+  full Diagram 1 flow: `findDueForCheck(UMBRAL_STOCK_BAJO_DIAS)` (1), a
+  per-item loop with NO `runInTransaction` wrapper and NO
+  `TRANSACTION_MANAGER` injected at all (D4), 2a's pure `consumoDiario`/
+  `diasRestantes` as the sole authority, 2b/2c's cleanup/no-op split on
+  `stockBajoNotificadoAt`, 2d's reclaim-before-emit CAS check (D-E), 2e/2f's
+  fan-out event pair (`StockBajoDetectado` always, `RefillAutoSolicitado`
+  iff `autoCrearRefill`), 2g's best-effort push via `mensajeStockBajo`
+  (no per-item pet lookup, N+1 avoidance per D-D), and step 3's exact
+  summary log shape `{ candidatas, emitidos, limpiados, fallidos,
+  duracionMs }`.
+
+## Files Changed
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `services/core-api/src/domains/consumo/ports-in/procesar-consumos-vencidos.use-case.ts` | Created (183 lines) | `ProcesarConsumosVencidosUseCase` — constructor injects `CONSUMPTION_REPOSITORY`/`EVENT_PUBLISHER`/`NOTIFICATION_PORT` only; `execute(): Promise<void>` implements design.md Diagram 1 steps 1–3 verbatim, including the reclaim-before-emit ordering (D-E) as actual control flow (not just a comment) and the exact 5-field summary log |
+| `services/core-api/src/domains/consumo/ports-in/procesar-consumos-vencidos.use-case.spec.ts` | Created (430 lines) | 14 tests across 9 describe blocks — see "Completed Tasks" above for the full enumeration |
+| `services/core-api/src/domains/consumo/ports-out/consumption-repository.port.ts` | Modified (+27/-1) | New `ConsumptionCandidata` type (extends `UserConsumption` with `stockBajoNotificadoAt: string \| null`), doc-commented with the "why not `@repon/types`" rationale; `findDueForCheck`'s return type changed to `Promise<ConsumptionCandidata[]>` |
+| `services/core-api/src/domains/consumo/adapters/persistence/kysely-consumption.repository.ts` | Modified (+26/-5) | `findDueForCheck` now widens each mapped row with `stockBajoNotificadoAt`; updated both the file-level and method-level doc comments (the file-level one was stale — it had promised this mapping "once `findDueForCheck` lands," which had already happened in PR6a without delivering it) |
+| `services/core-api/src/domains/consumo/adapters/persistence/kysely-consumption.repository.spec.ts` | Modified (+16/-0) | One new test in the `findDueForCheck` describe block: `stockBajoNotificadoAt` propagates per-row (both a set marker and a null one) |
+| `openspec/changes/backend-core-api-consumo/tasks.md` | Modified (+2/-2) | Tasks 6b.1–6b.2 marked `[x]` |
+
+`consumo.module.ts` was deliberately NOT touched — registering
+`ProcesarConsumosVencidosUseCase` as a provider is PR6c's job (the `@Cron()`
+adapter that will inject it), not this batch's. Confirmed via `git diff`:
+zero changes to that file this batch.
+
+## Commands Run and Results
+
+| Command | Result |
+|---|---|
+| `pnpm exec jest kysely-consumption.repository.spec.ts -t "propaga stock_bajo_notificado_at"` (RED, before the fix) | 1 failed: `Received: undefined` — confirms real RED against the pre-fix mapping, not a typo |
+| `pnpm exec jest kysely-consumption.repository.spec.ts` (GREEN, after the fix) | 29/29 passed |
+| `pnpm exec jest procesar-consumos-vencidos.use-case.spec.ts` (RED, before the use case existed) | Suite failed to run: `Cannot find module './procesar-consumos-vencidos.use-case'` — confirms RED against a genuinely missing module |
+| `pnpm exec jest procesar-consumos-vencidos.use-case.spec.ts` (GREEN, after the implementation) | 14/14 passed |
+| `grep -rn "ProcesarConsumosVencidosUseCase" src/domains/consumo/adapters/ consumo.module.ts` | Only one match — a doc-comment mention inside `kysely-consumption.repository.ts`'s class doc comment, written in PR6a, referring to this class in prose. Zero controller wiring, zero route, zero `consumo.module.ts` registration |
+| `grep -rn "@Roles" src/domains/consumo/` | Zero matches anywhere in the `consumo` domain (confirms the "no `@Roles()` anywhere" structural claim — `consumo`'s controller has never used `@Roles()`, this use case included, since none of its 4 HTTP routes require one) |
+| `pnpm lint` (workspace root) | `eslint .` — clean |
+| `cd services/core-api && pnpm typecheck` | `tsc -p tsconfig.json --noEmit` — clean |
+| `cd services/core-api && pnpm test` | 49 unit suites / 354 tests passed (was 48/339 after PR6a — +1 suite/+15 tests, all new); 12 e2e suites / 78 tests passed (unchanged from PR6a — zero HTTP surface added this batch, matching design). Zero regressions |
+| `cd services/core-api && pnpm build` | `tsc -p tsconfig.build.json` — clean |
+| `pnpm run format:check` (workspace root) | First run: 2 files flagged (`kysely-consumption.repository.spec.ts`, `procesar-consumos-vencidos.use-case.spec.ts`) → fixed via `npx prettier --write` on those 2 files only (whitespace/line-wrap only, confirmed no semantic change) → re-ran `format:check`/`lint`/`typecheck`/`pnpm test`/`pnpm build` again — all green (same recurring formatting-only gap as every prior batch) |
+
+## Deviations from Design
+
+**One necessary scope widening beyond the literal `ports-in/` file list**,
+covered in full at the top of this batch's entry ("A gap discovered before
+RED/GREEN could start") — the `ConsumptionCandidata` type + `findDueForCheck`
+return-type change + the one new repository spec test. Not a deviation from
+design.md's BEHAVIOR (Diagram 1 step 2b's branch is implemented exactly as
+specified), only from the literal file list implied by the launch
+instructions — flagged explicitly rather than silently widened.
+
+**`emitidos` counts items, not events**: design.md's step 3 log line names
+`emitidos` alongside `candidatas`/`limpiados`/`fallidos` — all clearly
+per-ITEM counts, not per-event counts. An item with `autoCrearRefill: true`
+publishes 2 events (`StockBajoDetectado` + `RefillAutoSolicitado`) but
+increments `emitidos` exactly once (right after the `StockBajoDetectado`
+publish succeeds, before the conditional `RefillAutoSolicitado`/push). This
+is an interpretation of an otherwise-unambiguous design intent, not a
+deviation from it.
+
+**A single shared `now` for the whole run, not `new Date()` per item**:
+design.md's diagram writes `intentarMarcarStockBajo(id, now)` with a single
+lowercase `now`, suggestively one value reused across the run rather than a
+fresh timestamp per claim (which would drift meaninglessly across a large
+batch). Captured once at the top of `execute()`, passed to every claim call
+this run.
+
+Everything else matches design.md's Diagram 1 verbatim: the per-item
+try/catch with no wrapping transaction and no `TRANSACTION_MANAGER`
+injection at all (D4), the cleanup/no-op split on the marker (2b/2c), the
+reclaim-before-emit ordering as real control flow (D-E), the fan-out
+(2e/2f, never a summary, D3), and the best-effort push living inside the
+same try/catch as defense in depth (2g, D10/D-G).
+
+## Issues Found
+
+None beyond the pre-existing gap described above, which this batch closed.
+All RED tests failed for the expected reason (a real assertion mismatch and
+a real missing module, never a typo-shaped false RED), and all GREEN
+implementations passed on the first full run after being written.
+
+**Structural "no HTTP surface" claim — verified by inspection, not a unit
+test** (core-api-consumo spec, "procesarConsumosVencidos has no HTTP
+surface"): there is nothing meaningful to assert in a `.spec.ts` for the
+ABSENCE of a controller binding — see the grep commands and their zero-match
+output in "Commands Run and Results" above. This mirrors how this codebase
+documents other structural "never wired" guarantees (e.g. `catalogo`'s
+`@Cron()`-adapter-has-no-dedicated-unit-test precedent named directly in
+tasks.md 6c.6) when no runtime test would meaningfully catch a regression.
+
+## Review Workload Note (flagged, not a blocker)
+
+This batch's actual size — **688 changed lines** (682 insertions / 6
+deletions: 613 lines across the 2 new use-case files + 69 insertions / 6
+deletions across the 3 modified repository-layer files, `tasks.md`'s 4-line
+checkbox diff excluded) — exceeds tasks.md's own 350-430 line estimate for
+PR6b and the project's default 400-line reviewer budget. This was
+anticipated: tasks.md's own per-PR table already flagged PR6b as
+"Medium-High" risk and *"el caso de uso con más escenarios de todo el
+cambio... budget review time generously"* — the largest batch of the whole
+`consumo` change so far, consistent with (and larger than) the overage
+pattern PR2b/PR3/PR4 already established under comprehensive RED-test
+coverage. The `delivery_strategy` decision (`ask-on-risk`, resolved by the
+maintainer as "sub-divide via the already-approved 10-PR chain," `Decision
+needed before apply: No`) was NOT re-opened: PR6b is already the smallest
+autonomous, cohesive unit in the approved chain (tasks.md: "un solo par de
+archivos cohesivo") — the necessary repository-layer fix above is a few
+lines bolted onto an already-existing file, not a second concern to split
+out. Flagging the actual number for the human reviewer rather than silently
+under-reporting it.
+
+## What PR6c (next batch) should know
+
+- `ProcesarConsumosVencidosUseCase.execute(): Promise<void>` is ready to be
+  called by the future `ConsumptionCheckJob`'s thin `@Cron()` — zero params,
+  zero actor, exactly one call needed (`await
+  this.procesarConsumosVencidosUseCase.execute()`).
+- `consumo.module.ts` does NOT YET register `ProcesarConsumosVencidosUseCase`
+  as a provider — PR6c must add it (alongside `ConsumptionCheckJob`, in
+  `providers`, not `controllers`, per design.md's wiring table). This
+  batch deliberately left `consumo.module.ts` untouched, per its own scope
+  boundary.
+- `ConsumptionCandidata` (new type, `ports-out/consumption-repository.port.ts`)
+  is `consumo`-internal only — PR6c's `ConsumptionCheckJob` never needs to
+  reference it directly, since it only calls `.execute()` with no params.
+- The D-A debounce-clear gap flagged back in PR3's and PR6a's batches
+  (`ConfigurarConsumoUseCase` does not call `limpiarMarcaStockBajo` on a
+  full reconfiguration) is STILL open — out of scope for both PR6b and PR6c
+  (a cron-only and a scheduling-only batch, respectively). Flagging a third
+  time so it is not silently lost.
+- Per tasks.md's 10-PR chain, PR6c's scope is `@nestjs/schedule` (the one
+  new dependency), `CONSUMO_CRON_ENABLED` in `env.schema.ts`, and the thin
+  `ConsumptionCheckJob` `@Cron()` class — estimated 140-200 lines, Low risk,
+  by far the smallest remaining PR. `consumo.module.ts`'s wiring update
+  (registering both new providers) is also PR6c's job.
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, per tasks.md's Review Workload
+  Forecast — resolved by the maintainer, "Decision needed before apply: No")
+- Current work unit: Unit 6b `ProcesarConsumosVencidosUseCase` — PR6b
+- Boundary: starts from PR6a's repo-CAS/events commit (`main` @ latest PR6a
+  commit); ends with a fully compiling, fully tested commit that adds the
+  cron's entire business-logic use case, closes the `stockBajoNotificadoAt`
+  read-path gap PR6a left open, and wires zero HTTP surface, zero
+  `consumo.module.ts` registration — all gates green
+- Estimated review budget impact: 688 changed lines (682 insertions / 6
+  deletions across 6 files, `tasks.md`'s 4-line checkbox diff excluded) —
+  ABOVE tasks.md's own 350-430 estimate and the 400-line default budget;
+  see "Review Workload Note" above for the full accounting and rationale
+
+## Status (cumulative)
+
+73/73 tasks complete across PR1 (10/10) + PR2a (6/6) + PR2b (9/9) + PR3
+(16/16) + PR4 (14/14) + PR5 (8/8) + PR6a (8/8) + PR6b (2/2). Ready for next
+batch: PR6c, Phase 6c — scheduling adapter (`@nestjs/schedule`,
+`CONSUMO_CRON_ENABLED`, the thin `@Cron()` class, and
+`consumo.module.ts`'s final wiring for both new providers).

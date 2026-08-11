@@ -423,6 +423,22 @@ describe('KyselyConsumptionRepository', () => {
       expect(typeof result[0]!.stockActual).toBe('number');
     });
 
+    it('propaga stock_bajo_notificado_at en cada candidata (PR6b: distingue rama limpieza (2b) de rama disparo (2d) sin una segunda lectura)', async () => {
+      const { db } = buildSelectDb([
+        buildRow({
+          id: 'consumption-marcada',
+          stock_bajo_notificado_at: '2026-08-01T09:00:00.000Z',
+        }),
+        buildRow({ id: 'consumption-sin-marcar', stock_bajo_notificado_at: null }),
+      ]);
+      const repo = new KyselyConsumptionRepository(db);
+
+      const result = await repo.findDueForCheck(7);
+
+      expect(result[0]!.stockBajoNotificadoAt).toBe('2026-08-01T09:00:00.000Z');
+      expect(result[1]!.stockBajoNotificadoAt).toBeNull();
+    });
+
     it('returns an empty array when nothing is due — not an error', async () => {
       const { db } = buildSelectDb([]);
       const repo = new KyselyConsumptionRepository(db);

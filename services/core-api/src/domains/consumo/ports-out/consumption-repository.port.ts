@@ -2,6 +2,28 @@ import type { UserConsumption } from '@repon/types';
 import type { TransactionContext } from '../../../shared/database/transaction';
 
 /**
+ * `findDueForCheck`'s return shape (PR6b, D-A/D-C): a `UserConsumption`
+ * candidate widened with the debounce marker's CURRENT value, so
+ * `ProcesarConsumosVencidosUseCase` can branch between the cleanup branch
+ * (2b) and the no-op branch (2c) — both share `diasRestantes >= UMBRAL`,
+ * differing only by whether the marker is open — without a second read
+ * (design.md Diagram 1, steps 2b/2c).
+ *
+ * Deliberately NOT added to `@repon/types.UserConsumption`: design.md's own
+ * D15 delta table for `@repon/types` is explicit — "el resto sin cambios"
+ * (only `userId` was added, PR1). The marker is `consumo`'s own internal
+ * debounce bookkeeping (D-A: "Ningún otro dominio lo lee ni lo escribe"),
+ * never a fact a client (mobile/web) or another backend domain needs to
+ * see — so it stays scoped to this port, inside `consumo`'s own
+ * `ports-out/`, never crossing the module boundary (`exports: []`, D9/D14).
+ * `findById`/`save` keep returning/accepting a plain `UserConsumption`,
+ * unchanged.
+ */
+export interface ConsumptionCandidata extends UserConsumption {
+  readonly stockBajoNotificadoAt: string | null;
+}
+
+/**
  * `consumo/SPEC.md`, "Puertos de salida", finalized shape (design.md D-A/
  * D-C/D-H.2 — backend-core-api-consumo PR 1). Interface + DI token only:
  * every method below lands incrementally, in the PR that first needs it
@@ -36,8 +58,12 @@ export interface ConsumptionRepository {
    * caller over each returned entity — this method never decides on its
    * own. `umbralDias` is `UMBRAL_STOCK_BAJO_DIAS` (D-B), passed in rather
    * than hard-coded so the domain constant stays the single source.
+   *
+   * Returns `ConsumptionCandidata[]`, not `UserConsumption[]` (PR6b): every
+   * candidate also carries `stockBajoNotificadoAt`'s current value, which
+   * the caller needs to pick between the cleanup and no-op branches.
    */
-  findDueForCheck(umbralDias: number, tx?: TransactionContext): Promise<UserConsumption[]>;
+  findDueForCheck(umbralDias: number, tx?: TransactionContext): Promise<ConsumptionCandidata[]>;
 
   /**
    * The compare-and-set that makes the debounce marker (D-A) safe under

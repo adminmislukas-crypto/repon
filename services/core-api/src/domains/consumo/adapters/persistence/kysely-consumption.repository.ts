@@ -7,7 +7,10 @@ import {
   toKyselyTransaction,
   type TransactionContext,
 } from '../../../../shared/database/transaction';
-import type { ConsumptionRepository } from '../../ports-out/consumption-repository.port';
+import type {
+  ConsumptionCandidata,
+  ConsumptionRepository,
+} from '../../ports-out/consumption-repository.port';
 
 /**
  * `dosis_por_toma`/`stock_actual` round-trip through node-postgres as
@@ -15,8 +18,14 @@ import type { ConsumptionRepository } from '../../ports-out/consumption-reposito
  * the same `numeric` gotcha `catalogo`'s D-C already documented for
  * `precio_base`/`precio_maximo`). This mapper is the ONE place that
  * conversion happens; `domain/consumo.calculos.ts` and every use case only
- * ever see `number`. `stock_bajo_notificado_at` is NOT mapped here yet — it
- * has no read path until PR6a's `findDueForCheck`/CAS methods land.
+ * ever see `number`. `stock_bajo_notificado_at` is deliberately NOT mapped
+ * here (PR6b): this function returns a plain `UserConsumption`, shared by
+ * `findById` and `findDueForCheck` alike, and `@repon/types.UserConsumption`
+ * never carries the marker (design.md D15: "el resto sin cambios" —
+ * consumo-internal bookkeeping, not a client-facing fact). The one caller
+ * that needs the marker's current value (`findDueForCheck`) widens this
+ * function's output with it directly at the call site, into
+ * `ConsumptionCandidata`.
  */
 export function mapUserConsumptionRow(row: Selectable<UserConsumptionTable>): UserConsumption {
   return {
@@ -145,8 +154,17 @@ export class KyselyConsumptionRepository implements ConsumptionRepository {
    * re-run `domain/consumo.calculos.ts`'s `diasRestantes` over every
    * returned entity and MAY skip false positives; it MUST NOT treat a row
    * in this result set as an already-confirmed alert.
+   *
+   * Returns `ConsumptionCandidata[]` (PR6b), not `UserConsumption[]`: each
+   * row also carries `stock_bajo_notificado_at`'s CURRENT value — unlike
+   * `mapUserConsumptionRow` (shared by `findById`), which deliberately does
+   * NOT map that column, this is the one read path where the caller needs
+   * it, to pick between the cleanup branch (2b) and the no-op branch (2c).
    */
-  async findDueForCheck(umbralDias: number, tx?: TransactionContext): Promise<UserConsumption[]> {
+  async findDueForCheck(
+    umbralDias: number,
+    tx?: TransactionContext,
+  ): Promise<ConsumptionCandidata[]> {
     const rows = await this.executor(tx)
       .selectFrom('user_consumption')
       .selectAll()
@@ -156,7 +174,10 @@ export class KyselyConsumptionRepository implements ConsumptionRepository {
                 < (${umbralDias}::numeric + 1) * dosis_por_toma * coalesce(array_length(horarios, 1), 0)`,
       )
       .execute();
-    return rows.map(mapUserConsumptionRow);
+    return rows.map((row) => ({
+      ...mapUserConsumptionRow(row),
+      stockBajoNotificadoAt: row.stock_bajo_notificado_at,
+    }));
   }
 
   /**
