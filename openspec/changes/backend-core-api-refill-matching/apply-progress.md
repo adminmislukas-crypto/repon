@@ -413,3 +413,137 @@ anywhere in this PR.
 28/28 tasks complete across PR1+PR2+PR3 (3.11 intentionally out of scope, not counted
 against this total — tasks.md's own text marks it opt-in/not-CI). Ready for next batch
 (PR4a, Phase 4a — creación lógica, `CrearSolicitudUseCase`).
+
+---
+
+**Batch**: PR4a "Creación (lógica)" (Phase 4a, tasks 4a.1–4a.4). **NO HTTP in this
+batch** — Phase 4b (controller/DTOs/filter/mapper/route) is a separate PR, out of scope
+here per this batch's explicit instructions.
+
+## TDD Note for This Batch
+
+Strict TDD followed exactly as tasks.md orders it: `ports-in/crear-solicitud.use-case.spec.ts`
+(4a.3) was written and confirmed RED (`Cannot find module './crear-solicitud.use-case'`)
+BEFORE `ports-in/crear-solicitud.use-case.ts` (4a.4) existed. All 7 tests were written
+into the RED file before the GREEN implementation, then confirmed green in one pass
+(`pnpm jest ports-in/crear-solicitud.use-case.spec.ts` → 7/7). Tasks 4a.1/4a.2 (the two
+event files) have no RED/GREEN pair — they are pure type/class declarations copied
+verbatim from design.md D-C, the same "costuras" category Phase 1's row-type/port
+declarations fell into; task 4a.4's spec file is what actually exercises them (the
+payload-shape assertion imports and asserts against `RefillCreado`'s real `.type` and
+`.payload`).
+
+## What Was Built
+
+- **`events/refill-solicitud.payload.ts`** — `RefillSolicitudItemPayload` (`refillItemId`,
+  `nombre`, `categoria`, `precioReferencia`, `catalogProductId: string | null`, all
+  required) + `RefillSolicitudPayload` (`refillRequestId`, `userId`, `comuna`, `urgencia`,
+  `items: readonly RefillSolicitudItemPayload[]`) — copied field-for-field and
+  comment-for-comment from design.md's D-C code block. **No `direccion` field** (D-C
+  privacy rule, verified explicitly in the use-case spec via
+  `expect(published.payload).not.toHaveProperty('direccion')`).
+- **`events/refill-creado.event.ts`** — `RefillCreado implements DomainEvent`,
+  `type = 'refill.creado'`, `occurredAt = new Date()`, `constructor(readonly payload:
+  RefillSolicitudPayload)` — same shape as `consumo`'s `RefillAutoSolicitado`/
+  `DosisRegistrada` (the direct structural templates named in this batch's instructions).
+- **`ports-in/crear-solicitud.use-case.ts`** — `CrearSolicitudUseCase.execute(profileId,
+  items, direccion, comuna, urgencia): Promise<RefillRequestActiva>`:
+  - `userId` on the constructed entity is **always** `crearSolicitudActiva`'s first
+    positional argument (`profileId`) — the method signature has no other parameter a
+    caller could route a different `userId` through.
+  - Constructs the entity via Phase 2's `crearSolicitudActiva(profileId, items, direccion,
+    comuna, urgencia)`, imported directly from `domain/refill-request.entity.ts` — no
+    validation duplicated here. A rejecting `crearSolicitudActiva` call (e.g. empty
+    `comuna`) throws `SolicitudInvalidaError` before `runInTransaction`,
+    `refillRepository.save`, or `eventPublisher.publish` are ever touched — asserted with
+    all three as `.not.toHaveBeenCalled()` in the same test.
+  - `runInTransaction` wraps exactly **1** `refillRepository.save(entity, tx)` call — no
+    ownership read precedes it (unlike `MarcarDosisTomadaUseCase`'s read+2-writes), since
+    the entity does not exist in the repository yet.
+  - `publish(new RefillCreado(payload))` is called **after** `runInTransaction` resolves,
+    never from inside its callback — verified with the same `callOrder` array pattern
+    `MarcarDosisTomadaUseCase.spec.ts` uses (`['transaction-committed', 'published']`).
+  - A rejecting `save()` (mocked to reject) propagates the rejection out of `execute()`
+    untouched, and `publish` is never called — `runInTransaction`'s own rollback guarantee
+    is what prevents partial persistence; this use case's only contribution is never firing
+    the event on a path that never resolved.
+  - `RefillSolicitudPayload.items` maps each `RefillItem` 1:1: `refillItemId: item.id`,
+    `catalogProductId: item.catalogProductId ?? null` — the one non-trivial conversion in
+    this file, since `NuevoRefillItem`/`RefillItem.catalogProductId` is `string |
+    undefined` (`@repon/types`) but the event payload's field is `string | null` (D-C).
+    Verified explicitly: one item with a `catalogProductId` and two without, asserting the
+    published payload's `catalogProductId` is `'cat-1'` for the first and `null` (never
+    `undefined`) for the other two.
+
+## Deviations from Design
+
+None. Constructor injection order (`REFILL_REPOSITORY`, `TRANSACTION_MANAGER`,
+`EVENT_PUBLISHER`) matches this batch's explicit instructions; the transaction/publish
+sequencing matches design.md Diagrama 1 steps 6–7 exactly (`runInTransaction` → COMMIT →
+`publish`, never the reverse).
+
+## Issues Found
+
+None. All 5 gates green: `pnpm lint` (workspace root), `pnpm typecheck` (workspace root,
+`packages/types` + `core-api` both `Done`), `pnpm test:unit` (core-api: 52 unit suites /
+418 tests, up from 411 baseline — 7 new; e2e intentionally NOT run, per this batch's scope
+— that's task 4b.7), `pnpm build`, `pnpm format:check` (1 file —
+`crear-solicitud.use-case.spec.ts` — needed one `prettier --write` pass for its long
+`items` array literal wrapping; applied and re-verified green). One typecheck-only fix
+was needed mid-batch: the spec's `eventPublisher.publish.mock.calls[0]` cast originally
+targeted an ad-hoc `{ type; payload }` object type, which TS rejected as a non-overlapping
+cast against `EventPublisher.publish`'s `DomainEvent` parameter type; fixed by casting to
+the concrete `RefillCreado` class instead (imported as a type-only import).
+
+## What PR4b (next batch) should know
+
+- `CrearSolicitudUseCase` is exported from
+  `services/core-api/src/domains/refill-matching/ports-in/crear-solicitud.use-case.ts`.
+  Constructor signature, in order: `(refillRepository: RefillRepository /* @Inject(REFILL_REPOSITORY) */,
+  transactionManager: TransactionManager /* @Inject(TRANSACTION_MANAGER) */, eventPublisher:
+  EventPublisher /* @Inject(EVENT_PUBLISHER) */)`. It is `@Injectable()` but **not yet
+  provided** in `refill-matching.module.ts` — PR4b's `providers` array addition is where
+  that happens (design.md's module block already names it), same status `REFILL_REPOSITORY`
+  itself is in (bound in 4b too, per PR3's note — `KyselyRefillRepository` still has no DI
+  binding).
+- `execute(profileId: string, items: readonly NuevoRefillItem[], direccion: string, comuna:
+  string, urgencia: Urgencia): Promise<RefillRequestActiva>` — 4b's controller calls this
+  as `execute(actor.profileId, dto.items, dto.direccion, dto.comuna, dto.urgencia)`. The DTO
+  (`CrearSolicitudDto`, task 4b.1) must NOT declare a `userId` field at all (D13) — nothing
+  new to enforce here, the use case already has no parameter slot for one.
+  `NuevoRefillItemDto` should validate `nombre`/`categoria` non-empty and `precioReferencia
+  >= 0` (task 4b.1's own instructions) even though `crearSolicitudActiva` re-validates the
+  same invariants — defense-in-depth at the DTO boundary, same precedent PR2 already
+  established for `assertSolicitudValida`.
+- The use case returns the full `RefillRequestActiva` entity (not `void`, not just an id) —
+  4b's `refill.mapper.ts`'s `toRefillRequestResponseDto()` (task 4b.2) can build the 201
+  response directly from this return value without a follow-up `findById`.
+- `SolicitudInvalidaError` (400 `SOLICITUD_INVALIDA`, per `refill.errors.ts`'s own doc
+  comment) is the only error this use case can throw — it propagates straight from
+  `crearSolicitudActiva` before any I/O. 4b's `refill-exception.filter.ts` (task 4b.4) only
+  needs to map this one class in this PR; the doc comment on `SolicitudInvalidaError`
+  already names `crearSolicitudActiva()` as its thrower, not this use case.
+- `RefillCreado`/`RefillSolicitudPayload` are now real, exported types/classes under
+  `events/` — `ofertas`' future listener (out of scope for this whole change, R6: frozen
+  with zero consumers) has nothing to import yet, since `refill-matching` has no
+  `contracts/` (D7).
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, per tasks.md's Review Workload Forecast)
+- Current work unit: Unit 4a "Creación (lógica)" — PR4a
+- Boundary: starts from PR3's persistencia commit; ends with `events/refill-solicitud.payload.ts`,
+  `events/refill-creado.event.ts`, `ports-in/crear-solicitud.use-case.ts` + its co-located
+  spec — zero HTTP surface, zero module wiring, all gates green
+- Actual size: 347 lines added across 4 new files (`refill-solicitud.payload.ts` 45,
+  `refill-creado.event.ts` 21, `crear-solicitud.use-case.ts` 80,
+  `crear-solicitud.use-case.spec.ts` 201) — smaller than PR2/PR3's ~2x overruns, and
+  within a single-PR-sized unit: no split proposed or needed. Reported honestly per this
+  batch's instructions, not measured against any target.
+
+## Status
+
+32/32 tasks complete across PR1+PR2+PR3+PR4a (3.11 still intentionally out of scope).
+Ready for next batch (PR4b, Phase 4b — creación HTTP: DTOs, mapper, controller, exception
+filter, `POST /refill/mis-solicitudes`, module wiring for `CrearSolicitudUseCase` +
+`REFILL_REPOSITORY`).
