@@ -547,3 +547,173 @@ the concrete `RefillCreado` class instead (imported as a type-only import).
 Ready for next batch (PR4b, Phase 4b — creación HTTP: DTOs, mapper, controller, exception
 filter, `POST /refill/mis-solicitudes`, module wiring for `CrearSolicitudUseCase` +
 `REFILL_REPOSITORY`).
+
+---
+
+**Batch**: PR4b "Creación (HTTP)" (Phase 4b, tasks 4b.1–4b.7). **First HTTP surface of
+this domain** — filter/controller/mapper/module wiring are CREATED here, not extended;
+Phase 5b/6b extend these same files incrementally from now on.
+
+## TDD Note for This Batch
+
+4b.4 (RED) then 4b.5 (GREEN) followed exactly: `adapters/http/refill-exception.filter.spec.ts`
+was written and confirmed RED (`Cannot find module './refill-exception.filter'`, ran via
+`pnpm exec jest refill-exception.filter.spec.ts`) BEFORE `adapters/http/refill-exception.filter.ts`
+existed; the GREEN implementation was written next, and the same command was re-run to
+confirm 1/1 passing. 4b.1/4b.2/4b.3/4b.6 are the "costuras" category this change's own
+tasks.md precedent already established for a domain's first controller/DTOs/mapper/module
+wiring (no domain-invariant logic of their own — the invariants they defend are Phase 2's
+`crearSolicitudActiva()`/Phase 4a's `CrearSolicitudUseCase`, both already tested), verified
+instead by the full gate suite + the e2e spec (4b.7), same as `consumo`'s PR2b/`catalogo`'s
+PR2b precedent for a domain's first HTTP PR. A DTO validation spec
+(`adapters/http/dto/refill-dto.spec.ts`) was added beyond tasks.md's literal 4b.1 text,
+mirroring `catalogo-dto.spec.ts`/`identidad-dto.spec.ts`'s established convention of a
+dedicated `class-validator` unit-test file per domain's DTOs — not strictly named in
+tasks.md, but "match existing code patterns and conventions" per this batch's own
+instructions, and it catches the DTO-boundary invariants (empty fields, negative price,
+nested-array validation, unknown `urgencia`, client-supplied `userId`) at the unit layer
+before the e2e spec re-proves the same behavior end-to-end.
+
+## What Was Built
+
+- **`adapters/http/dto/nuevo-refill-item.dto.ts`** — `NuevoRefillItemDto`: `nombre`/
+  `categoria` (`@IsString() @IsNotEmpty()`), `precioReferencia` (`@IsNumber() @Min(0)`),
+  `catalogProductId?` (`@IsOptional() @IsUUID()` — mirrors `NuevoProductoDto`'s own
+  optional-uuid field exactly).
+- **`adapters/http/dto/crear-solicitud.dto.ts`** — `CrearSolicitudDto`: `items:
+  NuevoRefillItemDto[]` (`@IsArray() @ArrayNotEmpty() @ValidateNested({ each: true })
+  @Type(() => NuevoRefillItemDto)` — this repo's FIRST nested-array DTO validation;
+  `class-transformer` was already a dependency, no new package added), `direccion`/
+  `comuna` (non-empty strings), `urgencia` (`@IsIn` against the 4 `Urgencia` literals).
+  **No `userId` field declared anywhere in this class** — not merely unused, structurally
+  absent (D13), enforced end-to-end by `main.ts`'s global `ValidationPipe({ whitelist:
+  true, forbidNonWhitelisted: true })`.
+- **`adapters/http/dto/refill-request-response.dto.ts`** — `RefillItemResponseDto` +
+  `RefillRequestResponseDto`, mirroring `RefillRequestActiva`/`RefillItem`
+  (`@repon/types`) field-for-field. `estado` is typed `RefillEstadoActivo` (never
+  `'borrador'`) since this DTO only ever represents an active request.
+- **`adapters/http/refill.mapper.ts`** — `toRefillRequestResponseDto(entity)`: thin
+  entity → DTO conversion, mirrors `consumo.mapper.ts`'s shape. No follow-up `findById` —
+  `CrearSolicitudUseCase.execute()` (PR4a) already returns the full entity.
+- **`adapters/http/refill.controller.ts`** (NEW) — `RefillController`, `@Controller('refill')`,
+  `POST /refill/mis-solicitudes` → 201. `actor.profileId` read via the existing `@Actor()`
+  param decorator (`shared/auth/decorators/actor.decorator.ts`), passed as the use case's
+  first positional argument — never read from `dto`. **No `@Roles()`** on the controller or
+  the route (D-E: `refill_requests.user_id` carries no role restriction in RLS either).
+  `@UseFilters(RefillExceptionFilter)` at the controller level, mirroring `ConsumoController`/
+  `CatalogoController` exactly.
+- **`adapters/http/refill-exception.filter.ts`** (NEW) + its spec — `RefillExceptionFilter`,
+  constructor-keyed `Map<ErrorConstructor, StatusAndCode>`, `@Catch(SolicitudInvalidaError)`
+  — the ONLY mapping this PR needs (`SolicitudInvalidaError` is the only error
+  `CrearSolicitudUseCase` can throw, per PR4a's own note). `{ statusCode, code, message }`
+  envelope, byte-for-byte the same shape `ConsumoExceptionFilter`/`CatalogoExceptionFilter`
+  already use. Doc comments explicitly flag this as this domain's FIRST filter and name
+  which later phases extend it (5b: 404/409/503; 6b: 409/400/400) — never a second file.
+- **`refill-matching.module.ts`** rewritten from the `@Module({})` placeholder:
+  `imports: [DatabaseModule]` (NOT `CatalogoModule` — that's Phase 5b, confirmed against
+  design.md's own wiring table), `controllers: [RefillController]`, `providers: [{ provide:
+  REFILL_REPOSITORY, useClass: KyselyRefillRepository }, CrearSolicitudUseCase]`,
+  `exports: []` (D7). `RefillExceptionFilter` is deliberately NOT listed as a provider —
+  zero DI dependencies, so `@UseFilters` instantiates it directly; verified this matches
+  `consumo.module.ts`/`catalogo.module.ts`'s own precedent (neither lists its filter
+  either) before applying it here, rather than following this batch's literal instruction
+  text ("register ... the exception filter as providers") verbatim — the instruction's
+  intent (wire the filter into the module) is satisfied via `@UseFilters` on the
+  controller, the same mechanism this repo's other 2 domains already use.
+- **`test/refill-crear-solicitud.e2e-spec.ts`** (NEW) — 6 tests, `AppModule` bootstrapped
+  for real (mirrors `consumo-mis-consumos.e2e-spec.ts`'s override shape): only
+  `ACTOR_PORT`/`REFILL_REPOSITORY` overridden with mocks; `EVENT_PUBLISHER` is
+  **deliberately left bound to the REAL `EventEmitterPublisher`/`EventEmitter2`** — a
+  jest spy is registered on the real bus (`eventEmitter.on('refill.creado', spy)`,
+  `app.get(EventEmitter2, { strict: false })`) BEFORE the request fires, mirroring
+  `catalogo-visibility.e2e-spec.ts`'s "prove the event is genuinely observable, not just
+  that a mock function got called" precedent. Covers: 201 happy path (request + 2 items
+  in one `save()` call, `RefillCreado` observed on the real bus with `direccion` absent
+  from its payload per D-C); 400 empty `items`; 400 negative `precioReferencia`; 400
+  missing `comuna`; 401 no token; 400 + zero `save()` calls for a client-supplied `userId`
+  (whitelist strips-then-forbids it).
+
+## Deviations from Design
+
+- **One interpretation call on the module-wiring instruction text**, not a design
+  deviation: this batch's own instructions said "register `CrearSolicitudUseCase`,
+  `RefillController`, and the exception filter as providers." `RefillController` belongs
+  in `controllers: []`, not `providers: []` (Nest's own distinction), and the filter is
+  intentionally absent from `providers` for the DI reason above. Both diverge from the
+  literal instruction text but match design.md's own module block (which also does not
+  list the filter in `providers`) and this repo's 2 existing precedents exactly — flagged
+  here per this batch's "match existing conventions" directive taking priority over a
+  literal reading that would have introduced a first-of-its-kind inconsistency.
+- No other deviation. `POST /refill/mis-solicitudes`, the DTO shapes, the mapper, the
+  filter's one mapping, and the module's `imports`/`exports` all match design.md D-E's
+  HTTP table and the wiring block verbatim.
+
+## Issues Found
+
+None. All 5 gates green: `pnpm lint` (workspace root, zero errors/warnings), `pnpm typecheck`
+(workspace root, `packages/types` + `core-api` both `Done`), `pnpm test` — run for the
+FIRST time in this change including e2e (54 unit suites / 434 tests, up from 52/418
+baseline — 16 new: 1 filter test + 15 DTO-validation tests across `refill-dto.spec.ts`;
+14 e2e suites / 89 tests, up from 13/83 baseline — 6 new), `pnpm build` (`tsc -p
+tsconfig.build.json`, clean), `pnpm run format:check` (3 files needed one `prettier
+--write` pass — import-list wrapping in `crear-solicitud.dto.ts`/`refill-dto.spec.ts` and
+one long JSDoc/decorator line in `refill.controller.ts` — applied, then `format:check`/
+`lint`/`typecheck`/`test`/`build` all re-verified green in that order).
+
+## What PR5a (next batch) should know
+
+- `RefillController`/`refill.mapper.ts`/`refill-exception.filter.ts`/
+  `refill-matching.module.ts` all now EXIST — Phase 5a is domain-only (no HTTP), but
+  Phase 5b (its HTTP twin) EXTENDS these exact 4 files: a new `@Post()` handler on the
+  same `RefillController` class, a new `toProveedorCompatibleDto`-shaped function
+  appended to `refill.mapper.ts`, 3 new entries added to `refill-exception.filter.ts`'s
+  `ERROR_STATUS_MAP` + `@Catch()` argument list (`RefillRequestNotFoundError` 404,
+  `SolicitudEnBorradorError` 409, `CatalogQueryUnavailableError` 503 — the last imported
+  from `catalogo/contracts/catalog-query.port.ts`, the one legitimate cross-domain
+  import), and `CatalogoModule` added to `refill-matching.module.ts`'s `imports` (the
+  first inter-domain module edge in the repo, per design.md). None of these 4 files
+  should be recreated or duplicated.
+- `RefillRequestResponseDto`/`toRefillRequestResponseDto()` are reusable as-is by Phase
+  6b's `completarBorrador` (same return shape, `RefillRequestActiva`) — no new response
+  DTO needed there per design.md's own HTTP table.
+- The e2e spec's pattern for asserting a real published event (`app.get(EventEmitter2,
+  { strict: false })` + `.on(type, spy)` registered before the request, `.off()` after) is
+  reusable for Phase 5b's own e2e spec if it needs to assert `MatchEncontrado` fires with
+  `companyIds: []` on a zero-match search (tasks.md 5b.6 names exactly this assertion).
+- `POST /refill/mis-solicitudes` is now live and manually verifiable — the domain's first
+  reachable HTTP surface. `GET /health` and every other domain's routes are unaffected
+  (confirmed by the full regression pass in the gate suite above).
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, per tasks.md's Review Workload Forecast)
+- Current work unit: Unit 4b "Creación (HTTP)" — PR4b
+- Boundary: starts from PR4a's lógica-only commit; ends with the 4 new/rewritten
+  `adapters/http/` files + their specs, the rewritten `refill-matching.module.ts`, and the
+  new e2e spec — `POST /refill/mis-solicitudes` fully wired and reachable, all gates green
+  (unit AND e2e, run together for the first time this change)
+- Actual size: 738 lines across 9 new files (`nuevo-refill-item.dto.ts` 40,
+  `crear-solicitud.dto.ts` 58, `refill-request-response.dto.ts` 56, `refill-dto.spec.ts`
+  116, `refill.mapper.ts` 33, `refill.controller.ts` 73, `refill-exception.filter.ts` 69,
+  `refill-exception.filter.spec.ts` 38, `refill-crear-solicitud.e2e-spec.ts` 255) + 39
+  insertions/4 deletions in the rewritten `refill-matching.module.ts` — roughly 777 lines
+  changed total. This is meaningfully over tasks.md's 270-330 estimate for 4b (Low-Medium
+  risk) — continuing this change's own established pattern (PR2 ~2x, PR3 ~2.3x over their
+  respective baselines), concentrated here in: (a) the e2e spec (255 lines — 6 scenarios
+  with a full `AppModule` bootstrap + JWT signing helpers + the real-event-bus spy
+  machinery, none of which tasks.md's estimate appears to have budgeted for at this
+  domain's first-HTTP-PR density, matching what `consumo`'s/`catalogo`'s own first-HTTP
+  PRs also needed), and (b) the DTO validation spec (116 lines, not literally named in
+  tasks.md's 4b.1 text, added for convention-parity with `catalogo-dto.spec.ts`/
+  `identidad-dto.spec.ts`). No split is proposed: every file here is a single structural
+  unit tasks.md itself names (one DTO trio, one mapper, one controller, one filter + spec,
+  one module, one e2e spec) — cutting any of them further would fragment a cohesive
+  RED/GREEN or request/response unit, not reduce real review surface. Reported honestly
+  per this batch's explicit instruction, not measured against any target.
+
+## Status
+
+39/39 tasks complete across PR1+PR2+PR3+PR4a+PR4b (3.11 still intentionally out of scope).
+`POST /refill/mis-solicitudes` is live, authenticated, and exception-mapped. Ready for
+next batch (PR5a, Phase 5a — matching lógica: `BuscarProveedoresCompatiblesUseCase`,
+`MatchEncontrado`, the R2/R3-closing negative tests, zero HTTP).

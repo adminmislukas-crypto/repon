@@ -108,13 +108,13 @@ Depends on Phase 3's `save()`.
 
 Depends on Phase 4a. **First HTTP surface of this domain** — filter/controller/mapper are created here, not extended.
 
-- [ ] 4b.1 `adapters/http/dto/nuevo-refill-item.dto.ts` (`nombre`/`categoria` non-empty, `precioReferencia >= 0`, `catalogProductId?`), `adapters/http/dto/crear-solicitud.dto.ts` (`items: NuevoRefillItemDto[]` non-empty, `direccion`, `comuna`, `urgencia` in the enum — **no `userId` field**, D13), `adapters/http/dto/refill-request-response.dto.ts`.
-- [ ] 4b.2 `adapters/http/refill.mapper.ts`: `toRefillRequestResponseDto()`.
-- [ ] 4b.3 `adapters/http/refill.controller.ts` (NEW): `POST /refill/mis-solicitudes` — authenticated, no `@Roles()` (D-E rationale: `refill_requests.user_id` has no role restriction in RLS either); `actor.profileId` passed to the use case, never a body field; 201 response.
-- [ ] 4b.4 RED: `adapters/http/refill-exception.filter.spec.ts` (NEW) — `SolicitudInvalidaError` → 400 `SOLICITUD_INVALIDA` (the only error reachable from this route so far; other mappings extend this same file in later phases).
-- [ ] 4b.5 GREEN: `adapters/http/refill-exception.filter.ts` — mirrors `ConsumoExceptionFilter`/`CatalogoExceptionFilter` exactly: constructor-keyed map, `{ statusCode, code, message }` envelope, `@Catch()` scoped so it does not compete with the global filter.
-- [ ] 4b.6 `refill-matching.module.ts`: `imports: [DatabaseModule]` (not yet `CatalogoModule` — lands in Phase 5); bind `REFILL_REPOSITORY` → `KyselyRefillRepository`; register `CrearSolicitudUseCase`, `RefillController`, the filter; `exports: []` (D7).
-- [ ] 4b.7 E2e: `test/refill-crear-solicitud.e2e-spec.ts` — 201 happy path (request + N items persisted, `RefillCreado` observable on the real event bus after the response resolves); 400 on empty `items`/negative `precioReferencia`/missing `comuna`; 401 no token; DTO shape rejects a client-supplied `userId` field.
+- [x] 4b.1 `adapters/http/dto/nuevo-refill-item.dto.ts` (`nombre`/`categoria` non-empty, `precioReferencia >= 0`, `catalogProductId?`), `adapters/http/dto/crear-solicitud.dto.ts` (`items: NuevoRefillItemDto[]` non-empty, `direccion`, `comuna`, `urgencia` in the enum — **no `userId` field**, D13), `adapters/http/dto/refill-request-response.dto.ts`.
+- [x] 4b.2 `adapters/http/refill.mapper.ts`: `toRefillRequestResponseDto()`.
+- [x] 4b.3 `adapters/http/refill.controller.ts` (NEW): `POST /refill/mis-solicitudes` — authenticated, no `@Roles()` (D-E rationale: `refill_requests.user_id` has no role restriction in RLS either); `actor.profileId` passed to the use case, never a body field; 201 response.
+- [x] 4b.4 RED: `adapters/http/refill-exception.filter.spec.ts` (NEW) — `SolicitudInvalidaError` → 400 `SOLICITUD_INVALIDA` (the only error reachable from this route so far; other mappings extend this same file in later phases).
+- [x] 4b.5 GREEN: `adapters/http/refill-exception.filter.ts` — mirrors `ConsumoExceptionFilter`/`CatalogoExceptionFilter` exactly: constructor-keyed map, `{ statusCode, code, message }` envelope, `@Catch()` scoped so it does not compete with the global filter.
+- [x] 4b.6 `refill-matching.module.ts`: `imports: [DatabaseModule]` (not yet `CatalogoModule` — lands in Phase 5); bind `REFILL_REPOSITORY` → `KyselyRefillRepository`; register `CrearSolicitudUseCase`, `RefillController`, the filter; `exports: []` (D7).
+- [x] 4b.7 E2e: `test/refill-crear-solicitud.e2e-spec.ts` — 201 happy path (request + N items persisted, `RefillCreado` observable on the real event bus after the response resolves); 400 on empty `items`/negative `precioReferencia`/missing `comuna`; 401 no token; DTO shape rejects a client-supplied `userId` field.
 
 ## Phase 5a: Matching (lógica) — Spec: `core-api-refill-matching`
 
