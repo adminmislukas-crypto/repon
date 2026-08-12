@@ -1092,3 +1092,223 @@ out of scope, not counted against this total). Phase 5 ("Matching") is fully clo
 edge with zero edits to `catalogo` itself. Ready for next batch (PR6a, Phase 6a — Auto:
 `CrearBorradorRefillUseCase`, dedup, `consumo-event.payloads.ts`,
 `RefillAutoSolicitadoListener`, the `moduleRef.init()` contract e2e).
+
+---
+
+**Batch**: PR6a "Auto" (Phase 6a, tasks 6a.1–6a.7). `refill-matching`'s **FIRST event
+consumer** — the listener that reacts to `consumo`'s `RefillAutoSolicitado` and the
+internal `crearBorradorRefill` use case it calls. No HTTP surface, no new module edge
+(`imports`/`controllers`/`exports` untouched — only `providers` grows).
+
+## TDD Note for This Batch
+
+Genuinely strict-TDD, both RED/GREEN pairs confirmed by actually running the failing
+test before writing the implementation (not assumed): `ports-in/crear-borrador-refill.use-case.spec.ts`
+(6a.1) was written and run FIRST — confirmed RED (`Cannot find module
+'./crear-borrador-refill.use-case'`) — before `ports-in/crear-borrador-refill.use-case.ts`
+(6a.2) existed; then GREEN (3/3 passing in one run, no test edits needed after). Same
+sequence for the listener: `adapters/events/refill-auto-solicitado.listener.spec.ts`
+(6a.4) confirmed RED (`Cannot find module './refill-auto-solicitado.listener'`) before
+`adapters/events/refill-auto-solicitado.listener.ts` (6a.5) existed; GREEN 2/2 on the
+first run. Task 6a.1's own explicit ordering ("dedup FIRST") was followed literally —
+the dedup/skip test is the first `it()` in the file, the happy path comes after.
+`consumo-event.payloads.ts` (6a.3) has no RED/GREEN pair of its own — pure type
+declaration, same "costuras" category `identidad-event.payloads.ts` established for
+`catalogo`; the listener spec is what actually exercises it.
+
+## What Was Built
+
+- **`ports-in/crear-borrador-refill.use-case.ts`** — `CrearBorradorRefillUseCase.execute({
+  consumptionId, userId, nombre })`: constructor injects **only** `REFILL_REPOSITORY` and
+  `TRANSACTION_MANAGER` — no `EVENT_PUBLISHER` token exists on this class, so "zero events
+  published on either branch" (D-C Decisión 1) is a structural guarantee, not a
+  convention to remember (there is no `publish` method to call). Inside ONE
+  `runInTransaction`: `findBorradorByConsumption(userId, consumptionId, tx)` — if it
+  returns a `RefillRequestBorrador`, logs `{ evento: 'refill.borrador_omitido', userId,
+  consumptionId }` via `this.logger.log(...)` (same structured-log shape `consumo`'s
+  `ProcesarConsumosVencidosUseCase` already uses for its own run-summary/skip events) and
+  returns — zero `save()` calls. Otherwise builds the entity via Phase 2's `crearBorrador()`
+  factory, generating `id`/the single item's `id` via `randomUUID()` (the factory's
+  `CrearBorradorInput` takes them as already-generated input, per its own doc comment —
+  this use case is the caller that generates them, same as `CrearSolicitudUseCase` does
+  for `crearSolicitudActiva`'s ids), `urgencia: 'lo_antes_posible'` (D-G.1's declared
+  start value), then `save(borrador, tx)`. The dedup READ and the insert WRITE share the
+  SAME `tx` — read-then-write atomicity against the TOCTOU the partial unique index
+  (migration 15) also guards against, per design.md D-D.2/D-D.3.
+- **`adapters/events/consumo-event.payloads.ts`** — `RefillAutoSolicitadoPayload`
+  (`consumptionId`, `userId`, `nombre` — exactly the 3 fields this domain consumes out of
+  `StockBajoPayload`'s 10) — direct structural/doc-comment copy of
+  `catalogo/adapters/events/identidad-event.payloads.ts`'s pattern, adapted from
+  `catalogo`/`identidad` to `refill-matching`/`consumo`. Never imports `consumo`'s real
+  `RefillAutoSolicitado` class or `StockBajoPayload`.
+- **`adapters/events/refill-auto-solicitado.listener.ts`** — `RefillAutoSolicitadoListener`,
+  `@OnEvent('consumo.refill_auto_solicitado')` (channel-name STRING subscription, never an
+  imported class). `onRefillAutoSolicitado`: `try { await
+  crearBorradorRefillUseCase.execute(event.payload) } catch (error) {
+  this.logger.error(...) }` — never re-throws, byte-for-byte `CompanyVisibilityListener`'s
+  catch-and-log shape. Constructor takes `CrearBorradorRefillUseCase` directly (concrete
+  class, no `@Inject` needed — same as `CompanyVisibilityListener`'s own 2 use-case
+  dependencies).
+- **The mandatory D17 structural negative (6a.4)** — instead of "no
+  `@OnEvent('consumo.stock_bajo_detectado')` exists" by textual absence alone, the spec
+  enumerates `Object.getOwnPropertyNames(RefillAutoSolicitadoListener.prototype)`,
+  resolves each method against `@nestjs/event-emitter`'s own `'EVENT_LISTENER_METADATA'`
+  Reflect key (`@nestjs/event-emitter/dist/constants.js` — verified by reading the
+  installed package source directly, not guessed; the key is written onto the decorated
+  METHOD itself via `extendArrayMetadata`, not onto the class or prototype), and asserts
+  exactly ONE method carries that metadata, with `event: 'consumo.refill_auto_solicitado'`.
+  A second `@OnEvent` handler anywhere on this class — for `stock_bajo_detectado` or
+  anything else — would fail this assertion structurally, not because "we didn't write
+  one". Same technique class as 5a.6's `SELF_DECLARED_DEPS_METADATA` constructor-inspection
+  test, applied here to `@OnEvent` instead of `@Inject`.
+- **`refill-matching.module.ts`** — `CrearBorradorRefillUseCase` and
+  `RefillAutoSolicitadoListener` added to `providers` (both — the listener has no route,
+  `DiscoveryService` finds `@OnEvent` on any provider). `imports`/`controllers`/`exports`
+  untouched — confirmed via the diff itself (only the `providers` array and its 2 new
+  imports changed).
+- **`test/refill-auto-solicitado.e2e-spec.ts`** — follows
+  `catalogo-visibility.e2e-spec.ts`'s exact structural pattern: a LIGHT
+  `Test.createTestingModule` (not the full `AppModule`), real
+  `EventEmitterModule.forRoot()`, real `EVENT_PUBLISHER`/`EventEmitterPublisher`, the real
+  listener and the real use case, `REFILL_REPOSITORY`/`TRANSACTION_MANAGER` as a minimal
+  in-memory fake (no live Postgres required for this specific test — the fake
+  `TransactionManager.runInTransaction` just invokes the callback with an opaque `tx`
+  object, no `db.transaction()` call). `await moduleRef.init()`, never only `.compile()`
+  — verified this is genuinely load-bearing by temporarily removing it and re-running: 2 of
+  the 3 tests failed loudly (`store` stayed empty) with only `.compile()`, restored
+  afterward. Publishes REAL `consumo` `RefillAutoSolicitado`/`StockBajoDetectado`
+  instances (imported from `consumo/events/` — legitimate here since this file lives in
+  `test/`, outside `domains/`, same exception `catalogo-visibility.e2e-spec.ts` already
+  uses). 3 scenarios: (1) a real `RefillAutoSolicitado` creates exactly one `'borrador'`
+  `RefillRequest`; (2) the same payload published twice (same `consumptionId`) creates
+  only one total (dedup); (3) a `StockBajoDetectado` with the same payload shape creates
+  zero requests.
+
+## Deviations from Design
+
+- **A genuine, non-obvious payload-shape discovery, not a design deviation**: design.md's
+  Diagrama 3 annotates the listener's payload conceptually as `{ consumptionId, userId,
+  nombre }`, and `CompanyVisibilityListener`'s own handler signature is `payload:
+  EmpresaOcultablePayload` (flat). Reading `EventEmitterPublisher.publish` closely
+  (`emitter.emitAsync(event.type, event)`) shows it emits the WHOLE event class instance,
+  never `event.payload` pre-unwrapped. `identidad`'s events (`EmpresaSuspendida`/etc.)
+  happen to flatten their fields directly onto the instance (no `payload` property at
+  all), which is why `CompanyVisibilityListener`'s flat typing "just works". `consumo`'s
+  `RefillAutoSolicitado`, like this domain's own `RefillCreado`/`MatchEncontrado`, instead
+  WRAPS its fields under `readonly payload: StockBajoPayload`. Typing this listener's
+  handler parameter as a flattened `RefillAutoSolicitadoPayload` (matching the literal
+  phrasing this batch's own instructions used) would have compiled fine and then silently
+  read every field as `undefined` at runtime — TypeScript cannot catch this, since
+  `@OnEvent` handler parameters are untyped from the framework's side. Caught before it
+  became a bug: the handler parameter is typed `{ payload: RefillAutoSolicitadoPayload }`
+  and destructures `.payload` explicitly, verified correct by the e2e contract test (6a.7)
+  actually passing against the REAL `RefillAutoSolicitado` class. Documented in the
+  listener's own doc comment so it is not rediscovered by a future domain that also
+  consumes a nested-payload event.
+- No other deviation. The dedup-read-and-write-share-one-tx shape, the "no
+  `EVENT_PUBLISHER` token" structural guarantee, the catch-and-log-never-rethrow pattern,
+  and the module wiring (`providers`-only, no new edge) all match design.md D-G.1/D-D.3/
+  Diagrama 3 verbatim.
+
+## Issues Found
+
+One self-corrected inaccuracy, caught before commit: this file's e2e spec originally
+claimed in its own doc comment that "without `.init()`, every assertion below would pass
+vacuously" — verified false by actually running the suite with `.init()` temporarily
+removed: 2 of 3 tests FAILED loudly (not vacuously), only the "creates zero" test would
+have passed either way. Doc comment corrected to state the verified behavior before this
+batch was considered done, per this project's "verify technical claims before stating
+them" convention. No other issues. All 5 gates green: `pnpm lint` (workspace root, 0
+errors/warnings), `pnpm typecheck` (workspace root — `packages/types` + `core-api` both
+`Done`; `git status --porcelain` on `domains/catalogo/` and `domains/consumo/` both
+confirmed EMPTY), `pnpm test` — run for BOTH unit AND e2e together (unit: 57 suites / 450
+tests, up from 55/445 baseline — 5 new: 3 use-case tests + 2 listener tests; e2e: 16
+suites / 98 tests, up from 15/95 baseline — 3 new, this batch's own e2e file), `pnpm
+build` (`tsc -p tsconfig.build.json`, clean), `pnpm run format:check` (1 file —
+`refill-auto-solicitado.listener.spec.ts`, needed one `prettier --write` pass for a
+multi-line type-cast wrap — applied, then `format:check`/`lint`/`typecheck`/`test`/`build`
+all re-verified green in that order). One typecheck-only fix was needed mid-batch: the
+listener spec's `RefillAutoSolicitadoListener.prototype as Record<string, unknown>` cast
+was rejected by `tsc` (TS2352, insufficient overlap) — fixed by casting through
+`unknown` first (`as unknown as Record<string, object>`), the standard double-cast
+idiom for this situation.
+
+## What PR6b (next batch) should know
+
+- `CrearBorradorRefillUseCase` now exists and is fully wired
+  (`services/core-api/src/domains/refill-matching/ports-in/crear-borrador-refill.use-case.ts`),
+  registered in `refill-matching.module.ts`'s `providers`. PR6b's `CompletarBorradorUseCase`
+  is the NEXT use case to build — per tasks.md 6b.1–6b.3, it reuses Phase 4a's
+  `RefillCreado`/`RefillSolicitudPayload` (NOT `crear-borrador-refill`'s anything — the two
+  use cases are unrelated except both writing to `RefillRepository`) and delegates
+  completeness validation to Phase 2's `completar()` transition (already tested, do not
+  re-implement the invariant in `CompletarBorradorUseCase`'s own spec).
+- `RefillAutoSolicitadoListener` is `refill-matching`'s ONLY event consumer, confirmed
+  structurally (this batch's 6a.4 test) — PR6b adds no listener of its own, it is a pure
+  HTTP-triggered use case (`completarBorrador`), same shape as `crearSolicitud`/
+  `buscarProveedoresCompatibles`.
+- `refill-exception.filter.ts`'s `ERROR_STATUS_MAP` is UNCHANGED by this batch (still the
+  4 entries from PR5b) — `CrearBorradorRefillUseCase` throws nothing this filter needs to
+  map (the listener catches everything itself). PR6b is the next batch that extends this
+  filter, with `TransicionInvalidaError`/`SolicitudIncompletaError`/
+  `RefillItemDesconocidoError` (tasks.md 6b.6/6b.7).
+- `RefillController` still has exactly 2 routes (unchanged by this batch — this domain's
+  listener has no route at all). PR6b's `POST .../completar` is the 3rd.
+- The **nested-payload gotcha documented above** is a real, reusable discovery for any
+  future domain event consumer in this repo: an event class that wraps
+  `readonly payload: SomeShape` (this domain's own `RefillCreado`/`MatchEncontrado`
+  included) delivers `{ type, occurredAt, payload }` to its `@OnEvent` handler, not a
+  flattened shape — only `identidad`'s events happen to flatten. Worth keeping in mind if
+  `ofertas` (out of scope for this whole change) ever needs to consume `RefillCreado` or
+  `MatchEncontrado` directly.
+- The `{ payload: X }`-typed handler + `Object.getOwnPropertyNames(...prototype)` +
+  `'EVENT_LISTENER_METADATA'` structural-inspection pattern is now a real, reusable
+  precedent for this repo's "prove no extra handler exists" class of test, alongside 5a.6's
+  `SELF_DECLARED_DEPS_METADATA` precedent for constructor injection.
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, per tasks.md's Review Workload Forecast)
+- Current work unit: Unit 6a "Auto: listener + `crearBorradorRefill` + dedup" — PR6a
+- Boundary: starts from PR5b's matching-HTTP commit; ends with
+  `ports-in/crear-borrador-refill.use-case.ts` + its co-located spec,
+  `adapters/events/consumo-event.payloads.ts`,
+  `adapters/events/refill-auto-solicitado.listener.ts` + its co-located spec, the extended
+  `refill-matching.module.ts` (`providers` only), and the new
+  `test/refill-auto-solicitado.e2e-spec.ts` — the listener is registered and reachable via
+  the real event bus, zero HTTP surface, zero new module edge, all 5 gates green (unit AND
+  e2e together)
+- Actual size: 569 lines across 6 new files (`consumo-event.payloads.ts` 40,
+  `refill-auto-solicitado.listener.ts` 64, `refill-auto-solicitado.listener.spec.ts` ~75,
+  `crear-borrador-refill.use-case.ts` 89, `crear-borrador-refill.use-case.spec.ts` 134,
+  `refill-auto-solicitado.e2e-spec.ts` 167) + 9 insertions/1 deletion in
+  `refill-matching.module.ts` — 578 lines changed total (tasks.md's own checkbox flips in
+  this same commit not counted as review surface). This is over tasks.md's own 330–410
+  estimate for 6a (Medium risk, one of the 4 PRs named as borderline with an explicit
+  named fallback split: "6a-listener + 6a-usecase"). The overrun ratio here (~1.4–1.56x
+  over the upper/mid estimate) is notably SMALLER than every prior PR in this change (PR2
+  ~2x, PR3 ~2.3x, PR4b ~2.5x, PR5a ~1.75x, PR5b ~1.7x) — reported honestly per this
+  batch's explicit instruction, but this is the most disciplined PR of the change so far
+  by that measure. **No split invoked**: the named fallback (6a-listener / 6a-usecase)
+  would separate the use case (89+134 lines) from the listener that is its only caller
+  (64+75 lines) — both files are already minimal, single-purpose units (tasks.md's own
+  6a.1–6a.2 vs. 6a.3–6a.5 grouping), and the e2e contract test (167 lines) exercises BOTH
+  together by design (it is specifically a cross-file wiring test — splitting the PR would
+  either duplicate that e2e spec across two PRs or leave one of the two halves untested
+  end-to-end until the other lands). Kept as one PR; the overrun is concentrated in the
+  e2e spec (167 lines — 3 scenarios plus a full in-memory fake repository/transaction
+  manager, doc comment citing and re-verifying the PR8b `.init()` incident) and the use
+  case's own doc comment (design rationale for the "no EVENT_PUBLISHER" structural
+  guarantee and the dedup transaction-sharing argument), not in any single oversized
+  logic file.
+
+## Status
+
+62/62 tasks complete across PR1+PR2+PR3+PR4a+PR4b+PR5a+PR5b+PR6a (3.11 still intentionally
+out of scope, not counted against this total). `refill-matching`'s first and only event
+consumer is live: a real `consumo.RefillAutoSolicitado` on the event bus creates exactly
+one `'borrador'` `RefillRequest`, deduplicated per `(userId, consumptionId)`, publishing
+zero events, and `consumo.stock_bajo_detectado` alone reaches nothing in this domain.
+Ready for next batch (PR6b, Phase 6b — Completar: `CompletarBorradorUseCase`, reusing
+`RefillCreado`/`RefillSolicitudPayload` from PR4a, `POST .../completar`, the 3 new filter
+mappings).

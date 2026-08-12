@@ -3,7 +3,9 @@ import { DatabaseModule } from '../../shared/database/database.module';
 import { CatalogoModule } from '../catalogo/catalogo.module';
 import { KyselyRefillRepository } from './adapters/persistence/kysely-refill.repository';
 import { RefillController } from './adapters/http/refill.controller';
+import { RefillAutoSolicitadoListener } from './adapters/events/refill-auto-solicitado.listener';
 import { BuscarProveedoresCompatiblesUseCase } from './ports-in/buscar-proveedores-compatibles.use-case';
+import { CrearBorradorRefillUseCase } from './ports-in/crear-borrador-refill.use-case';
 import { CrearSolicitudUseCase } from './ports-in/crear-solicitud.use-case';
 import { REFILL_REPOSITORY } from './ports-out/refill-repository.port';
 
@@ -26,7 +28,11 @@ import { REFILL_REPOSITORY } from './ports-out/refill-repository.port';
  * `catalogo.module.ts`: neither lists its own exception filter as a
  * provider either.
  *
- * Phase 6a add `CrearBorradorRefillUseCase` + `RefillAutoSolicitadoListener`;
+ * Phase 6a (this batch, tasks.md 6a.6) adds `CrearBorradorRefillUseCase` +
+ * `RefillAutoSolicitadoListener` — both go in `providers`, `Listener`
+ * included: it has no route, `DiscoveryService` finds `@OnEvent` on any
+ * provider, it doesn't need to be a `controller`. Neither touches
+ * `imports`/`controllers`/`exports` — no new module edge this phase.
  * Phase 6b add `CompletarBorradorUseCase`; Phase 7 add
  * `MarcarComoOfertadaUseCase`/`MarcarComoConfirmadaUseCase` (providers only,
  * no route — D6). Each phase EXTENDS this same `providers` array, never
@@ -42,6 +48,8 @@ import { REFILL_REPOSITORY } from './ports-out/refill-repository.port';
     { provide: REFILL_REPOSITORY, useClass: KyselyRefillRepository },
     CrearSolicitudUseCase,
     BuscarProveedoresCompatiblesUseCase,
+    CrearBorradorRefillUseCase,
+    RefillAutoSolicitadoListener,
   ],
   exports: [],
 })
