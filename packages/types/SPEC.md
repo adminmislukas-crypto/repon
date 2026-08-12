@@ -11,7 +11,7 @@ Tipos TypeScript compartidos entre `usuario-mobile`, `proveedor-mobile`, `admin-
 | `src/identidad.ts` | `Role`, `CompanyStatus`, `ProfileStatus`, `AdminRole`, `Company`, `CompanyDispatchZone`, `Profile` |
 | `src/consumo.ts` | `OwnerType`, `ConsumptionKind`, `Pet`, `UserConsumption` (delta `backend-core-api-consumo`, D15 — gana `userId: string`), `ConsumptionLog` |
 | `src/catalogo.ts` | `CatalogProductStatus`, `CatalogProduct`, `ProviderCatalogItem`, `NuevoProductoProveedor`, `FilaCarga`, `ArchivoCarga`, `ResultadoCargaMasiva` (últimos 4: delta `backend-core-api-catalogo`, D12 — promovidos desde prosa de `catalogo/SPEC.md` a código real, mismo tratamiento que `shared-types-package` ya hizo para los otros 7 archivos en `backend-core-api-foundation`) |
-| `src/refill-matching.ts` | `RefillRequest`, `RefillItem` |
+| `src/refill-matching.ts` | `Urgencia`, `RefillEstado`, `RefillEstadoActivo`, `RefillItem`, `RefillItemBorrador`, `RefillRequest` (+ variantes `RefillRequestBorrador`/`RefillRequestActiva`), `NuevoRefillItem` (delta `backend-core-api-refill-matching`, D11/D-B — `RefillRequest` es ahora una unión discriminada sobre `estado`; `RefillItem` conserva su forma exacta de siempre para no romper la firma congelada de `CatalogQueryPort` en `catalogo`) |
 | `src/ofertas.ts` | `OfferKind`, `OfferStatus`, `OfferItem` (+ variantes `OfferItemReactiva`/`OfferItemProactiva`/`OfferItemAlt`), `Offer` |
 | `src/pedidos-pagos.ts` | `OrderStatus`, `Order`, `OrderItem`, `PaymentStatus`, `Payment` |
 | `src/audit.ts` | `AuditLog` (infraestructura compartida, no es entidad de un dominio) |
@@ -33,7 +33,7 @@ Estado real de cada regla en el código (`shared-types-package` spec, Requiremen
 - **Documentado, deliberadamente NO forzado a nivel estructural** (comentario TSDoc en el campo, valor original preservado — forzarlo cambiaría el significado del campo en lecturas ya existentes de filas en cualquier estado):
   - `ConsumptionLog` no expone `createdAt` — mismo patrón que `Company`/`Profile`.
   - `ProviderCatalogItem.catalogProductId` / `RefillItem.catalogProductId` opcionales a propósito (Q4).
-  - `RefillRequest.comuna` siempre requerido (Q2) — ya no-opcional en el tipo.
+  - `RefillRequestActiva.comuna`/`direccion` siempre requeridos; `RefillRequestBorrador.comuna`/`direccion` opcionales — corrección declarada (delta `backend-core-api-refill-matching`, D3/D4): ya no existe un único `RefillRequest.comuna` universal "siempre requerido" como decía una versión anterior de esta fila, porque `RefillRequest` es ahora una unión discriminada sobre `estado` (D-B) y solo la variante activa exige completitud.
   - `CatalogProduct` no filtra por `status` en el tipo (Q6).
 - **Diferido a la capa de dominio de `services/core-api` — no es trabajo de este paquete** (invariantes de creación/transición sobre valores que son válidos en reposo en cualquier estado; enforced por factories/casos de uso, Fase 4a/4b de `backend-core-api-foundation`, no construidos todavía):
   - `CompanyStatus` empieza siempre en `'pendiente'` al crear una empresa.

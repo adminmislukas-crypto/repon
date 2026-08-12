@@ -21,7 +21,7 @@ Panel admin (Next.js)─┘   monolito modular, hexagonal por dominio
 | Auth | Registro y sesión de usuarios y proveedores |
 | Postgres + RLS | Toda la data: perfiles, mascotas, consumo, catálogos, solicitudes, ofertas, pedidos |
 | Realtime | Las ofertas de proveedores llegan a la bandeja del usuario sin recargar |
-| Edge Functions | Motor de matching (solicitud ↔ catálogo de proveedores), webhooks de pago |
+| Edge Functions | Webhooks de pago |
 | Storage | Fotos de productos, comprobantes |
 
 ## Servicios externos
@@ -39,11 +39,13 @@ Cuando un dominio necesite escalar distinto a los demás — típicamente `ofert
 ## Flujo central: de la solicitud al pedido
 
 1. El usuario arma una solicitud de refill (productos + dirección + urgencia)
-2. El motor de matching (Edge Function) busca proveedores compatibles por categoría, zona y catálogo cargado
+2. El motor de matching corre en `core-api` (`buscarProveedoresCompatibles`, dominio `refill-matching`, consultando `CatalogQueryPort` que expone `catalogo`) y busca proveedores compatibles por categoría/nombre y catálogo cargado — sin filtrar por zona/comuna todavía (ver corrección declarada abajo)
 3. Los proveedores ofertan — con precio, tiempo de entrega y, si corresponde, una **presentación alternativa** (ej. saco de 25kg en vez de 15kg, o 2 cajas x15 en vez de 1 caja x30)
 4. Las ofertas llegan en tiempo real a la bandeja del usuario vía Realtime
 5. El usuario acepta una oferta y paga mediante el checkout hospedado
 6. Se crea el pedido y se notifica al proveedor por push
+
+**Corrección declarada (`backend-core-api-refill-matching`, D9)**: la prosa original de esta sección, y la fila de Edge Functions de la tabla de arriba, ubicaban el motor de matching en una Edge Function que además filtraba por zona. Eso no se construyó así: el matching corre en `core-api` vía `buscarProveedoresCompatibles` (dominio `refill-matching`) consultando `CatalogQueryPort` (expuesto por `catalogo`), sin necesidad de una función serverless separada. Y este cambio, además, NO filtra por comuna/zona (D1): la columna `comuna` se persiste desde el día 1 para que un filtro futuro sea aditivo, pero hoy el matching es nacional — cualquier proveedor con catálogo compatible aparece, sin importar dónde esté.
 
 ## Automatización de consumo
 

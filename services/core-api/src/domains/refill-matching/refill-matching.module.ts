@@ -8,6 +8,8 @@ import { BuscarProveedoresCompatiblesUseCase } from './ports-in/buscar-proveedor
 import { CompletarBorradorUseCase } from './ports-in/completar-borrador.use-case';
 import { CrearBorradorRefillUseCase } from './ports-in/crear-borrador-refill.use-case';
 import { CrearSolicitudUseCase } from './ports-in/crear-solicitud.use-case';
+import { MarcarComoConfirmadaUseCase } from './ports-in/marcar-como-confirmada.use-case';
+import { MarcarComoOfertadaUseCase } from './ports-in/marcar-como-ofertada.use-case';
 import { REFILL_REPOSITORY } from './ports-out/refill-repository.port';
 
 /**
@@ -37,9 +39,12 @@ import { REFILL_REPOSITORY } from './ports-out/refill-repository.port';
  * PR6b (this batch, tasks.md 6b.8) adds `CompletarBorradorUseCase` —
  * `providers` only, purely additive, `imports`/`controllers`/`exports`
  * untouched (its route lives on the already-registered `RefillController`).
- * Phase 7 adds `MarcarComoOfertadaUseCase`/`MarcarComoConfirmadaUseCase`
- * (providers only, no route — D6). Each phase EXTENDS this same `providers`
- * array, never replaces this file.
+ * Phase 7 (this batch, tasks.md 7.2) adds `MarcarComoOfertadaUseCase`/
+ * `MarcarComoConfirmadaUseCase` — `providers` only, no controller wiring, no
+ * new `imports`/`exports` edge (D6: neither has a route, neither has a
+ * caller in this change — `RefillController`'s constructor is confirmed
+ * unchanged by tasks.md 7.1's own structural test). Each phase EXTENDS this
+ * same `providers` array, never replaces this file.
  *
  * `exports: []`, deliberately (D7): this domain has no `contracts/` and
  * nothing else imports from it — still true after this PR.
@@ -54,6 +59,8 @@ import { REFILL_REPOSITORY } from './ports-out/refill-repository.port';
     CrearBorradorRefillUseCase,
     RefillAutoSolicitadoListener,
     CompletarBorradorUseCase,
+    MarcarComoOfertadaUseCase,
+    MarcarComoConfirmadaUseCase,
   ],
   exports: [],
 })

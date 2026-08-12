@@ -1589,3 +1589,282 @@ transaction, and publishes `RefillCreado` only after commit — reusing PR4a's e
 verbatim. Only Phase 7 remains: `marcarComoOfertada`/`marcarComoConfirmada` (no HTTP,
 D6), the SPEC.md/ARCHITECTURE.md corrections (7.3–7.5), and the final workspace-wide
 verification that closes this whole change.
+
+---
+
+**Batch**: PR7 "Cierre" (Phase 7, tasks 7.1–7.9) — the LAST PR of this 10-PR chain.
+2 parts: (A) the state machine's remaining 2 use cases, `marcarComoOfertada`/
+`marcarComoConfirmada` — thin `actualizarEstado` wrappers with zero HTTP surface
+(D6); (B) documentation corrections across `refill-matching/SPEC.md`,
+`packages/types/SPEC.md`, and `docs/ARCHITECTURE.md`, plus final workspace-wide
+verification. Extends (never recreates) `refill-matching.module.ts`'s `providers`
+array only — `imports`/`controllers`/`exports` untouched.
+
+## TDD Note for This Batch
+
+Genuinely strict-TDD for Part A, docs-only (no TDD cycle) for Part B, per this
+project's own precedent for a closing phase (`consumo` tasks.md 7.1–7.9 was the
+same split). `ports-in/marcar-como-ofertada.use-case.spec.ts` +
+`ports-in/marcar-como-confirmada.use-case.spec.ts` (7.1) were written and run
+FIRST — confirmed RED (`Cannot find module './marcar-como-ofertada.use-case'` /
+`'./marcar-como-confirmada.use-case'`) — before either implementation file (7.2)
+existed; GREEN was 6/6 passing on the first run across both suites (2 happy-path
+tests, 2 constructor-inspection tests, 2 domain-wide structural tests), zero test
+edits needed afterward. Tasks 7.3–7.9 are Markdown/audit-only, verified by the
+full gate suite (7.8) rather than a RED/GREEN pair, same precedent `consumo`'s own
+PR7 established for its docs-only closing batch.
+
+## What Was Built
+
+- **`ports-in/marcar-como-ofertada.use-case.ts`** / **`ports-in/marcar-como-confirmada.use-case.ts`**
+  (NEW) — `execute(refillRequestId: string): Promise<void>` calling
+  `refillRepository.actualizarEstado(refillRequestId, 'ofertada' | 'confirmada')`.
+  Constructor injects ONLY `REFILL_REPOSITORY` (`@Inject(REFILL_REPOSITORY)`) — no
+  `EVENT_PUBLISHER`, no `AuditLogPort` (D16). Neither calls Phase 2's
+  `marcarOfertada()`/`marcarConfirmada()` pure functions: unlike `completarBorrador`
+  (which round-trips the full entity through `completar()` then `save()`),
+  `actualizarEstado` is `RefillRepository`'s own narrow single-column `UPDATE`
+  (D-G.2) that performs exactly the same transition without ever reading the
+  entity back into memory — the pure functions stay as living documentation of the
+  "no out-of-order transition" invariant, not as a code path these wrappers
+  actually call. Doc comments name the precedent explicitly: same orphan-surface
+  class as `consumo`'s `adherenciaUltimos7Dias()` — a real, tested method with
+  zero current callers, built because the interface (`RefillRepository`, PR1) and
+  the state machine (`domain/refill-request.entity.ts`, PR2) already demanded it
+  exist, not built speculatively.
+- **The structural RED tests (7.1)** — mirrors the `SELF_DECLARED_DEPS_METADATA`
+  technique 5a.6 (`buscar-proveedores-compatibles.use-case.spec.ts`) and 6a.4
+  (`refill-auto-solicitado.listener.spec.ts`) already established: each spec
+  asserts `Reflect.getMetadata('self:paramtypes', UseCase)` has exactly 1 entry,
+  `param === REFILL_REPOSITORY`. Two additional structural checks — properties of
+  the WHOLE domain, not of either class alone — live once in
+  `marcar-como-ofertada.use-case.spec.ts` (cross-referenced, not duplicated, from
+  `marcar-como-confirmada.use-case.spec.ts`): (1) `RefillController`'s own
+  `design:paramtypes` metadata (the raw TS-emitted constructor-param list,
+  verified against the installed `@nestjs/common/constants.js` source, same
+  rigor 6a.4 established for `EVENT_LISTENER_METADATA`) has length 3, unchanged
+  since PR6b, and does not contain `MarcarComoOfertadaUseCase`; the controller's
+  own route methods, enumerated via `Object.getOwnPropertyNames(prototype)` +
+  each method's `'path'` metadata (`@Post()`'s own `PATH_METADATA`, verified
+  against `request-mapping.decorator.js`), total exactly 3 paths, none matching
+  `/ofertada|confirmada/i`. (2) A filesystem walk of the whole
+  `domains/refill-matching/` tree (via `node:fs`, recursive, `.ts` files only)
+  asserts that no file — other than the 2 use cases' own impl/spec files and
+  `refill-matching.module.ts` — contains the string `MarcarComoOfertadaUseCase`
+  or `MarcarComoConfirmadaUseCase`: a grep-based, import-based proof that neither
+  has a caller anywhere in this domain's module graph, per the task's own
+  "weaker claim, grep-based is acceptable" guidance.
+- **`refill-matching.module.ts`** (extended) — both use cases added to
+  `providers` only, alongside the existing 6 entries. `imports:
+  [DatabaseModule, CatalogoModule]` and `exports: []` confirmed unchanged
+  (verified via `git diff --stat`: only the `providers` array, its 2 new
+  imports, and the doc comment changed).
+- **`services/core-api/domains/refill-matching/SPEC.md`** (rewritten, precisely
+  against its CURRENT content, not blindly overwritten) — "Entidades que posee"
+  now documents `RefillRequest` as a 4-state discriminated union
+  (`'borrador'`/`'abierta'`/`'ofertada'`/`'confirmada'`, D3) and `RefillItem` vs.
+  `RefillItemBorrador` (D-B); `RefillInboundPort` gains `comuna` on
+  `crearSolicitud` (D12) and a new "el dueño se deriva siempre del actor" prose
+  paragraph replacing the stale `userId`-as-parameter framing (D13), plus the
+  6th internal-only `crearBorradorRefill` use case named explicitly;
+  `RefillRepository` gains `findBorradorByConsumption`/`actualizarEstado`
+  (D-G.2); "Eventos que publica" corrected — `RefillCreado` fires on the
+  transition TO `'abierta'` from either `crearSolicitud` or `completarBorrador`,
+  never on borrador creation, and the false claim that `RefillCreado` "notifica a
+  los proveedores compatibles" is replaced with the correct attribution to
+  `MatchEncontrado` (D-G.3, the exact prose bug this change's own brief named);
+  "Eventos que consume" drops `EmpresaSuspendida` (D5, with the "why" —
+  `CatalogQueryPort`'s own anti-join already excludes it transitively) and
+  corrects `RefillAutoSolicitado` to name `crearBorradorRefill`, never
+  `crearSolicitud` (D-G.1). Every corrected sentence is marked "corrección
+  declarada" against the prior text, never a silent rewrite.
+- **`packages/types/SPEC.md`** (modified) — `src/refill-matching.ts`'s table row
+  rewritten to the VERIFIED actual export list (read directly from
+  `packages/types/src/refill-matching.ts` rather than guessed): `Urgencia`,
+  `RefillEstado`, `RefillEstadoActivo`, `RefillItem`, `RefillItemBorrador`,
+  `RefillRequest` (+ variantes `RefillRequestBorrador`/`RefillRequestActiva`,
+  same convention `src/ofertas.ts`'s own row already uses for `OfferItem`'s
+  variants), `NuevoRefillItem` — 9 exported symbols total (the file's 2
+  `Common` interfaces, `RefillItemCommon`/`RefillRequestCommon`, are NOT
+  exported and correctly omitted). The stale "`RefillRequest.comuna` siempre
+  requerido" bullet is corrected: `comuna`/`direccion` are required only on
+  `RefillRequestActiva`, optional on `RefillRequestBorrador` — there is no
+  longer a single universal `RefillRequest.comuna` now that the type is a
+  discriminated union (D3/D4).
+- **`docs/ARCHITECTURE.md`** (modified) — the Edge Functions table's "Motor de
+  matching (solicitud ↔ catálogo de proveedores)" entry removed (only "Webhooks
+  de pago" remains); "Flujo central" step 2 corrected to name
+  `buscarProveedoresCompatibles` running in `core-api` against `CatalogQueryPort`,
+  and to note explicitly that this change does not filter by zone/comuna;
+  a **"Corrección declarada (`backend-core-api-refill-matching`, D9)"** paragraph
+  added directly below the flow's numbered list, byte-for-byte the same style
+  `consumo`'s own D11 correction paragraph already established immediately below
+  the "Automatización de consumo" section (searched for and matched, per this
+  task's explicit instruction, rather than inventing a new format).
+
+## Audits (7.6/7.7 — read-only, zero code changes)
+
+- **7.6**: `refill-matching.module.ts` confirmed `exports: []` and
+  `imports: [DatabaseModule, CatalogoModule]` exactly (unchanged by this batch's
+  own edit, which only touched `providers`). `git log --oneline
+  b860970^..HEAD -- services/core-api/src/domains/catalogo/` and `git diff
+  --stat` over the same range both returned EMPTY — confirmed no commit in this
+  entire 10-PR chain (PR1 `b860970` through PR6b `7f93ba0`) ever touched a file
+  under `domains/catalogo/`. D5's success criterion holds holistically across
+  the whole change, not just per-PR.
+- **7.7**: `find services/core-api/src/domains/refill-matching -type d` +
+  targeted `find -name contracts` / `find -name scheduling` confirm
+  `adapters/events/` contains exactly 1 listener
+  (`refill-auto-solicitado.listener.ts`, plus its co-located spec and the local
+  `consumo-event.payloads.ts`), and there is NO `contracts/` directory and NO
+  `adapters/scheduling/` directory anywhere in this domain. Matches D7/D8
+  exactly — nothing was wrong, nothing was changed.
+
+## Commands Run and Results
+
+| Command | Result |
+|---|---|
+| `pnpm lint` (workspace root) | `eslint .` — clean, 0 errors/warnings |
+| `pnpm typecheck` (workspace root) | `packages/types` + `services/core-api` both `Done` |
+| `pnpm test` (workspace root, fans out to `services/core-api`) | unit: 60 suites / 472 tests (up from PR6b's 58/466 baseline — exactly +2 suites/+6 tests, this batch's own 2 new spec files, zero regressions elsewhere including `identidad`/`catalogo`/`consumo`'s own suites); e2e: 17 suites / 106 tests — byte-identical to PR6b's baseline (Phase 7 adds no HTTP surface, so no e2e delta is expected) |
+| `pnpm build` (`services/core-api`) | `tsc -p tsconfig.build.json` — clean |
+| `pnpm run format:check` (workspace root) | 2 files needed one `prettier --write` pass (`marcar-como-ofertada.use-case.ts`, `marcar-como-confirmada.use-case.ts` — single-line constructor collapsed) — applied, then `format:check`/`lint`/`typecheck`/`test`/`build` all re-verified green in that order afterward |
+| Opt-in integration suite (Phase 3's task 3.11) | Deliberately NOT run — already explicitly deferred as non-CI back in PR3; this task's mention of it is informational only, not a new requirement (per this batch's own explicit instruction) |
+
+## Riesgos residuales y preguntas abiertas — carry-forward (design.md, task 7.9)
+
+None silently dropped. Carried forward exactly as design.md's own closing section
+states them (some verified directly against the actual code during this audit,
+noted below where relevant):
+
+1. **El borrador no expira (D-D.1)**. No draft-expiry mechanism exists — none was
+   built, and D8 explicitly forbids `adapters/scheduling/` for this domain, which
+   is the only mechanism that could implement one. A user who ignores a borrador
+   keeps it forever, and it blocks every future automatic borrador for that same
+   `consumptionId` (D-D.3's dedup). Accepted: the pending borrador already says
+   what needs saying. Named, job-free exit path: a `'descartada'` state + a
+   discard route, purely additive.
+2. **`consumption_id` es un cambio de esquema/tipos más allá de D3/D4 (D-D.2)** —
+   declared as such, not snuck in. Deferring it would have been worse: the data
+   is irrecoverable once the event passes.
+3. **`MatchEncontrado` no está deduplicado entre llamadas repetidas al matching**.
+   Verified directly against `buscar-proveedores-compatibles.use-case.ts` (this
+   batch): the use case has no state-based guard — calling
+   `POST .../matching` N times on the same request publishes N
+   `MatchEncontrado` events, which could fan out N auto-ofertas once `ofertas`
+   exists. Partially bounded by `POST` (not `GET`, so not prefetchable/
+   auto-retried by a proxy). Named, not built: idempotency by
+   `refillRequestId` on `ofertas`' side, or a state guard on this side.
+4. **El matching se permite sobre `'ofertada'` y `'confirmada'`, no solo sobre
+   `'abierta'`**. Verified directly against
+   `buscar-proveedores-compatibles.use-case.ts`'s own state check this batch: the
+   ONLY state it rejects is `entity.estado === 'borrador'`
+   (`SolicitudEnBorradorError`) — `'abierta'`, `'ofertada'`, and `'confirmada'`
+   all fall through to the same matching path unchanged. Re-matching an already-
+   confirmed request is semantically dubious; today it's unreachable in practice
+   only because D6 leaves `marcarComoOfertada`/`marcarComoConfirmada` (this
+   batch's own use cases) without any caller. Revisit when `ofertas` wires them.
+5. **El default `estado = 'abierta'` es fail-open bajo D3 (D-G.4)** — neutralized
+   by `KyselyRefillRepository` always writing `estado` explicitly (PR3, with its
+   own dedicated test), never relying on the column default. The default itself
+   is not changed — that would be a delta on migration `04`, out of this
+   change's scope.
+6. **`refill_items` no tiene `updated_at` ni trigger**, despite migration `04`'s
+   own comment calling it "inmutable una vez creada" — `completarBorrador` (PR6b)
+   updates existing item rows in place. The comment's claim is no longer true;
+   the contradiction is declared in `db-schema-refill-matching`'s delta spec
+   (already landed in an earlier planning phase) rather than silently left as a
+   surprise. No column added — a schema delta with no requirement behind it.
+7. **`Number(null) === 0` podía anular D3 desde el mapper** — the single highest
+   mechanical-risk item design.md named. Mitigated with an explicit conditional
+   conversion in `KyselyRefillRepository` (PR3), a dedicated round-trip test
+   asserting `undefined` (never `0`, never `''`), and this residual risk staying
+   named for any future domain that reads a nullable `numeric` column.
+8. **Un borrador solo lleva `nombre`** — `consumo`'s `kind` never maps to
+   `categoria` (refuses to, correctly: no authority over `catalogo`'s
+   vocabulary), no price, no `catalogProductId`. The user completes from
+   scratch. Highest-value named follow-up, inherited from `consumo`'s own PR7
+   carry-forward list (item 1 there): `user_consumption.catalog_product_id`
+   (nullable, additive) would let an automatic borrador carry a real
+   `catalogProductId`, making C7's matching exact instead of fuzzy-by-name.
+9. **El prefijo `refill` rompe 3/3 de precedente** (every other controller uses
+   its domain's own name). Declared deviation with the rule that justifies it
+   ("a hyphenated domain exposes its resource family, not its internal name") —
+   `pedidos-pagos` inherits this rule. Zero clients today; reverting is a
+   one-line change.
+10. **`?: never` no se usa en la unión discriminada de `RefillRequest`**, unlike
+    `Offer`. Declared deviation, not an oversight: there is no structural
+    exclusivity here, only an unknown-yet value, and a type unable to represent
+    a legal row would force the mapper to silently drop data.
+11. **`RefillCreado`/`MatchEncontrado` se congelan con cero consumidores** (R6,
+    from the proposal). This design.md revision also fixes the RULE that
+    governs them going forward (own facts + own outputs, never another domain's
+    entity shape) — that rule is what has to survive, not the exact field list.
+12. **`ALTER TYPE … ADD VALUE` no es reversible** (R8 + D-A). Trivial to undo
+    today with zero rows; not once `ofertas` holds FKs against
+    `refill_requests`.
+13. **`CatalogoModule` es la primera arista entre dos módulos de dominio** del
+    repo (verified again this batch, 7.6: zero edits to `catalogo` across the
+    whole 10-PR chain). Purely additive and revertible by removing an import,
+    but it is the precedent the two remaining domains (`ofertas`,
+    `pedidos-pagos`) will copy for consuming a `contracts/` that isn't theirs.
+
+## Deviations from Design
+
+None beyond the ones already declared and carried forward in "What Was Built"
+above (the `SELF_DECLARED_DEPS_METADATA`/`design:paramtypes`/`PATH_METADATA`
+structural-test techniques are direct extensions of 5a.6/6a.4's own precedent,
+not new patterns). The 2 use cases match design.md D6/D-G.2's shape exactly:
+1-line-body wrappers, `REFILL_REPOSITORY`-only constructors, `providers`-only
+registration, `exports: []` untouched.
+
+## Issues Found
+
+No code bugs. All 5 gates green, run in order:
+`format:check` → `lint` → `typecheck` → `test` (unit + e2e together) → `build`,
+re-verified in that order after the one `prettier --write` fix-up (2 files, see
+"Commands Run and Results"). No pre-existing doc-staleness issues found outside
+this batch's own declared scope (unlike `consumo`'s own PR7, which surfaced 3
+out-of-scope staleness items in `supabase/SPEC.md`/`consumption-repository.port.ts`/
+`services/core-api/SPEC.md` — no equivalent was found for `refill-matching` during
+this audit).
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, per tasks.md's Review Workload
+  Forecast)
+- Current work unit: Unit 7 "Cierre" — PR7, the LAST PR in the 10-PR chain
+- Boundary: starts from PR6b's `completarBorrador` commit; ends with a fully
+  green commit that adds the 2 remaining use cases (with their structural
+  tests), reconciles `refill-matching/SPEC.md`/`packages/types/SPEC.md`/
+  `docs/ARCHITECTURE.md` against the actually-implemented code, and re-verifies
+  the entire workspace (all 5 gates) — closing out
+  `backend-core-api-refill-matching`'s implementation entirely
+- Actual size: ~254 lines across 4 new files (`marcar-como-ofertada.use-case.ts`
+  38, `marcar-como-ofertada.use-case.spec.ts` 141, `marcar-como-confirmada.use-case.ts`
+  25, `marcar-como-confirmada.use-case.spec.ts` 50) + 10 insertions/3 deletions in
+  `refill-matching.module.ts` + 23 insertions/11 deletions across the 3 doc files
+  (`refill-matching/SPEC.md`, `packages/types/SPEC.md`, `docs/ARCHITECTURE.md`) —
+  roughly 300 lines changed total (tasks.md's own checkbox flips not counted as
+  review surface, per this change's established convention). Comfortably within
+  tasks.md's own 260-360 estimate for Phase 7 (Low-Medium risk, not named among
+  the 4 borderline PRs) — **no split invoked, none needed**: this is the
+  smallest PR of the whole 10-PR chain by a wide margin, consistent with
+  tasks.md's own note that "docs carry lower per-line review cost than logic."
+
+## Status (cumulative)
+
+**80/80 tasks complete** across PR1 (10/10) + PR2 (8/8) + PR3 (10/10) + PR4a (4/4)
++ PR4b (7/7) + PR5a (10/10) + PR5b (6/6) + PR6a (7/7) + PR6b (9/9) + PR7 (9/9)
+(3.11 still intentionally out of scope, not counted against this total).
+`backend-core-api-refill-matching`'s entire 10-PR chain is now complete:
+`marcarComoOfertada`/`marcarComoConfirmada` exist, are tested, and are
+structurally confirmed to have zero HTTP surface and zero callers (D6);
+`refill-matching/SPEC.md`, `packages/types/SPEC.md`, and `docs/ARCHITECTURE.md`
+all match the actually-implemented code with every correction marked as a
+declared correction, never a silent rewrite; `refill-matching.module.ts`'s
+`exports: []` and `imports: [DatabaseModule, CatalogoModule]` are confirmed
+final; zero edits to `domains/catalogo/` across the whole change; all 5
+workspace gates green. Ready for `sdd-verify`, then `sdd-archive` — mirroring
+exactly how `backend-core-api-catalogo` and `backend-core-api-consumo` were
+closed.
