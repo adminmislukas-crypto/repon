@@ -14,3 +14,7 @@ coverage/
 # repeated at root so `git status` stays clean regardless of cwd)
 supabase/.branches/
 supabase/.temp/
+
+# graphify knowledge graph — local dev artifact, regenerated via
+# `graphify update .` (see .git/hooks/post-commit), never committed
+graphify-out/
