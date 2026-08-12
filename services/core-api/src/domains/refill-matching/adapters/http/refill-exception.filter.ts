@@ -5,7 +5,12 @@ import {
   type ArgumentsHost,
   type ExceptionFilter,
 } from '@nestjs/common';
-import { SolicitudInvalidaError } from '../../domain/refill.errors';
+import { CatalogQueryUnavailableError } from '../../../catalogo/contracts/catalog-query.port';
+import {
+  RefillRequestNotFoundError,
+  SolicitudEnBorradorError,
+  SolicitudInvalidaError,
+} from '../../domain/refill.errors';
 
 interface ResponseLike {
   status(code: number): { json(body: unknown): void };
@@ -21,17 +26,33 @@ interface StatusAndCode {
 // plain-`Error` subclasses maps to at this domain's HTTP boundary. A lookup
 // keyed by constructor, not an instanceof-chain, so a new error class is a
 // one-line append — mirrors `ConsumoExceptionFilter`/`CatalogoExceptionFilter`
-// exactly. `SolicitudInvalidaError` lands in this PR (4b) — it's the only
-// error `CrearSolicitudUseCase` can throw, and the only route wired so far.
-// This is this domain's FIRST exception filter: Phase 5b adds
-// `RefillRequestNotFoundError`/`SolicitudEnBorradorError`/
-// `CatalogQueryUnavailableError`, Phase 6b adds `TransicionInvalidaError`/
-// `SolicitudIncompletaError`/`RefillItemDesconocidoError` — both EXTEND this
-// same map and this same `@Catch()` list, neither creates a second filter.
+// exactly. `SolicitudInvalidaError` landed in PR4b — it's the only error
+// `CrearSolicitudUseCase` can throw. PR5b (this batch) adds the 3 mappings
+// `BuscarProveedoresCompatiblesUseCase` (PR5a) can throw:
+// `RefillRequestNotFoundError` (404), `SolicitudEnBorradorError` (409), and
+// `CatalogQueryUnavailableError` (503 — imported from
+// `catalogo/contracts/catalog-query.port.ts`, the ONE legitimate
+// cross-domain import this domain makes anywhere, D15/C8: it is `catalogo`'s
+// own error class, never redeclared/copied here). Phase 6b adds
+// `TransicionInvalidaError`/`SolicitudIncompletaError`/
+// `RefillItemDesconocidoError` — it EXTENDS this same map and this same
+// `@Catch()` list too, it never creates a second filter.
 type ErrorConstructor = new (...args: never[]) => Error;
 
 const ERROR_STATUS_MAP = new Map<ErrorConstructor, StatusAndCode>([
   [SolicitudInvalidaError, { statusCode: HttpStatus.BAD_REQUEST, code: 'SOLICITUD_INVALIDA' }],
+  [
+    RefillRequestNotFoundError,
+    { statusCode: HttpStatus.NOT_FOUND, code: 'REFILL_REQUEST_NOT_FOUND' },
+  ],
+  [
+    SolicitudEnBorradorError,
+    { statusCode: HttpStatus.CONFLICT, code: 'REFILL_REQUEST_EN_BORRADOR' },
+  ],
+  [
+    CatalogQueryUnavailableError,
+    { statusCode: HttpStatus.SERVICE_UNAVAILABLE, code: 'CATALOG_UNAVAILABLE' },
+  ],
 ]);
 
 /**
@@ -49,7 +70,12 @@ const ERROR_STATUS_MAP = new Map<ErrorConstructor, StatusAndCode>([
  * Nest falls through to `main.ts`'s `GlobalExceptionFilter` instead of this
  * filter inventing a second, competing catch-all.
  */
-@Catch(SolicitudInvalidaError)
+@Catch(
+  SolicitudInvalidaError,
+  RefillRequestNotFoundError,
+  SolicitudEnBorradorError,
+  CatalogQueryUnavailableError,
+)
 export class RefillExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(RefillExceptionFilter.name);
 

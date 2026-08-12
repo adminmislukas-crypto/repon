@@ -1,4 +1,5 @@
-import type { RefillRequestActiva } from '@repon/types';
+import type { ProviderCatalogItem, RefillRequestActiva } from '@repon/types';
+import type { ProveedorCompatibleDto } from './dto/proveedor-compatible.dto';
 import type { RefillRequestResponseDto } from './dto/refill-request-response.dto';
 
 /**
@@ -29,5 +30,27 @@ export function toRefillRequestResponseDto(entity: RefillRequestActiva): RefillR
       precioReferencia: item.precioReferencia,
       catalogProductId: item.catalogProductId,
     })),
+  };
+}
+
+/**
+ * PR5b (task 5b.1): the `200 ProveedorCompatibleDto[]` response for
+ * `buscarProveedoresCompatibles`. Thin field-for-field conversion, same
+ * shape `catalogo`'s own `ProviderCatalogItemResponseDto`-producing mapper
+ * would build — this domain does not add, drop, or rename any field of
+ * `ProviderCatalogItem` (`catalogo`'s vocabulary, D-C Decisión 2).
+ */
+export function toProveedorCompatibleDto(item: ProviderCatalogItem): ProveedorCompatibleDto {
+  return {
+    id: item.id,
+    companyId: item.companyId,
+    catalogProductId: item.catalogProductId,
+    nombre: item.nombre,
+    categoria: item.categoria,
+    precioBase: item.precioBase,
+    precioMaximo: item.precioMaximo,
+    stock: item.stock,
+    disponible: item.disponible,
+    imagenUrl: item.imagenUrl,
   };
 }

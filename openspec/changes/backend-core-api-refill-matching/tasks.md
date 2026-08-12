@@ -135,12 +135,12 @@ Depends on Phase 3's `findById()`. **Después del 4a/4b a propósito** (design.m
 
 Depends on Phase 5a.
 
-- [ ] 5b.1 `adapters/http/dto/proveedor-compatible.dto.ts`: `ProveedorCompatibleDto` (maps `ProviderCatalogItem` → response shape).
-- [ ] 5b.2 `adapters/http/refill.controller.ts`: `POST /refill/mis-solicitudes/:refillRequestId/matching` — `ParseUUIDPipe` on the param, authenticated, no `@Roles()`, 200. **`POST`, not `GET`** (D-E — the use case publishes an event, so it must not be safe/idempotent/cacheable).
-- [ ] 5b.3 RED (extend `refill-exception.filter.spec.ts`): `RefillRequestNotFoundError` → 404 `REFILL_REQUEST_NOT_FOUND`; `SolicitudEnBorradorError` → 409 `REFILL_REQUEST_EN_BORRADOR`; `CatalogQueryUnavailableError` (**imported from `catalogo/contracts/catalog-query.port.ts`** — the one legitimate cross-domain import in this domain, per D15/C8) → 503 `CATALOG_UNAVAILABLE`.
-- [ ] 5b.4 GREEN (extend the filter): the 3 new mappings.
-- [ ] 5b.5 `refill-matching.module.ts`: add `CatalogoModule` to `imports` (the **first inter-domain module edge** in the repo, purely additive — consumes the already-exported `CATALOG_QUERY_PORT`, zero edits to any `catalogo` file); register `BuscarProveedoresCompatiblesUseCase`.
-- [ ] 5b.6 E2e: `test/refill-buscar-proveedores.e2e-spec.ts` — 404 cross-tenant (own request of user A read as user B → 404); 404 on a borrador belonging to another user (order-of-checks proof); 409 on the caller's own borrador; 503 with `CATALOG_QUERY_PORT` mocked to throw; 200 happy path (`companyIds` non-empty); 200 with `companyIds: []` still returns 200 with an empty provider list (the event still fires — assert via a spy on the real event bus, not just the HTTP response).
+- [x] 5b.1 `adapters/http/dto/proveedor-compatible.dto.ts`: `ProveedorCompatibleDto` (maps `ProviderCatalogItem` → response shape).
+- [x] 5b.2 `adapters/http/refill.controller.ts`: `POST /refill/mis-solicitudes/:refillRequestId/matching` — `ParseUUIDPipe` on the param, authenticated, no `@Roles()`, 200. **`POST`, not `GET`** (D-E — the use case publishes an event, so it must not be safe/idempotent/cacheable).
+- [x] 5b.3 RED (extend `refill-exception.filter.spec.ts`): `RefillRequestNotFoundError` → 404 `REFILL_REQUEST_NOT_FOUND`; `SolicitudEnBorradorError` → 409 `REFILL_REQUEST_EN_BORRADOR`; `CatalogQueryUnavailableError` (**imported from `catalogo/contracts/catalog-query.port.ts`** — the one legitimate cross-domain import in this domain, per D15/C8) → 503 `CATALOG_UNAVAILABLE`.
+- [x] 5b.4 GREEN (extend the filter): the 3 new mappings.
+- [x] 5b.5 `refill-matching.module.ts`: add `CatalogoModule` to `imports` (the **first inter-domain module edge** in the repo, purely additive — consumes the already-exported `CATALOG_QUERY_PORT`, zero edits to any `catalogo` file); register `BuscarProveedoresCompatiblesUseCase`.
+- [x] 5b.6 E2e: `test/refill-buscar-proveedores.e2e-spec.ts` — 404 cross-tenant (own request of user A read as user B → 404); 404 on a borrador belonging to another user (order-of-checks proof); 409 on the caller's own borrador; 503 with `CATALOG_QUERY_PORT` mocked to throw; 200 happy path (`companyIds` non-empty); 200 with `companyIds: []` still returns 200 with an empty provider list (the event still fires — assert via a spy on the real event bus, not just the HTTP response).
 
 ## Phase 6a: Auto — Spec: `core-api-refill-matching`
 

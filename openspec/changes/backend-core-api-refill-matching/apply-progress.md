@@ -901,3 +901,194 @@ is fully unit-tested, has zero HTTP surface, and is the first real consumer of
 `catalogo`'s frozen `CatalogQueryPort` in the repo. Ready for next batch (PR5b, Phase
 5b — matching HTTP: `ProveedorCompatibleDto`, `POST .../matching` route, the 3 filter
 extensions, `CatalogoModule` wiring, e2e).
+
+---
+
+**Batch**: PR5b "Matching (HTTP)" (Phase 5b, tasks 5b.1–5b.6). Depends on PR5a's
+`BuscarProveedoresCompatiblesUseCase` — this batch wires it to HTTP. **This is the
+first inter-domain module edge in the whole repo** (`CatalogoModule` imported by
+`RefillMatchingModule`) and closes out Phase 5.
+
+## TDD Note for This Batch
+
+Followed tasks.md's literal ordering: 5b.3 (RED, extending
+`refill-exception.filter.spec.ts` with 3 new `describe.each` tuples —
+`RefillRequestNotFoundError`→404, `SolicitudEnBorradorError`→409,
+`CatalogQueryUnavailableError`→503) was run FIRST and confirmed RED (`Expected: 404/
+409/503, Received: 500` on all 3 new cases — the pre-existing `SolicitudInvalidaError`
+case stayed green throughout, confirming the extension didn't disturb PR4b's mapping).
+5b.4 (GREEN, extending `ERROR_STATUS_MAP` + the `@Catch()` argument list in
+`refill-exception.filter.ts`) was written next and the same command re-run: 4/4 passing
+in one pass. 5b.1/5b.2/5b.5 (the DTO, the controller route, and the module wiring) are
+the "costuras" category — no RED/GREEN pair of their own, same as PR4b's own DTO/
+controller/module tasks — but were written before 5b.6's e2e suite so the route existed
+for the e2e RED/GREEN cycle to run against (all 6 e2e scenarios were written together
+against the already-wired route and controller, then run once: 6/6 green on the first
+run, no test edits needed afterward — the controller/mapper/module wiring had already
+been typechecked and unit-verified via the filter spec by that point).
+
+## What Was Built
+
+- **`adapters/http/dto/proveedor-compatible.dto.ts`** (NEW) — `ProveedorCompatibleDto`,
+  field-for-field mirror of `catalogo`'s own
+  `ProviderCatalogItemResponseDto` (`catalogo/adapters/http/dto/
+  provider-catalog-item-response.dto.ts`), which already serializes the exact same
+  underlying `@repon/types` `ProviderCatalogItem`: `id`, `companyId`,
+  `catalogProductId?`, `nombre`, `categoria`, `precioBase`, `precioMaximo`, `stock`,
+  `disponible`, `imagenUrl?` — same field list, same `@ApiProperty`/`@ApiPropertyOptional`
+  style, deliberately not re-derived from scratch (task instruction: "don't invent a
+  different shape for the same underlying type").
+- **`adapters/http/refill.mapper.ts`** (extended) — `toProveedorCompatibleDto(item:
+  ProviderCatalogItem): ProveedorCompatibleDto`, a second `toXResponseDto`-shaped
+  function appended alongside PR4b's `toRefillRequestResponseDto`, per that file's own
+  doc comment naming this precedent.
+- **`adapters/http/refill.controller.ts`** (extended) — `POST
+  /refill/mis-solicitudes/:refillRequestId/matching`, `@Param('refillRequestId',
+  ParseUUIDPipe)`, `@HttpCode(HttpStatus.OK)` (200, not 201 — this doesn't create a
+  resource). No `@UseGuards`/`@Roles()` beyond what the class-level `APP_GUARD` already
+  provides, same pattern as `crearSolicitud`. `actor.profileId` + the path param are
+  passed straight to `buscarProveedoresCompatiblesUseCase.execute(profileId,
+  refillRequestId)` — no DTO body (there is none to validate, D-E's route table lists
+  `—` for this route's body). Response is `matches.map(toProveedorCompatibleDto)`.
+  `BuscarProveedoresCompatiblesUseCase` injected alongside `CrearSolicitudUseCase` in
+  the same constructor — still one controller for the domain, per the class doc
+  comment's own stated plan.
+- **`adapters/http/refill-exception.filter.ts`** (extended) — 3 new
+  `ERROR_STATUS_MAP` entries and 3 new `@Catch()` arguments:
+  `RefillRequestNotFoundError`→404 `REFILL_REQUEST_NOT_FOUND`,
+  `SolicitudEnBorradorError`→409 `REFILL_REQUEST_EN_BORRADOR`,
+  `CatalogQueryUnavailableError`→503 `CATALOG_UNAVAILABLE` — the last one imported
+  directly from `catalogo/contracts/catalog-query.port.ts` (the ONE legitimate
+  cross-domain import this domain makes anywhere, D15/C8): the real class, never
+  redeclared or copied. The pre-existing `SolicitudInvalidaError` entry/constructor-keyed
+  map structure was left untouched, only appended to.
+- **`adapters/http/refill-exception.filter.spec.ts`** (extended) — 3 new tuples appended
+  to the existing `describe.each` table (never restructured), importing
+  `CatalogQueryUnavailableError` from `catalogo/contracts/catalog-query.port.ts` and
+  `RefillRequestNotFoundError`/`SolicitudEnBorradorError` from `domain/refill.errors.ts`.
+- **`refill-matching.module.ts`** (extended) — `CatalogoModule` added to `imports`
+  (alongside the existing `DatabaseModule`) — **the first inter-domain module edge in
+  the entire repo**: purely additive, consumes `CatalogoModule`'s already-exported
+  `CATALOG_QUERY_PORT` token, zero edits to any file under `domains/catalogo/`
+  (confirmed via `git status --porcelain services/core-api/src/domains/catalogo/`
+  showing nothing, both before and after this batch).
+  `BuscarProveedoresCompatiblesUseCase` added to `providers`, alongside the existing
+  `REFILL_REPOSITORY` binding and `CrearSolicitudUseCase` (both left untouched).
+- **`test/refill-buscar-proveedores.e2e-spec.ts`** (NEW) — 6 scenarios, mirroring
+  `refill-crear-solicitud.e2e-spec.ts`'s (PR4b) setup/teardown/auth-token/real-event-bus
+  conventions exactly, extended with a 3rd override (`CATALOG_QUERY_PORT`, mocked
+  alongside `ACTOR_PORT`/`REFILL_REPOSITORY` — no local Supabase required, same as
+  PR4b): (1) 404 cross-tenant — an `'abierta'` request owned by user A, read as user B;
+  asserts `catalogQueryPort.buscarCoincidencias` was never called. (2) 404 on a
+  `'borrador'` request owned by another user — the order-of-checks proof: ownership is
+  verified BEFORE state, so a borrador belonging to a stranger still returns 404, never
+  409. (3) 409 on the caller's OWN borrador. (4) 503 with the mocked
+  `CATALOG_QUERY_PORT.buscarCoincidencias` rejecting with a real
+  `CatalogQueryUnavailableError`. (5) 200 with a non-empty `companyIds`/provider list —
+  asserts the full `ProveedorCompatibleDto` shape via `toEqual`/`objectContaining` on
+  every field. (6) 200 with `companyIds: []` — asserts BOTH the empty HTTP array AND
+  that `MatchEncontrado` still fires exactly once on the real event bus (`app.get(
+  EventEmitter2, { strict: false })` + `.on('refill.match_encontrado', spy)`, same
+  precedent PR4b's e2e established for `refill.creado`), with `companyIds: []`/
+  `providerCatalogItemIds: []` in the published payload — never suppressed.
+  - The 409-on-own-borrador scenario needed a `'borrador'` fixture, and there is still
+    no HTTP route that creates one (Phase 6a adds the `RefillAutoSolicitado` listener
+    later). Since `REFILL_REPOSITORY` is entirely mocked in this suite (same as PR4b —
+    no real Supabase writes happen anywhere in it), the borrador fixture is built
+    directly via a local `buildBorrador()` helper and handed back by the mocked
+    `findById()` — this suite's direct equivalent of "inserting a borrador row for test
+    setup," with no new test-only DB helper needed.
+
+## Deviations from Design
+
+None. Route (`POST .../matching`, 200, `ParseUUIDPipe`), the 3 error mappings
+(404/409/503) and their codes, the `CatalogoModule` import as the sole module change,
+and the DTO's field-for-field mirror of `catalogo`'s own response DTO all match
+design.md D-E's "Superficie HTTP"/"Errores de dominio" tables and D-C verbatim.
+
+## Issues Found
+
+None. All 5 gates green, run in order: `pnpm run format:check` (2 files —
+`refill-exception.filter.spec.ts`/`refill-buscar-proveedores.e2e-spec.ts` — needed one
+`prettier --write` pass for array-literal/import-line wrapping; applied, then
+`format:check` re-verified green), `pnpm lint` (workspace root, 0 errors/warnings),
+`pnpm typecheck` (workspace root — `packages/types` + `core-api` both `Done`; `git
+status --porcelain services/core-api/src/domains/catalogo/` confirmed EMPTY both before
+and after this batch — `catalogo` compiles with zero diff, task instruction's explicit
+ask), `pnpm test` — run for BOTH unit AND e2e together per this batch's explicit
+instruction (unit: 55 suites / 445 tests, up from 442 baseline — 3 new, the filter
+spec's 3 tuples; e2e: 15 suites / 95 tests, up from 89 baseline — 6 new, this batch's
+own e2e file), `pnpm build` (`tsc -p tsconfig.build.json`, clean).
+
+## What PR6a (next batch) should know
+
+- Phase 5 (matching, lógica + HTTP) is fully closed. `refill-matching.module.ts` now
+  imports `[DatabaseModule, CatalogoModule]` and provides
+  `[REFILL_REPOSITORY→KyselyRefillRepository, CrearSolicitudUseCase,
+  BuscarProveedoresCompatiblesUseCase]` — PR6a's `CrearBorradorRefillUseCase` and
+  `RefillAutoSolicitadoListener` are additive entries to this same `providers` array
+  (`RefillAutoSolicitadoListener` goes in `providers`, not `controllers` — it has no
+  route, `DiscoveryService` finds `@OnEvent` either way, same as `catalogo`'s
+  `CompanyVisibilityListener`).
+- `RefillController` now has 2 routes (`POST /refill/mis-solicitudes`, `POST
+  /refill/mis-solicitudes/:refillRequestId/matching`). PR6a's listener has NO route —
+  it does not touch `refill.controller.ts` at all. PR6b (`.../completar`) is the next
+  batch that extends the controller.
+- `refill-exception.filter.ts`'s `ERROR_STATUS_MAP` now has 4 entries
+  (`SolicitudInvalidaError`, `RefillRequestNotFoundError`, `SolicitudEnBorradorError`,
+  `CatalogQueryUnavailableError`). PR6a's `CrearBorradorRefillUseCase` throws none of
+  these and adds no new error class of its own (design.md: the listener catches and
+  logs, never re-throws to any HTTP boundary) — PR6a does not need to touch this filter
+  or its spec at all. PR6b (`TransicionInvalidaError`/`SolicitudIncompletaError`/
+  `RefillItemDesconocidoError`) is the next batch that extends it.
+- The e2e pattern of overriding a 3rd provider beyond `ACTOR_PORT`/`REFILL_REPOSITORY`
+  (this batch added `CATALOG_QUERY_PORT`) is now a real 2-instance precedent in this
+  domain's e2e suite, not a one-off — useful if PR6a's own e2e contract test
+  (`test/refill-auto-solicitado.e2e-spec.ts`, task 6a.7) needs to override anything
+  beyond the real event bus it's built around.
+- `CatalogoModule` is now imported by a second domain (`refill-matching`), beyond its
+  own `CatalogoModule`/`AppModule` wiring — confirmed this doesn't create a circular
+  import (`catalogo` still imports nothing from `refill-matching`, verified by the
+  empty `git status --porcelain` on `domains/catalogo/`).
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, per tasks.md's Review Workload Forecast)
+- Current work unit: Unit 5b "Matching (HTTP)" — PR5b
+- Boundary: starts from PR5a's matching-lógica commit; ends with
+  `adapters/http/dto/proveedor-compatible.dto.ts` (new), the extended
+  `refill.mapper.ts`/`refill.controller.ts`/`refill-exception.filter.ts`/
+  `refill-exception.filter.spec.ts`, the extended `refill-matching.module.ts`
+  (`CatalogoModule` + `BuscarProveedoresCompatiblesUseCase`), and the new
+  `test/refill-buscar-proveedores.e2e-spec.ts` — `POST
+  /refill/mis-solicitudes/:refillRequestId/matching` fully wired and reachable, zero
+  `catalogo/` files touched, all 5 gates green (unit AND e2e together)
+- Actual size: 358 lines added across 2 new files (`proveedor-compatible.dto.ts` 46,
+  `refill-buscar-proveedores.e2e-spec.ts` 312) + 158 insertions/30 deletions across 5
+  extended files (`refill-exception.filter.spec.ts`, `refill-exception.filter.ts`,
+  `refill.controller.ts`, `refill.mapper.ts`, `refill-matching.module.ts`) — 546 lines
+  changed total. This is over tasks.md's own 200-250 estimate for 5b (Low risk),
+  continuing this change's established pattern of running larger than its own
+  tasks.md baseline (PR2 ~2x, PR3 ~2.3x, PR4b ~2.5x, PR5a ~1.75x over their respective
+  estimates) — here concentrated almost entirely in the e2e spec (312 lines — 6
+  scenarios, 3 overridden providers instead of PR4b's 2, plus 3 local fixture builders
+  for `RefillRequestActiva`/`RefillRequestBorrador`/`ProviderCatalogItem` that PR4b's
+  e2e didn't need since it never had to construct a full entity by hand). No split is
+  proposed: every file here is a single structural unit tasks.md itself names as one
+  piece (one DTO, one mapper extension, one controller extension, one filter+spec
+  extension pair, one module extension, one e2e spec covering the 6 scenarios task
+  5b.6 itself lists as one bullet) — splitting the e2e spec further would separate
+  scenarios that share the same 3-provider override setup and fixture builders for no
+  reviewability gain. Reported honestly per this batch's explicit instruction to report
+  the real diff size rather than invent a sub-split.
+
+## Status
+
+55/55 tasks complete across PR1+PR2+PR3+PR4a+PR4b+PR5a+PR5b (3.11 still intentionally
+out of scope, not counted against this total). Phase 5 ("Matching") is fully closed:
+`buscarProveedoresCompatibles` is reachable at `POST
+/refill/mis-solicitudes/:refillRequestId/matching`, authenticated, exception-mapped
+(404/409/503), and `CatalogoModule` is wired as this repo's first inter-domain module
+edge with zero edits to `catalogo` itself. Ready for next batch (PR6a, Phase 6a — Auto:
+`CrearBorradorRefillUseCase`, dedup, `consumo-event.payloads.ts`,
+`RefillAutoSolicitadoListener`, the `moduleRef.init()` contract e2e).

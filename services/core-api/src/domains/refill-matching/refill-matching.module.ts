@@ -1,20 +1,24 @@
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from '../../shared/database/database.module';
+import { CatalogoModule } from '../catalogo/catalogo.module';
 import { KyselyRefillRepository } from './adapters/persistence/kysely-refill.repository';
 import { RefillController } from './adapters/http/refill.controller';
+import { BuscarProveedoresCompatiblesUseCase } from './ports-in/buscar-proveedores-compatibles.use-case';
 import { CrearSolicitudUseCase } from './ports-in/crear-solicitud.use-case';
 import { REFILL_REPOSITORY } from './ports-out/refill-repository.port';
 
 /**
- * design.md "Wiring de módulos y tokens" — first real wiring of
- * `refill-matching.module.ts`, grown incrementally per design.md's own
- * §"Secuencia de implementación" table (this is PR4b of the pre-split
- * 10-PR chain, `tasks.md` task 4b.6). `imports: [DatabaseModule]` ONLY —
- * NOT `CatalogoModule` yet: that lands in Phase 5b, when
- * `BuscarProveedoresCompatiblesUseCase` needs `CATALOG_QUERY_PORT`
- * (design.md: "`CatalogoModule` es la PRIMERA arista de dependencia entre
- * dos modulos de dominio del repo"). `DatabaseModule` is redundant (it's
- * `@Global`) but explicit — same style as Identidad/Catalogo/Consumo.
+ * design.md "Wiring de módulos y tokens" — grown incrementally per
+ * design.md's own §"Secuencia de implementación" table. PR4b wired
+ * `imports: [DatabaseModule]` only. PR5b (this batch, `tasks.md` task 5b.5)
+ * adds `CatalogoModule` to `imports` — the **first inter-domain module
+ * edge in the whole repo**: `BuscarProveedoresCompatiblesUseCase` (PR5a)
+ * needs `CATALOG_QUERY_PORT`, and `CatalogoModule` already exports exactly
+ * that token (`exports: [CATALOG_QUERY_PORT]`). Purely additive — zero
+ * edits to any file under `domains/catalogo/` (verified via `git status
+ * --porcelain services/core-api/src/domains/catalogo/` showing nothing for
+ * this PR). `DatabaseModule` is redundant (it's `@Global`) but explicit —
+ * same style as Identidad/Catalogo/Consumo.
  *
  * `RefillExceptionFilter` is deliberately NOT listed as a provider — it has
  * zero DI dependencies, so `@UseFilters(RefillExceptionFilter)` on
@@ -22,7 +26,6 @@ import { REFILL_REPOSITORY } from './ports-out/refill-repository.port';
  * `catalogo.module.ts`: neither lists its own exception filter as a
  * provider either.
  *
- * Phase 5a/5b add `BuscarProveedoresCompatiblesUseCase` + `CatalogoModule`;
  * Phase 6a add `CrearBorradorRefillUseCase` + `RefillAutoSolicitadoListener`;
  * Phase 6b add `CompletarBorradorUseCase`; Phase 7 add
  * `MarcarComoOfertadaUseCase`/`MarcarComoConfirmadaUseCase` (providers only,
@@ -33,11 +36,12 @@ import { REFILL_REPOSITORY } from './ports-out/refill-repository.port';
  * nothing else imports from it — still true after this PR.
  */
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, CatalogoModule],
   controllers: [RefillController],
   providers: [
     { provide: REFILL_REPOSITORY, useClass: KyselyRefillRepository },
     CrearSolicitudUseCase,
+    BuscarProveedoresCompatiblesUseCase,
   ],
   exports: [],
 })
