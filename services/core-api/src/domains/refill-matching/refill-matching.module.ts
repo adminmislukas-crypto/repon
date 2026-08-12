@@ -5,6 +5,7 @@ import { KyselyRefillRepository } from './adapters/persistence/kysely-refill.rep
 import { RefillController } from './adapters/http/refill.controller';
 import { RefillAutoSolicitadoListener } from './adapters/events/refill-auto-solicitado.listener';
 import { BuscarProveedoresCompatiblesUseCase } from './ports-in/buscar-proveedores-compatibles.use-case';
+import { CompletarBorradorUseCase } from './ports-in/completar-borrador.use-case';
 import { CrearBorradorRefillUseCase } from './ports-in/crear-borrador-refill.use-case';
 import { CrearSolicitudUseCase } from './ports-in/crear-solicitud.use-case';
 import { REFILL_REPOSITORY } from './ports-out/refill-repository.port';
@@ -28,15 +29,17 @@ import { REFILL_REPOSITORY } from './ports-out/refill-repository.port';
  * `catalogo.module.ts`: neither lists its own exception filter as a
  * provider either.
  *
- * Phase 6a (this batch, tasks.md 6a.6) adds `CrearBorradorRefillUseCase` +
- * `RefillAutoSolicitadoListener` — both go in `providers`, `Listener`
- * included: it has no route, `DiscoveryService` finds `@OnEvent` on any
- * provider, it doesn't need to be a `controller`. Neither touches
- * `imports`/`controllers`/`exports` — no new module edge this phase.
- * Phase 6b add `CompletarBorradorUseCase`; Phase 7 add
- * `MarcarComoOfertadaUseCase`/`MarcarComoConfirmadaUseCase` (providers only,
- * no route — D6). Each phase EXTENDS this same `providers` array, never
- * replaces this file.
+ * Phase 6a added `CrearBorradorRefillUseCase` + `RefillAutoSolicitadoListener`
+ * — both in `providers`, `Listener` included: it has no route,
+ * `DiscoveryService` finds `@OnEvent` on any provider, it doesn't need to be
+ * a `controller`. Neither touched `imports`/`controllers`/`exports` — no new
+ * module edge that phase.
+ * PR6b (this batch, tasks.md 6b.8) adds `CompletarBorradorUseCase` —
+ * `providers` only, purely additive, `imports`/`controllers`/`exports`
+ * untouched (its route lives on the already-registered `RefillController`).
+ * Phase 7 adds `MarcarComoOfertadaUseCase`/`MarcarComoConfirmadaUseCase`
+ * (providers only, no route — D6). Each phase EXTENDS this same `providers`
+ * array, never replaces this file.
  *
  * `exports: []`, deliberately (D7): this domain has no `contracts/` and
  * nothing else imports from it — still true after this PR.
@@ -50,6 +53,7 @@ import { REFILL_REPOSITORY } from './ports-out/refill-repository.port';
     BuscarProveedoresCompatiblesUseCase,
     CrearBorradorRefillUseCase,
     RefillAutoSolicitadoListener,
+    CompletarBorradorUseCase,
   ],
   exports: [],
 })

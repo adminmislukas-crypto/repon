@@ -1,9 +1,12 @@
 import type { ArgumentsHost } from '@nestjs/common';
 import { CatalogQueryUnavailableError } from '../../../catalogo/contracts/catalog-query.port';
 import {
+  RefillItemDesconocidoError,
   RefillRequestNotFoundError,
   SolicitudEnBorradorError,
+  SolicitudIncompletaError,
   SolicitudInvalidaError,
+  TransicionInvalidaError,
 } from '../../domain/refill.errors';
 import { RefillExceptionFilter } from './refill-exception.filter';
 
@@ -27,9 +30,12 @@ function fakeHost(): { host: ArgumentsHost; json: jest.Mock; status: jest.Mock }
 // `RefillRequestNotFoundError` (404), `SolicitudEnBorradorError` (409), and
 // `CatalogQueryUnavailableError` (503 — imported from
 // `catalogo/contracts/catalog-query.port.ts`, the one legitimate
-// cross-domain import this domain makes, D15/C8). Phase 6b (409/400/400)
-// extends this same table again — it never replaces it or creates a second
-// filter file.
+// cross-domain import this domain makes, D15/C8). PR6b (this batch) EXTENDS
+// this same table with the 3 mappings `CompletarBorradorUseCase` (PR6b) can
+// throw: `TransicionInvalidaError` (409 — completing a non-borrador),
+// `SolicitudIncompletaError` (400 — delegated from Phase 2's `completar()`),
+// `RefillItemDesconocidoError` (400 — also delegated from `completar()`) —
+// it never replaces this table or creates a second filter file.
 describe.each([
   [
     new SolicitudInvalidaError('La solicitud debe tener al menos un ítem.'),
@@ -47,6 +53,21 @@ describe.each([
     'REFILL_REQUEST_EN_BORRADOR',
   ],
   [new CatalogQueryUnavailableError(), 503, 'CATALOG_UNAVAILABLE'],
+  [
+    new TransicionInvalidaError("No se puede completar una solicitud en estado 'abierta'."),
+    409,
+    'TRANSICION_INVALIDA',
+  ],
+  [
+    new SolicitudIncompletaError('direccion es obligatoria para completar la solicitud.'),
+    400,
+    'REFILL_REQUEST_INCOMPLETA',
+  ],
+  [
+    new RefillItemDesconocidoError('11111111-1111-1111-1111-111111111111'),
+    400,
+    'REFILL_ITEM_DESCONOCIDO',
+  ],
 ] as const)('RefillExceptionFilter — %#', (exception, statusCode, code) => {
   it(`maps ${exception.constructor.name} to ${statusCode} ${code}`, () => {
     const filter = new RefillExceptionFilter();

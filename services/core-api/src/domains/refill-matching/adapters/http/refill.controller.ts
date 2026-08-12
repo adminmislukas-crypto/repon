@@ -24,9 +24,11 @@ import {
 import { Actor } from '../../../../shared/auth/decorators/actor.decorator';
 import type { AuthenticatedActor } from '../../../../shared/auth/ports/actor.port';
 import { BuscarProveedoresCompatiblesUseCase } from '../../ports-in/buscar-proveedores-compatibles.use-case';
+import { CompletarBorradorUseCase } from '../../ports-in/completar-borrador.use-case';
 import { CrearSolicitudUseCase } from '../../ports-in/crear-solicitud.use-case';
 import { RefillExceptionFilter } from './refill-exception.filter';
 import { toProveedorCompatibleDto, toRefillRequestResponseDto } from './refill.mapper';
+import { CompletarBorradorDto } from './dto/completar-borrador.dto';
 import { CrearSolicitudDto } from './dto/crear-solicitud.dto';
 import { ProveedorCompatibleDto } from './dto/proveedor-compatible.dto';
 import { RefillRequestResponseDto } from './dto/refill-request-response.dto';
@@ -62,6 +64,7 @@ export class RefillController {
   constructor(
     private readonly crearSolicitudUseCase: CrearSolicitudUseCase,
     private readonly buscarProveedoresCompatiblesUseCase: BuscarProveedoresCompatiblesUseCase,
+    private readonly completarBorradorUseCase: CompletarBorradorUseCase,
   ) {}
 
   @Post('mis-solicitudes')
@@ -122,5 +125,40 @@ export class RefillController {
       refillRequestId,
     );
     return matches.map(toProveedorCompatibleDto);
+  }
+
+  @Post('mis-solicitudes/:refillRequestId/completar')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      "Completa un borrador propio del actor autenticado y lo transiciona a 'abierta', " +
+      'publicando RefillCreado después del commit (D-C Decisión 1; 200, no 201 — no crea ' +
+      'un recurso nuevo, transiciona uno existente).',
+  })
+  @ApiParam({ name: 'refillRequestId', format: 'uuid' })
+  @ApiOkResponse({ type: RefillRequestResponseDto })
+  @ApiBadRequestResponse({
+    description:
+      "DTO inválido, o la transición a 'abierta' queda incompleta (400 REFILL_REQUEST_INCOMPLETA " +
+      '/ REFILL_ITEM_DESCONOCIDO — D3/D4).',
+  })
+  @ApiUnauthorizedResponse({ description: 'Token ausente o inválido.' })
+  @ApiNotFoundResponse({
+    description: 'La solicitud no existe, o pertenece a otro usuario (404, nunca 403 — D13).',
+  })
+  @ApiConflictResponse({
+    description: "La solicitud no está en 'borrador' (409 TRANSICION_INVALIDA).",
+  })
+  async completarBorrador(
+    @Param('refillRequestId', ParseUUIDPipe) refillRequestId: string,
+    @Body() dto: CompletarBorradorDto,
+    @Actor() actor: AuthenticatedActor,
+  ): Promise<RefillRequestResponseDto> {
+    const entity = await this.completarBorradorUseCase.execute(
+      actor.profileId,
+      refillRequestId,
+      dto,
+    );
+    return toRefillRequestResponseDto(entity);
   }
 }

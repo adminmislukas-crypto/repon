@@ -1312,3 +1312,280 @@ zero events, and `consumo.stock_bajo_detectado` alone reaches nothing in this do
 Ready for next batch (PR6b, Phase 6b — Completar: `CompletarBorradorUseCase`, reusing
 `RefillCreado`/`RefillSolicitudPayload` from PR4a, `POST .../completar`, the 3 new filter
 mappings).
+
+---
+
+**Batch**: PR6b "Completar" (Phase 6b, tasks 6b.1–6b.9). `completarBorrador` — the
+HTTP-reachable use case that transitions a `'borrador'` request to `'abierta'`. Extends
+(never recreates) `refill.controller.ts`/`refill-exception.filter.ts`/
+`refill-matching.module.ts` from PR4b/PR5b. Reuses PR4a's `RefillCreado`/
+`RefillSolicitudPayload` and PR2's `completar()`/`CompletarInput`/`CompletarRefillItemInput`
+verbatim — none of the four are redeclared here.
+
+## TDD Note for This Batch
+
+Genuinely strict-TDD, both RED/GREEN pairs confirmed by actually running the failing
+test first, not assumed: `ports-in/completar-borrador.use-case.spec.ts` (6b.2) was
+written and run against a temporarily-removed implementation file — confirmed RED
+(`Cannot find module './completar-borrador.use-case'`) — before
+`ports-in/completar-borrador.use-case.ts` (6b.3) was restored; GREEN was 13/13 on the
+first run, zero test edits needed afterward. Same sequence for the filter:
+`refill-exception.filter.spec.ts` (6b.6) was extended with the 3 new `describe.each`
+tuples and run FIRST — confirmed RED (`Expected: 409/400/400, Received: 500` on all 3
+new cases; the 4 pre-existing mappings from PR4b/PR5b stayed green throughout, proving
+the extension didn't disturb them) — before `refill-exception.filter.ts` (6b.7) was
+extended; GREEN was 7/7 on the first run. Tasks 6b.1/6b.4/6b.5/6b.8 are the "costuras"
+category this change's own precedent already established for DTO/controller/module
+extensions (no domain-invariant logic of their own — the invariants they defend are
+Phase 2's `completar()` and this batch's own `CompletarBorradorUseCase`, both already
+tested) — verified instead by the full gate suite plus the e2e spec (6b.9), same as
+PR4b's/PR5b's own precedent for a domain's Nth HTTP surface.
+
+## What Was Built
+
+- **Task 6b.1 — a documented deviation from its own literal text, decided in the
+  codebase's favor before writing anything**: the task says to declare
+  `CompletarRefillItemInput` "locally" in `ports-in/completar-borrador.use-case.ts`.
+  Checked first, per this batch's explicit instructions: `domain/refill-request.entity.ts`
+  (PR2) already exports `CompletarInput`/`CompletarRefillItemInput`, field-for-field
+  identical to design.md D-E's own code block, and that file's own doc comment names
+  *this exact use case* as the intended importer ("declarado ACÁ... y exportado para que
+  Phase 6b's `CompletarBorradorUseCase` lo importe en vez de redeclararlo"). Redeclaring
+  would have created two structurally-identical interfaces under two different names in
+  the same domain for no reason — imported and re-exported from the use-case file
+  instead (`export type { CompletarInput, CompletarRefillItemInput } from '../domain/refill-request.entity'`),
+  so the use-case file remains the canonical reference point design.md's D-E section
+  ("La entrada de `completarBorrador`") describes, without a duplicate declaration.
+  `@repon/types`'s export count is untouched either way — this was never a candidate for
+  promotion there (D-B: no `SPEC.md` names `completarBorrador`).
+- **`ports-in/completar-borrador.use-case.ts`** —
+  `CompletarBorradorUseCase.execute(profileId, refillRequestId, input: CompletarInput):
+  Promise<RefillRequestActiva>`:
+  - Constructor injects `REFILL_REPOSITORY`, `TRANSACTION_MANAGER`, `EVENT_PUBLISHER` —
+    same 3 tokens, same order, as `CrearSolicitudUseCase` (PR4a); unlike
+    `BuscarProveedoresCompatiblesUseCase`'s deliberate omission of
+    `TRANSACTION_MANAGER` (PR5a), this use case writes, so it needs one.
+  - **Structural shape mirrors `MarcarDosisTomadaUseCase` (`consumo`), not
+    `CrearSolicitudUseCase`** (tasks.md 6b.2's own explicit instruction): unlike
+    `crearSolicitud` (which builds a brand-new entity before ever opening a
+    transaction), this use case needs an ownership read before it can write.
+    `findById(refillRequestId, tx)` runs INSIDE `runInTransaction`, on the SAME `tx`
+    the `save()` call also uses — a rejection anywhere in the callback rolls back with
+    zero writes.
+  - `found === null || found.userId !== profileId` → `RefillRequestNotFoundError`,
+    constructed identically in both branches (D13) — checked FIRST, before state,
+    verified byte-for-byte via the same "compare `.name`/`.message` across both
+    branches" test PR5a established.
+  - `found.estado !== 'borrador'` → `TransicionInvalidaError` (409). **This check
+    belongs to this use case, not to `completar()`**: the domain function's parameter
+    is typed `RefillRequestBorrador`, so TypeScript enforces "is this a borrador?" at
+    the call site — there is no runtime branch inside `completar()` for "what if it
+    wasn't actually one." Past this check, TypeScript narrows `found` to
+    `RefillRequestBorrador` (D-B), so `completar(found, input)` type-checks with no
+    cast.
+  - `completar(found, input)` (Phase 2) — delegated, never re-implemented. Its own 2
+    completeness checks (`SolicitudIncompletaError`) and its unknown-`refillItemId`
+    check (`RefillItemDesconocidoError`) both propagate straight out of this use case
+    uncaught.
+  - `save(activa, tx)` — same `tx` as the read. `RefillRepository.save()`'s own
+    doc comment (PR1/PR3) already names this exact call as its update-in-place path.
+  - `RefillCreado` publishes only AFTER `runInTransaction` resolves — reusing PR4a's
+    `RefillSolicitudPayload`/`RefillCreado` verbatim, the exact same
+    `refillItemId`/`catalogProductId ?? null` conversion `CrearSolicitudUseCase`
+    already established (D-C: both producers of `RefillCreado` build the identical
+    payload shape).
+- **`adapters/http/dto/completar-refill-item.dto.ts`** (NEW) —
+  `CompletarRefillItemDto`: `refillItemId` (`@IsUUID()`), `categoria`/`precioReferencia`
+  (same decorators as `NuevoRefillItemDto`), `catalogProductId?`. `refillItemId` is
+  validated as a well-formed UUID but NOT checked against the borrador's own items at
+  the DTO layer — that's a domain invariant (`completar()`), not a shape invariant; an
+  unknown id passes DTO validation and surfaces as `RefillItemDesconocidoError` (400
+  `REFILL_ITEM_DESCONOCIDO`) at the use-case layer instead.
+- **`adapters/http/dto/completar-borrador.dto.ts`** (NEW) — `CompletarBorradorDto`:
+  `direccion`/`comuna` (required, same decorators as `CrearSolicitudDto`), `urgencia?`
+  (OPTIONAL — omitting it keeps whatever urgencia the borrador already carries, D-G.1),
+  `items: CompletarRefillItemDto[]` (nested-array validation, same
+  `@ValidateNested`/`@Type` pattern `CrearSolicitudDto` established). No `userId`
+  field, same D13 rule every DTO in this domain follows. Structurally identical to
+  `CompletarInput` field for field, so the controller passes the DTO instance straight
+  through with zero remapping — same minimal-plumbing precedent `CrearSolicitudDto`
+  already set.
+- **`adapters/http/refill.controller.ts`** (extended) — `POST
+  /refill/mis-solicitudes/:refillRequestId/completar`, `@HttpCode(HttpStatus.OK)` (200,
+  not 201 — this transitions an existing resource, it doesn't create one).
+  `CompletarBorradorUseCase` injected into the SAME constructor alongside the existing
+  2 use cases — still one controller for the domain, 3rd route now live.
+  `actor.profileId` + the path param + the DTO instance are passed straight to
+  `completarBorradorUseCase.execute(profileId, refillRequestId, dto)`.
+- **`adapters/http/refill-exception.filter.ts`** (extended) — 3 new
+  `ERROR_STATUS_MAP` entries and 3 new `@Catch()` arguments:
+  `TransicionInvalidaError`→409 `TRANSICION_INVALIDA`, `SolicitudIncompletaError`→400
+  `REFILL_REQUEST_INCOMPLETA`, `RefillItemDesconocidoError`→400
+  `REFILL_ITEM_DESCONOCIDO` — all 3 imported from this domain's own
+  `domain/refill.errors.ts` (no cross-domain import this time, unlike PR5b's
+  `CatalogQueryUnavailableError`). The pre-existing 4-entry map (PR4b/PR5b) was left
+  untouched, only appended to — now 7 entries total.
+- **`refill-matching.module.ts`** (extended) — `CompletarBorradorUseCase` added to
+  `providers`, alongside the existing 4 entries (repository binding +
+  `CrearSolicitudUseCase` + `BuscarProveedoresCompatiblesUseCase` +
+  `CrearBorradorRefillUseCase` + `RefillAutoSolicitadoListener`). `imports`/
+  `controllers`/`exports` untouched — no new module edge this batch (confirmed via the
+  diff itself: only the `providers` array, its one new import, and 2 doc-comment
+  paragraphs changed).
+- **`test/refill-completar-borrador.e2e-spec.ts`** (NEW) — 8 scenarios, mirroring
+  `refill-crear-solicitud.e2e-spec.ts`'s (PR4b) and
+  `refill-buscar-proveedores.e2e-spec.ts`'s (PR5b) override shape exactly:
+  `ACTOR_PORT`/`REFILL_REPOSITORY` are the only 2 overrides, `EVENT_PUBLISHER` stays
+  bound to the real `EventEmitterPublisher`/`EventEmitter2`. There is still no HTTP
+  route that creates a `'borrador'` (Phase 6a's listener is the only creator, reacting
+  only to a real `consumo` event) — reused PR5b's exact `buildBorrador()` +
+  mocked-`findById()` precedent for test setup rather than round-tripping through the
+  real event bus (PR6a's own e2e uses the latter, but that suite is testing the
+  LISTENER itself; this suite has no listener to exercise, only the
+  controller/use-case/filter chain PR4b's/PR5b's e2e pattern already fits directly).
+  Covers: (1) 200 happy path — borrador → `'abierta'`, `save()` called once on the
+  event-publish-after-commit ordering, `RefillCreado` observed on the real bus with
+  `direccion` absent from its payload (D-C). (2)/(3) 400 missing `direccion`/`comuna`.
+  (4) 400 an item missing `categoria`/`precioReferencia` (nested DTO validation). (5)
+  400 `REFILL_ITEM_DESCONOCIDO` for an unknown `refillItemId`. (6) 404 cross-tenant. (7)
+  409 `TRANSICION_INVALIDA` completing an already-`'abierta'` request, created via a
+  REAL `POST /refill/mis-solicitudes` call first (per this batch's explicit
+  instruction), with `findById` explicitly re-mocked afterward to hand that entity
+  back (since `REFILL_REPOSITORY.save` is mocked, nothing was actually persisted by the
+  create step). (8) 401 unauthenticated.
+  - **A real bug caught and fixed during this batch, not just narrated**: the first
+    draft of scenarios (2)/(3)/(4) also stubbed `refillRepository.findById` "for
+    completeness," even though `ValidationPipe` rejects those requests before the
+    controller method — and therefore `findById` — ever runs. Since
+    `mockResolvedValueOnce` queues are FIFO and are NOT drained by `afterEach`'s
+    `jest.clearAllMocks()` (`clearAllMocks` resets call history, not queued
+    once-implementations — only `mockReset`/`mockRestore` do that), those 3 unconsumed
+    stubs silently leaked into LATER tests that do call `findById`, handing them the
+    WRONG borrador fixture (wrong owner) and turning an expected 400/409 into an
+    observed 404. Caught by actually running the suite (not assumed green): 2 tests
+    failed with `expected 400/409, got 404`. Fixed by removing the irrelevant stubs
+    from the 3 DTO-validation-only tests and adding an explicit
+    `expect(refillRepository.findById).not.toHaveBeenCalled()` assertion to each,
+    turning the fix into a permanent regression guard — documented inline in the file
+    so this class of bug isn't rediscovered in a future e2e spec in this domain.
+- **No dedicated `completar-dto.spec.ts` added**, unlike PR4b's `refill-dto.spec.ts`
+  (which was added beyond its own task's literal text for convention parity). This
+  batch's task list is explicit and already comprehensive about every deliverable, and
+  every DTO-validation scenario the extra file would have covered (missing
+  `direccion`/`comuna`, an item missing `categoria`/`precioReferencia`, an unknown
+  `refillItemId`) is already exercised end-to-end by 6b.9's e2e spec — adding a second,
+  narrower layer of the same coverage was judged unnecessary scope on a PR already
+  running over its own budget (see "Workload / PR Boundary" below), not an oversight.
+
+## Deviations from Design
+
+- **Task 6b.1's literal text vs. reusing PR2's already-exported types** — covered in
+  full above ("What Was Built"). Not a design deviation in substance: design.md's own
+  D-E section places `CompletarRefillItemInput` conceptually at "the entrada de
+  `completarBorrador`," and importing PR2's export satisfies that placement exactly —
+  only the *file* the literal interface declaration lives in differs from tasks.md's
+  text, and PR2's own doc comment already flagged this as the intended path one batch
+  ago.
+- No other deviation. The transactional shape (`findById` inside `runInTransaction`,
+  same `tx` for `save()`), the check ordering (404 before 409, both before
+  `completar()`), the publish-after-commit rule, the DTO field set, the route/status
+  code (200, not 201), and the 3 new filter mappings all match design.md D-E's tables
+  and Diagrama 1's closing note verbatim.
+
+## Issues Found
+
+The FIFO-queue e2e bug documented in "What Was Built" above (self-caught, fixed before
+this batch was considered done — not a design issue, a test-authoring mistake). No
+other issues. All 5 gates green, run in order: `pnpm lint` (workspace root, 0
+errors/warnings), `pnpm typecheck` (workspace root — `packages/types` + `core-api` both
+`Done`; `git status --porcelain` on `domains/catalogo/` and `domains/consumo/` both
+confirmed EMPTY — neither domain touched), `pnpm test` — run for BOTH unit AND e2e
+(unit: 58 suites / 466 tests, up from 57/450 baseline — 16 new: 13 from
+`completar-borrador.use-case.spec.ts` + 3 from the filter spec's new tuples; e2e: 17
+suites / 106 tests, up from 16/98 baseline — 8 new, this batch's own e2e file), `pnpm
+build` (`tsc -p tsconfig.build.json`, clean), `pnpm run format:check` (3 files needed
+one `prettier --write` pass — `refill.controller.ts`, the use-case spec, and the e2e
+spec, all long-line/array-wrapping issues — applied, then
+`format:check`/`lint`/`typecheck`/`test`/`build` all re-verified green in that order
+afterward).
+
+## What PR7 (next batch) should know
+
+- Phase 6 (both 6a "Auto" and 6b "Completar") is now fully closed. `RefillController`
+  has 3 routes: `POST /refill/mis-solicitudes` (crearSolicitud), `POST
+  .../:id/matching` (buscarProveedoresCompatibles), `POST .../:id/completar`
+  (completarBorrador) — all authenticated, none `@Roles()`. `refill-matching.module.ts`
+  provides: the repository binding, `CrearSolicitudUseCase`,
+  `BuscarProveedoresCompatiblesUseCase`, `CrearBorradorRefillUseCase`,
+  `RefillAutoSolicitadoListener`, `CompletarBorradorUseCase` — 6 providers, `imports:
+  [DatabaseModule, CatalogoModule]`, `exports: []` (D7, still true).
+- `refill-exception.filter.ts`'s `ERROR_STATUS_MAP` now has 7 entries:
+  `SolicitudInvalidaError` (400), `RefillRequestNotFoundError` (404),
+  `SolicitudEnBorradorError` (409), `CatalogQueryUnavailableError` (503),
+  `TransicionInvalidaError` (409), `SolicitudIncompletaError` (400),
+  `RefillItemDesconocidoError` (400). Phase 7's `marcarComoOfertada`/
+  `marcarComoConfirmada` throw `TransicionInvalidaError` too (already mapped) but are
+  NEVER HTTP-reachable (D6) — Phase 7 does not need to touch this filter at all.
+- `domain/refill-request.entity.ts` still exports `marcarOfertada`/`marcarConfirmada`
+  (built in PR2, unused since) — Phase 7's `MarcarComoOfertadaUseCase`/
+  `MarcarComoConfirmadaUseCase` are their first and only callers, each injecting ONLY
+  `REFILL_REPOSITORY` (no `EVENT_PUBLISHER`, no `TRANSACTION_MANAGER` — D16, they call
+  `actualizarEstado`, a single narrow `UPDATE`, not `save()`). Both go in
+  `refill-matching.module.ts`'s `providers` only — no controller wiring, confirmed by a
+  route-enumeration test per tasks.md 7.1.
+- `RefillRepository.actualizarEstado` (PR1's port declaration, D-G.2) still has ZERO
+  callers anywhere in this codebase — Phase 7 is where that finally changes.
+- Phase 7 is also the SPEC.md/ARCHITECTURE.md correction phase (7.3/7.4/7.5) — none of
+  those files were touched by this batch or any prior one; all corrections described in
+  tasks.md 7.3–7.5 are still fully outstanding.
+- After Phase 7's use cases + SPEC.md/ARCHITECTURE.md deltas land, Phase 7 also closes
+  with the final workspace-wide verification tasks.md's own dependency notes describe —
+  this is the last batch of the whole `backend-core-api-refill-matching` change.
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, per tasks.md's Review Workload Forecast)
+- Current work unit: Unit 6b "Completar" — PR6b
+- Boundary: starts from PR6a's Auto commit; ends with
+  `ports-in/completar-borrador.use-case.ts` + its co-located spec, the 2 new DTO files,
+  the extended `refill.controller.ts`/`refill-exception.filter.ts`/
+  `refill-exception.filter.spec.ts`/`refill-matching.module.ts`, and the new
+  `test/refill-completar-borrador.e2e-spec.ts` — `POST .../completar` fully wired and
+  reachable, `catalogo`/`consumo` untouched, all 5 gates green (unit AND e2e together)
+- Actual size: ~898 lines across 5 new files (`completar-refill-item.dto.ts` 45,
+  `completar-borrador.dto.ts` 62, `completar-borrador.use-case.ts` 133,
+  `completar-borrador.use-case.spec.ts` 294, `refill-completar-borrador.e2e-spec.ts`
+  364) + 96 insertions/16 deletions across 4 extended files (`refill.controller.ts`,
+  `refill-exception.filter.ts`, `refill-exception.filter.spec.ts`,
+  `refill-matching.module.ts`) — roughly 1010 lines changed total (tasks.md's own
+  checkbox flips not counted as review surface, per this change's established
+  convention). This is meaningfully over tasks.md's own 330-410 estimate for 6b (Medium
+  risk, explicitly named as one of the 4 borderline PRs with a named fallback split:
+  "6b-i (use case, logic only) / 6b-ii (DTOs+controller+filter-ext+e2e)") — roughly
+  2.5-3x over the upper bound. This sits squarely inside the range this change's own
+  prior PRs already established as normal for this codebase (PR3 ~2.3x, PR4b ~2.5x, both
+  kept whole) rather than being a new, more dramatic outlier — **no split invoked**: the
+  named fallback would separate the use case (133+294 lines) from the DTOs/controller/
+  filter-extension/e2e (45+62+extensions+364 lines), but the e2e spec is specifically a
+  cross-file wiring test that exercises the use case, the DTOs, the controller route,
+  AND the filter mappings together by design — splitting the PR would either duplicate
+  that e2e spec across two PRs or leave one half untested end-to-end until the other
+  lands, the same reasoning PR6a already applied to its own named fallback split. The
+  overrun is concentrated in the e2e spec (364 lines — 8 scenarios, a full
+  create-then-complete flow for the 409 case, plus the FIFO-mock-queue bug fix and its
+  documentation) and the use case's own doc comment (design rationale for the
+  "TransicionInvalidaError belongs here, not completar()" call, cross-referenced against
+  `marcarDosisTomada`'s shape) — not in any single oversized logic file. Reported
+  honestly per this batch's explicit instruction to report the real diff size rather
+  than invent a sub-split.
+
+## Status
+
+71/71 tasks complete across PR1+PR2+PR3+PR4a+PR4b+PR5a+PR5b+PR6a+PR6b (3.11 still
+intentionally out of scope, not counted against this total). `completarBorrador` is
+live at `POST /refill/mis-solicitudes/:refillRequestId/completar`, authenticated,
+exception-mapped (404/409/400), transitions a `'borrador'` to `'abierta'` inside one
+transaction, and publishes `RefillCreado` only after commit — reusing PR4a's event
+verbatim. Only Phase 7 remains: `marcarComoOfertada`/`marcarComoConfirmada` (no HTTP,
+D6), the SPEC.md/ARCHITECTURE.md corrections (7.3–7.5), and the final workspace-wide
+verification that closes this whole change.

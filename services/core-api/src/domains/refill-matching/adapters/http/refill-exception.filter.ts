@@ -7,9 +7,12 @@ import {
 } from '@nestjs/common';
 import { CatalogQueryUnavailableError } from '../../../catalogo/contracts/catalog-query.port';
 import {
+  RefillItemDesconocidoError,
   RefillRequestNotFoundError,
   SolicitudEnBorradorError,
+  SolicitudIncompletaError,
   SolicitudInvalidaError,
+  TransicionInvalidaError,
 } from '../../domain/refill.errors';
 
 interface ResponseLike {
@@ -33,10 +36,12 @@ interface StatusAndCode {
 // `CatalogQueryUnavailableError` (503 — imported from
 // `catalogo/contracts/catalog-query.port.ts`, the ONE legitimate
 // cross-domain import this domain makes anywhere, D15/C8: it is `catalogo`'s
-// own error class, never redeclared/copied here). Phase 6b adds
-// `TransicionInvalidaError`/`SolicitudIncompletaError`/
-// `RefillItemDesconocidoError` — it EXTENDS this same map and this same
-// `@Catch()` list too, it never creates a second filter.
+// own error class, never redeclared/copied here). PR6b (this batch) adds
+// `TransicionInvalidaError` (409 — `CompletarBorradorUseCase` rejects
+// completing a non-borrador), `SolicitudIncompletaError` (400 — delegated
+// from Phase 2's `completar()`), and `RefillItemDesconocidoError` (400 —
+// also delegated from `completar()`) — it EXTENDS this same map and this
+// same `@Catch()` list too, it never creates a second filter.
 type ErrorConstructor = new (...args: never[]) => Error;
 
 const ERROR_STATUS_MAP = new Map<ErrorConstructor, StatusAndCode>([
@@ -52,6 +57,15 @@ const ERROR_STATUS_MAP = new Map<ErrorConstructor, StatusAndCode>([
   [
     CatalogQueryUnavailableError,
     { statusCode: HttpStatus.SERVICE_UNAVAILABLE, code: 'CATALOG_UNAVAILABLE' },
+  ],
+  [TransicionInvalidaError, { statusCode: HttpStatus.CONFLICT, code: 'TRANSICION_INVALIDA' }],
+  [
+    SolicitudIncompletaError,
+    { statusCode: HttpStatus.BAD_REQUEST, code: 'REFILL_REQUEST_INCOMPLETA' },
+  ],
+  [
+    RefillItemDesconocidoError,
+    { statusCode: HttpStatus.BAD_REQUEST, code: 'REFILL_ITEM_DESCONOCIDO' },
   ],
 ]);
 
@@ -75,6 +89,9 @@ const ERROR_STATUS_MAP = new Map<ErrorConstructor, StatusAndCode>([
   RefillRequestNotFoundError,
   SolicitudEnBorradorError,
   CatalogQueryUnavailableError,
+  TransicionInvalidaError,
+  SolicitudIncompletaError,
+  RefillItemDesconocidoError,
 )
 export class RefillExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(RefillExceptionFilter.name);
