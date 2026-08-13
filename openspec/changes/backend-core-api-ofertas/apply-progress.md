@@ -214,3 +214,269 @@ and formatting style throughout.
 
 10/10 tasks in this batch complete. Ready for next batch (PR2, Phase 2 —
 dominio puro, `domain/offer.entity.ts`).
+
+---
+
+# PR2 "Dominio (puro, sin I/O)" (Phase 2, tasks 2.1–2.10)
+
+**Mode**: Strict TDD (project-wide `strict_tdd: true`, `openspec/config.yaml`)
+**Batch**: PR2 (Phase 2, tasks 2.1–2.10) — SECOND apply batch. PR1's groundwork
+(migration 16, row types, `@repon/types` additions, both `ports-out/` ports,
+all 8 `domain/oferta.errors.ts` classes) is complete and available as-is; this
+batch adds zero I/O, zero framework imports — pure Jest.
+
+## TDD Note for This Batch
+
+Unlike PR1 (pure scaffolding, no Jest-testable behavior), every task pair in
+this batch is genuinely strict-TDD from the first task: `domain/offer.entity.spec.ts`
+was written before `domain/offer.entity.ts` existed at all — the first RED run
+failed with `Cannot find module './offer.entity'`, not merely a failing
+assertion. Each of the 5 task pairs below (2.1/2.2, 2.3/2.4, 2.5/2.6, 2.7/2.8,
+2.9/2.10) was executed as its own RED → GREEN cycle, run against the actual
+Jest test file at each step (`pnpm jest src/domains/ofertas/domain/offer.entity.spec.ts`),
+never batched together.
+
+**One transparent ordering nuance** (tasks 2.5/2.6, `total()`): `crearOfertaReactiva`'s
+own GREEN step (2.2) structurally requires a working `total()` to populate
+`OfferCommon.total` — `total()` was implemented one task pair ahead of its own
+dedicated unit-test task as an unavoidable consequence of the factory needing
+it. The factory-level "computes total as the sum of every item precio..."
+tests (written as part of 2.1's RED, confirmed RED before `offer.entity.ts`
+existed, confirmed GREEN after 2.2) DID exercise `total()` transitively through
+a genuine RED→GREEN cycle. Task 2.5/2.6's own dedicated `describe('total', ...)`
+block (4 direct unit tests) was then added afterward, running against the
+already-correct implementation — not a from-zero RED for that specific test
+file section, and flagged here explicitly rather than silently presented as
+one. `precioPorUnidad` (2.7/2.8) and the `aceptar` transition function
+(2.9/2.10) are both standalone (not needed by any other task's GREEN step) and
+ran as textbook RED→GREEN cycles with no such caveat.
+
+## TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 2.1/2.2 `crearOfertaReactiva` | `domain/offer.entity.spec.ts` | Unit | N/A (new file) | ✅ Written — `Cannot find module './offer.entity'` | ✅ 8/8 passed | ✅ 8 cases (isAlt/altNote omitted, whitespace-only altNote, accepts non-empty altNote, happy-path field-by-field, fresh `randomUUID()` per call, 0 items, negative precio, total computation) | ✅ Reordered file section order to match design.md's documented file-map order (factories → total → precioPorUnidad → state machine) after all 5 task pairs landed; tests re-run green after |
+| 2.3/2.4 `crearOfertaProactiva` | `domain/offer.entity.spec.ts` | Unit | ✅ 8/8 (prior describe block) | ✅ Written — `crearOfertaProactiva is not a function`, 6 new tests failed, 8 prior still passed | ✅ 14/14 passed | ✅ 6 cases (whitespace-only altNote, accepts non-empty altNote, happy-path field-by-field incl. `refillRequestId` absent, fresh `randomUUID()`, 0 items, total computation) | ➖ Folded into the single end-of-batch refactor pass above |
+| 2.5/2.6 `total` | `domain/offer.entity.spec.ts` | Unit | ✅ 14/14 (prior blocks) | ✅ Written (see ordering nuance above — implementation pre-existed from 2.2's necessity; this is the FIRST dedicated/direct test of `total()` in isolation) | ✅ 18/18 passed | ✅ 4 cases (single item, multiple items, empty items + nonzero despacho, empty items + zero despacho) | ➖ Folded into the single end-of-batch refactor pass |
+| 2.7/2.8 `precioPorUnidad` | `domain/offer.entity.spec.ts` | Unit | ✅ 18/18 (prior blocks) | ✅ Written — `precioPorUnidad is not a function`, 5 new tests failed (1 was a false-negative on the pre-existing-function check due to test ordering — see note), 18 prior still passed | ✅ 23/23 passed | ✅ 5 cases (altSize+altQty both present, altSize alone, neither present, altSize=0 guard, no-ceiling-enforced residual-risk case) | ➖ Folded into the single end-of-batch refactor pass |
+| 2.9/2.10 `OfferStatus` transition (`aceptar`) | `domain/offer.entity.spec.ts` | Unit | ✅ 23/23 (prior blocks) | ✅ Written — `aceptar is not a function`, 5 new tests failed, 23 prior still passed | ✅ 28/28 passed | ✅ 5 cases (pendiente→aceptada happy path + immutability, already-aceptada rejected, rechazada rejected, expirada rejected, non-status fields preserved) | ✅ End-of-batch pass: reordered `offer.entity.ts`'s section order (see 2.1/2.2 row); re-ran full 28/28 green after — zero behavior change, pure reorganization |
+
+## Test Summary
+
+- **Total tests written**: 28 (all in `domain/offer.entity.spec.ts`, one file, 5 `describe` blocks: `crearOfertaReactiva` 8, `crearOfertaProactiva` 6, `total` 4, `precioPorUnidad` 5, `aceptar` 5)
+- **Total tests passing**: 28/28
+- **Layers used**: Unit (28), Integration (0), E2E (0) — matches design.md's own PR2 row ("Jest puro, sin contenedor Nest")
+- **Approval tests** (refactoring): None — no refactoring tasks, this is 100% new production code
+- **Pure functions created**: 5 (`crearOfertaReactiva`, `crearOfertaProactiva`, `total`, `precioPorUnidad`, `aceptar`) + 2 internal validation helpers (`assertItemsValidos`, `assertItemValido`), all zero I/O, zero framework imports
+
+## Completed Tasks (10/10 in this batch)
+
+- [x] 2.1 RED: `domain/offer.entity.spec.ts` — `crearOfertaReactiva` rejects `isAlt: true` without `altNote` (2 cases: omitted entirely, whitespace-only); happy path asserts `status: 'pendiente'`, every field, `randomUUID()` id.
+- [x] 2.2 GREEN: `domain/offer.entity.ts` — `crearOfertaReactiva()` factory implemented; 8/8 green.
+- [x] 2.3 RED (extend): `crearOfertaProactiva` — same `isAlt ⇒ altNote` rule; happy path asserts `refillRequestId` absent (`toBeUndefined()`), `kind: 'proactiva'`.
+- [x] 2.4 GREEN (extend): `crearOfertaProactiva()` factory implemented; 14/14 green.
+- [x] 2.5 RED (extend): `total(items, costoDespacho)` — dedicated `describe` block, 4 direct unit cases (see TDD ordering note above for the implementation-preceded-dedicated-test nuance).
+- [x] 2.6 GREEN (extend): `total()` confirmed correct via the 4 dedicated cases; 18/18 green.
+- [x] 2.7 RED (extend, D-G.2): `precioPorUnidad(item)` — 5 cases incl. the explicit "does not enforce any ceiling" residual-risk assertion.
+- [x] 2.8 GREEN (extend): `precioPorUnidad()` implemented — formula verified against `apps/proveedor-mobile/mockups/proveedor.html`'s `updateAltNote` (`unitAlt = totalAlt / (altSize * altQty)`), not invented from scratch (see "Deviations from Design" below); 23/23 green.
+- [x] 2.9 RED (extend, D-G.3): `OfferStatus` transition (`aceptar`) — rejects `'aceptada'`/`'rechazada'`/`'expirada'` origins with `TransicionInvalidaError`, including a double-accept of the same offer.
+- [x] 2.10 GREEN (extend): the transition function (`aceptar`) implemented; 28/28 green.
+
+## Files Changed
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `services/core-api/src/domains/ofertas/domain/offer.entity.ts` | Created (216 lines) | 5 exported functions (`crearOfertaReactiva`, `crearOfertaProactiva`, `total`, `precioPorUnidad`, `aceptar`) + 2 internal validation helpers, all pure/zero I/O; ordered per design.md's file-map comment (factories → `total` → `precioPorUnidad` → state machine); every function doc-commented with its tasks.md/design.md reference |
+| `services/core-api/src/domains/ofertas/domain/offer.entity.spec.ts` | Created (380 lines) | 28 tests across 5 `describe` blocks, strict-TDD RED-then-GREEN per task pair, triangulated with 2+ cases per behavior throughout |
+| `openspec/changes/backend-core-api-ofertas/tasks.md` | Modified | Tasks 2.1–2.10 marked `[x]` (10 lines changed, checkbox flips only) |
+
+## Commands Run and Results
+
+| Command | Result |
+|---|---|
+| `git status --porcelain services/core-api/src/domains/ofertas/` (before starting) | Only `domain/oferta.errors.ts` present, confirmed matching PR1's "what PR2 should know" note |
+| `pnpm jest src/domains/ofertas/domain/offer.entity.spec.ts` (RED, task 2.1, before `offer.entity.ts` existed) | `Cannot find module './offer.entity'` — genuine RED, not a failing assertion |
+| `pnpm jest src/domains/ofertas/domain/offer.entity.spec.ts` (GREEN, task 2.2) | 8/8 passed |
+| `pnpm jest src/domains/ofertas/domain/offer.entity.spec.ts` (RED, task 2.3) | 6 new tests failed (`crearOfertaProactiva is not a function`), 8 prior still passed |
+| `pnpm jest src/domains/ofertas/domain/offer.entity.spec.ts` (GREEN, task 2.4) | 14/14 passed |
+| `pnpm jest src/domains/ofertas/domain/offer.entity.spec.ts` (RED, task 2.5) | 4 new `total` tests failed pre-dedicated-suite (implementation existed, see ordering note), then confirmed GREEN |
+| `pnpm jest src/domains/ofertas/domain/offer.entity.spec.ts` (GREEN, task 2.6) | 18/18 passed |
+| `pnpm jest src/domains/ofertas/domain/offer.entity.spec.ts` (RED, task 2.7) | 5 new tests failed (`precioPorUnidad is not a function`), 18 prior still passed |
+| `pnpm jest src/domains/ofertas/domain/offer.entity.spec.ts` (GREEN, task 2.8) | 23/23 passed |
+| `pnpm jest src/domains/ofertas/domain/offer.entity.spec.ts` (RED, task 2.9) | 5 new tests failed (`aceptar is not a function`), 23 prior still passed |
+| `pnpm jest src/domains/ofertas/domain/offer.entity.spec.ts` (GREEN, task 2.10) | 28/28 passed |
+| `pnpm jest src/domains/ofertas/domain/offer.entity.spec.ts` (after end-of-batch reorder refactor) | 28/28 passed — zero regression from the reorganization |
+| `pnpm typecheck` (workspace root, first pass) | **FAILED** — `offer.entity.spec.ts(66,13): error TS2352`, an unsafe `as Record<string, unknown>` cast in the "altNote omitted" test; fixed by relying on `itemReactiva()`'s own existing cast instead of a second one, no production-code change |
+| `pnpm jest src/domains/ofertas/domain/offer.entity.spec.ts` (after the typecheck fix) | 28/28 passed |
+| `pnpm typecheck` (workspace root, second pass) | Clean — both `packages/types` and `services/core-api` |
+| `pnpm lint` (workspace root) | **Clean** — the PR1-reported blocker (`.claude/worktrees/agent-a07bad886ca002da4/` stray nested tsconfig) is gone; `.claude/worktrees/` still exists on disk but `eslint .` now exits 0, so whatever was previously colliding is no longer present. Not investigated further — out of this batch's scope, and the signal that matters (this batch's own 2 new files) is clean |
+| `pnpm run format:check` (workspace root, first pass) | **FAILED** — `offer.entity.spec.ts` had Prettier style issues (line-wrapping of a few multi-line `crearOfertaReactiva(...)` calls) |
+| `pnpm exec prettier --write` on both new files | `offer.entity.spec.ts` reformatted (129ms); `offer.entity.ts` unchanged (already compliant) |
+| `pnpm run format:check` (workspace root, second pass) | Clean |
+| `pnpm jest src/domains/ofertas/domain/offer.entity.spec.ts` (after prettier --write) | 28/28 passed — reformat was whitespace-only |
+| `pnpm lint` / `pnpm typecheck` (workspace root, final pass after prettier) | Both clean |
+| `pnpm test` (workspace root, full suite) | `services/core-api`: **61 unit suites / 500 tests** passed (up from PR1's baseline 60/472 — exactly +1 suite/+28 tests, confirming zero regressions on `identidad`/`catalogo`/`consumo`/`refill-matching`); **17 e2e suites / 106 tests** passed (unchanged from PR1's baseline) |
+| `pnpm build` (workspace root) | `tsc -p tsconfig.build.json` — clean |
+
+## Deviations from Design
+
+**`precioPorUnidad`'s exact formula was not specified anywhere in `design.md`,
+`proposal.md`, `specs/core-api-ofertas/spec.md`, or `services/core-api/domains/ofertas/SPEC.md`**
+— all four say only "precio por unidad/kilo, función de dominio pura" or name
+it as a residual-risk topic, never the arithmetic. Rather than inventing a
+formula from scratch, this batch searched the repo for existing product
+intent and found it: `apps/proveedor-mobile/mockups/proveedor.html`'s
+`updateAltNote` function computes `unitAlt = totalAlt / (altSize * altQty)`
+for exactly this comparison (pet-food-sack `isAlt` example, `royal` product),
+where `totalAlt = altPrice * altQty` is the line's already-multiplied total —
+structurally identical to how this domain's `item.precio` is defined (summed
+directly by `total()`, never separately multiplied by a quantity elsewhere).
+`precioPorUnidad(item)` implements exactly this: `item.precio / (altSize * altQty)`,
+with `altSize`/`altQty` defaulting to `1` when absent (nothing to normalize
+against) and a guard against dividing by a non-positive `altSize`/`altQty`
+(falls back to the raw `precio`, never `Infinity`/`NaN`). Flagged explicitly
+because this is real product-intent evidence, not a guess, but it was never
+written down as a formula in any of this change's own artifacts — **`sdd-verify`
+or a future PR should confirm this formula against product/design before it's
+treated as load-bearing beyond a client-side comparison hint**, since no test
+in `specs/core-api-ofertas/spec.md` currently pins it down.
+
+**Factory parameter types are narrower than tasks.md's literal wording.**
+tasks.md 2.1/2.3 describe both factories as taking `items: NuevoOfferItem[]`
+(the union of `NuevoOfferItemReactiva | NuevoOfferItemProactiva`). This batch
+types them as `readonly NuevoOfferItemReactiva[]` and `readonly NuevoOfferItemProactiva[]`
+respectively — the narrower, kind-specific variant — because `Offer`'s
+`items` field is itself a discriminated union tied to `kind`
+(`OfferItemReactiva[]` for `kind: 'reactiva'`, `OfferItemProactiva[]` for
+`kind: 'proactiva'`), and a factory typed to accept the broader
+`NuevoOfferItem[]` union could not assign its result to that narrower field
+without an unsafe cast. This exactly mirrors `refill-request.entity.ts`'s own
+precedent (its factories use dedicated `CrearBorradorInput`/`CompletarInput`
+interfaces rather than tasks.md's generic wording) — not a deviation from any
+stated design decision, since neither `design.md` nor `proposal.md` commits to
+an exact parameter type for these factories, only tasks.md's shorthand does.
+
+**`OfertaInvalidaError` validations beyond the literally-quoted task text.**
+tasks.md 2.1/2.3 quote only the `isAlt ⇒ altNote` rule as the RED scenario,
+but `oferta.errors.ts`'s own `OfertaInvalidaError` doc-comment (written in
+PR1) explicitly attributes THREE validations to "Phase 2, `domain/offer.entity.ts`":
+0 items, `isAlt: true` without `altNote`, and a negative `precio`. This batch
+implements and tests all three in `assertItemsValidos`/`assertItemValido`,
+matching the errors file's own documented contract instead of only the
+narrower literal task wording — same discipline as `refill-request.entity.ts`'s
+`assertSolicitudValida` doing more validation than its own task text names.
+
+**No other deviations.** The `OfferStatus` transition rule (`'pendiente' -> 'aceptada'`
+only, `TransicionInvalidaError` otherwise) matches design.md D-G.3 exactly,
+including the "double-accept is not a silent no-op" scenario tested
+explicitly. `total()` matches D-G.2 step 9 verbatim (`Σ(item.precio) + costoDespacho`).
+
+## Issues Found
+
+**One typecheck error caught and fixed before this batch's tests were
+considered done** (see "Commands Run and Results" above): an early draft of
+the "isAlt omitted entirely" test used a redundant `as Record<string, unknown>`
+cast to `delete` a property that was never present in the first place (the
+underlying object was already built via `itemReactiva()`'s own existing
+`as NuevoOfferItemReactiva` cast). `tsc` correctly rejected the double-cast as
+insufficiently overlapping types. Fixed by removing the redundant cast/delete
+entirely — the original test intent (isAlt: true, altNote absent) was already
+achieved by `itemReactiva({ isAlt: true })` alone. Zero production-code impact.
+
+**One formatting fix, mechanical.** `offer.entity.spec.ts`'s first draft had a
+few multi-line `crearOfertaReactiva(...)` call sites that Prettier preferred
+collapsed onto fewer lines; `prettier --write` fixed this automatically with
+zero behavior change (confirmed by re-running the 28-test suite after).
+
+**PR1's previously-reported `pnpm lint`/`pnpm run format:check` environmental
+blocker is gone.** `.claude/worktrees/` still exists on disk, but `eslint .`
+now exits 0 for the whole workspace. Not investigated (out of this batch's
+authority/scope, and not this batch's regression to own), but noted for the
+record since PR1's apply-progress flagged it as an open blocker for the
+reviewer and it no longer applies.
+
+## What PR3a/PR3b (next batches) should know
+
+- **`domain/offer.entity.ts` now exports 5 pure functions**: `crearOfertaReactiva`,
+  `crearOfertaProactiva`, `total`, `precioPorUnidad`, `aceptar` — all zero
+  I/O, zero framework imports, matching `core-api-hexagonal-layout`'s rule
+  that `domain/` never imports from `ports-in/`/`ports-out/`/`adapters/`.
+- **`aceptar(offer: Offer): Offer` is the `OfferStatus` transition function**
+  design.md D-D names as living in "Phase 2, `domain/offer.entity.ts`" and
+  called by `AceptarOfertaUseCase` (Phase 7a) BETWEEN `offerRepository.findById(offerId, tx)`
+  and `offerRepository.marcarAceptada(offerId, tx)` — this function validates
+  the transition (throws `TransicionInvalidaError` if not `'pendiente'`), the
+  repository executes the actual narrow 1-column `UPDATE`. Phase 7a's use
+  case should call `aceptar(offer)` first (to get the 409 on an invalid
+  transition) and then call `marcarAceptada` — NOT persist `aceptar()`'s
+  returned object via a `save()` that would rewrite `items` (design.md D12
+  explicitly rejects that shape).
+- **`total(items, costoDespacho)` is called by `EnviarOfertaUseCase`/
+  `EnviarOfertaProactivaUseCase` (Phase 5a/6b) AFTER the catalog port
+  round-trip, BEFORE `runInTransaction`** (design.md Diagrama 2, step 9) —
+  `items` at that point are the client's original `NuevoOfferItem[]`
+  (already validated against the catalog's live match + `precioMaximo`
+  ceiling for non-`isAlt` items in the use case itself, NOT in this
+  function — `total()` has no opinion on price validity, only arithmetic).
+- **`precioPorUnidad`'s formula (`precio / (altSize * altQty)`) is grounded
+  in `apps/proveedor-mobile/mockups/proveedor.html`, not in any of this
+  change's own written artifacts** — flag this for `sdd-verify` and for
+  whichever phase's HTTP DTO/response mapper (Phase 4b likely) ends up
+  surfacing this value to a client, since no `specs/core-api-ofertas/spec.md`
+  scenario currently pins the exact arithmetic down.
+- **The 2 factories intentionally use narrower parameter types than
+  tasks.md's literal `NuevoOfferItem[]` wording** (`NuevoOfferItemReactiva[]`/
+  `NuevoOfferItemProactiva[]`) — Phase 5a/6b's use cases should pass the
+  already-kind-narrowed array directly; no adaptation needed at the call
+  site since the DTO layer (Phase 4b) will already know which factory
+  (hence which kind) applies to a given HTTP route.
+- Local Supabase still has migration 16 live from PR1 — Phase 3a/3b
+  (`KyselyOfferRepository`/`KyselyOfferOpportunityRepository`) can start
+  directly against it, no new migration work needed.
+- `pnpm lint`'s previously-reported environmental blocker (PR1) is resolved
+  — no special handling needed for lint going forward, but this wasn't
+  verified as a permanent fix (just observed as currently clean).
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, same as PR1 — tasks.md names no
+  `Decision needed before apply` and no `Chained PRs recommended` for PR2
+  specifically, forecast "260-330, Low")
+- Current work unit: Unit 2 "Dominio (puro, sin I/O)" — PR2, tasks 2.1–2.10
+- Boundary: starts from PR1's committed groundwork (migration 16, row types,
+  `@repon/types` additions, both `ports-out/` ports, all 8 domain error
+  classes — zero implementers of either repository port); ends with
+  `domain/offer.entity.ts` fully implemented (5 pure functions) and
+  `domain/offer.entity.spec.ts` fully green (28/28) — `pnpm lint`/
+  `pnpm typecheck`/`pnpm test`/`pnpm build`/`pnpm run format:check` all clean
+- Estimated review budget impact: **596 lines of implementation content**
+  (216 `offer.entity.ts` + 380 `offer.entity.spec.ts`, `wc -l`-verified) +
+  `tasks.md`'s own 10-line checkbox-flip delta (process, not implementation).
+  This is meaningfully over tasks.md's own 260-330 forecast (roughly
+  80-130% over the upper bound) and crosses the repo-wide 400-line review
+  budget guard on its own, even though tasks.md's Review Workload Forecast
+  table did not flag PR2 as high-risk or requiring a decision before apply
+  (forecast said "Low"). Flagged honestly, same as PR1's own overrun:
+  the direct sibling precedent for this exact shape of PR (one domain-entity
+  file + its Jest spec, `refill-matching`'s `refill-request.entity.ts` +
+  `.spec.ts`) is **715 lines** (291 + 424) — LARGER than this batch's 596 —
+  confirming the 260-330 forecast was miscalibrated for this class of PR
+  from the start, not that this batch over-implemented relative to the
+  established repo pattern. No split proposed: `domain/offer.entity.ts` is
+  the single file design.md's own file-map names for ALL of Phase 2's
+  logic (5 functions that share 2 validation helpers and read each other,
+  e.g. both factories call `total()`); splitting the test file from the
+  implementation file would not reduce total review surface, only make the
+  two harder to review together. Flagged for the orchestrator's awareness
+  — if a stricter budget is wanted, the same test-suite-per-function split
+  used by `consumo.calculos.spec.ts` (separate `.spec.ts` per pure-function
+  group instead of one file per entity) is available as a future-batch
+  convention, not something to retrofit onto this already-green batch.
+
+## Status
+
+**Cumulative**: 20/20 tasks complete across PR1 (10/10) + PR2 (10/10).
+Ready for next batch (PR3a — Phase 3a `KyselyOfferRepository`, per tasks.md's
+own PR sequencing; `Deviations from Design` above flags 2 items — the
+`precioPorUnidad` formula's evidence source and the narrower factory
+parameter types — for `sdd-verify`'s attention, neither blocking).

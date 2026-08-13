@@ -80,16 +80,16 @@ Chain strategy: stacked-to-main, 14 PRs
 
 Depends on Phase 1's types/errors. Zero adapters, zero I/O.
 
-- [ ] 2.1 RED: `domain/offer.entity.spec.ts` — `crearOfertaReactiva(companyId, refillRequestId, items: NuevoOfferItem[], entrega, userId, mensaje?)` rejects `isAlt: true` without `altNote`; happy path returns an `Offer` with `status: 'pendiente'` by construction, id via `randomUUID()`.
-- [ ] 2.2 GREEN: `domain/offer.entity.ts` — `crearOfertaReactiva()` factory.
-- [ ] 2.3 RED (extend): `crearOfertaProactiva(companyId, userId, items, entrega, mensaje?)` — same `isAlt ⇒ altNote` rule; `providerCatalogItemId` required per item; `refillRequestId` absent by construction.
-- [ ] 2.4 GREEN (extend): `crearOfertaProactiva()` factory.
-- [ ] 2.5 RED (extend): `total(items, costoDespacho)` — pure function, `Σ(item.precio) + costoDespacho`.
-- [ ] 2.6 GREEN (extend): `total()`.
-- [ ] 2.7 RED (extend, D-G.2): `precioPorUnidad(item)` — pure function for comparing an `isAlt` item's price against `precioReferencia`; doc-commented residual risk: this function does **not** enforce any ceiling on `isAlt` items — the price cap only applies to non-`isAlt` items, and is enforced in the use case (Phase 5a), not here.
-- [ ] 2.8 GREEN (extend): `precioPorUnidad()`.
-- [ ] 2.9 RED (extend, D-G.3): `OfferStatus` transition — accepting from any origin state other than `'pendiente'` (`'aceptada'`/`'rechazada'`/`'expirada'`, including the same offer twice) throws `TransicionInvalidaError` — a double-accept is not a silent no-op.
-- [ ] 2.10 GREEN (extend): the transition function.
+- [x] 2.1 RED: `domain/offer.entity.spec.ts` — `crearOfertaReactiva(companyId, refillRequestId, items: NuevoOfferItem[], entrega, userId, mensaje?)` rejects `isAlt: true` without `altNote`; happy path returns an `Offer` with `status: 'pendiente'` by construction, id via `randomUUID()`.
+- [x] 2.2 GREEN: `domain/offer.entity.ts` — `crearOfertaReactiva()` factory.
+- [x] 2.3 RED (extend): `crearOfertaProactiva(companyId, userId, items, entrega, mensaje?)` — same `isAlt ⇒ altNote` rule; `providerCatalogItemId` required per item; `refillRequestId` absent by construction.
+- [x] 2.4 GREEN (extend): `crearOfertaProactiva()` factory.
+- [x] 2.5 RED (extend): `total(items, costoDespacho)` — pure function, `Σ(item.precio) + costoDespacho`.
+- [x] 2.6 GREEN (extend): `total()`.
+- [x] 2.7 RED (extend, D-G.2): `precioPorUnidad(item)` — pure function for comparing an `isAlt` item's price against `precioReferencia`; doc-commented residual risk: this function does **not** enforce any ceiling on `isAlt` items — the price cap only applies to non-`isAlt` items, and is enforced in the use case (Phase 5a), not here.
+- [x] 2.8 GREEN (extend): `precioPorUnidad()`.
+- [x] 2.9 RED (extend, D-G.3): `OfferStatus` transition — accepting from any origin state other than `'pendiente'` (`'aceptada'`/`'rechazada'`/`'expirada'`, including the same offer twice) throws `TransicionInvalidaError` — a double-accept is not a silent no-op.
+- [x] 2.10 GREEN (extend): the transition function.
 
 ## Phase 3a: Persistencia — `KyselyOfferRepository` — Spec: `core-api-ofertas`, `db-schema-ofertas`
 
