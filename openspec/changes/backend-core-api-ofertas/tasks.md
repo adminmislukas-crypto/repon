@@ -95,17 +95,17 @@ Depends on Phase 1's types/errors. Zero adapters, zero I/O.
 
 Depends on Phase 2's entities. **Independent of Phase 3b** — can proceed in parallel.
 
-- [ ] 3a.1 RED: `adapters/persistence/kysely-offer.repository.spec.ts` — `save()` on a NEW reactiva `Offer`: 1 insert `offers` (`status` **always explicit**, never the column default) + 1 bulk insert `offer_items` (single statement, not N round-trips); numeric mapper for `costo_despacho`/`total`/`precio`; `alt_size`/`alt_qty` `NULL` survive as `undefined`, **never `0`**.
-- [ ] 3a.2 GREEN: `kysely-offer.repository.ts` — `save()`'s insert path.
-- [ ] 3a.3 RED (extend): `findById(offerId)` — `Offer | null`, items inline, 1 query with join.
-- [ ] 3a.4 GREEN (extend): `findById()`.
-- [ ] 3a.5 RED (extend): `findByUser(userId)` — `obtenerBandeja`'s read, items inline, no N+1.
-- [ ] 3a.6 GREEN (extend): `findByUser()` gets its first real implementation (previously a thin placeholder).
-- [ ] 3a.7 RED (extend, R4): `marcarAceptada(offerId, tx)` — a single narrow `UPDATE ... SET status = 'aceptada'` (never a `save()` that rewrites items); the driver's `23505` on constraint `offers_refill_request_id_aceptada_uidx` is caught and re-thrown as `OfertaYaAceptadaError`; any other driver error re-thrown as-is.
-- [ ] 3a.8 GREEN (extend): `marcarAceptada()`.
-- [ ] 3a.9 RED (extend): `desplazarHermanas(refillRequestId, exceptoOfferId, tx)` — single `UPDATE ... RETURNING id` (`status = 'rechazada' WHERE refill_request_id = $1 AND id <> $2 AND status = 'pendiente'`), returns exactly the ids the statement moved — **no prior `SELECT`** (D-D).
-- [ ] 3a.10 GREEN (extend): `desplazarHermanas()`.
-- [ ] 3a.11 Confirm `findByRefillRequest()` stays declared and unimplemented-beyond-interface with no caller added in this change (D-G.1) — do not wire it to anything.
+- [x] 3a.1 RED: `adapters/persistence/kysely-offer.repository.spec.ts` — `save()` on a NEW reactiva `Offer`: 1 insert `offers` (`status` **always explicit**, never the column default) + 1 bulk insert `offer_items` (single statement, not N round-trips); numeric mapper for `costo_despacho`/`total`/`precio`; `alt_size`/`alt_qty` `NULL` survive as `undefined`, **never `0`**.
+- [x] 3a.2 GREEN: `kysely-offer.repository.ts` — `save()`'s insert path.
+- [x] 3a.3 RED (extend): `findById(offerId)` — `Offer | null`, items inline, 1 query with join.
+- [x] 3a.4 GREEN (extend): `findById()`.
+- [x] 3a.5 RED (extend): `findByUser(userId)` — `obtenerBandeja`'s read, items inline, no N+1.
+- [x] 3a.6 GREEN (extend): `findByUser()` gets its first real implementation (previously a thin placeholder).
+- [x] 3a.7 RED (extend, R4): `marcarAceptada(offerId, tx)` — a single narrow `UPDATE ... SET status = 'aceptada'` (never a `save()` that rewrites items); the driver's `23505` on constraint `offers_refill_request_id_aceptada_uidx` is caught and re-thrown as `OfertaYaAceptadaError`; any other driver error re-thrown as-is.
+- [x] 3a.8 GREEN (extend): `marcarAceptada()`.
+- [x] 3a.9 RED (extend): `desplazarHermanas(refillRequestId, exceptoOfferId, tx)` — single `UPDATE ... RETURNING id` (`status = 'rechazada' WHERE refill_request_id = $1 AND id <> $2 AND status = 'pendiente'`), returns exactly the ids the statement moved — **no prior `SELECT`** (D-D).
+- [x] 3a.10 GREEN (extend): `desplazarHermanas()`.
+- [x] 3a.11 Confirm `findByRefillRequest()` stays declared and unimplemented-beyond-interface with no caller added in this change (D-G.1) — do not wire it to anything.
 
 ## Phase 3b: Persistencia — `KyselyOfferOpportunityRepository` (el writer de D5) — Spec: `db-schema-ofertas`, `core-api-ofertas`
 

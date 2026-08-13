@@ -87,10 +87,23 @@ export class OfferNotFoundError extends Error {
  * because a Postgres error code is infrastructure vocabulary `ports-in/`
  * must not know about (same frontier `CatalogQueryUnavailableError`
  * exists behind). Any other driver error re-thrown as-is, mapped to 500.
+ *
+ * **Correction made in Phase 3a** (tasks.md 3a.7/3a.8): this constructor
+ * originally took `refillRequestId`, per this PR1 doc comment's own
+ * wording. `OfferRepository.marcarAceptada(offerId, tx)` — the port's own
+ * final form, also fixed in PR1 — never receives a `refillRequestId`
+ * (design.md's Diagrama D-D calls it with only `offerId`), so that value
+ * was never actually available at the one call site that throws this
+ * error. Takes `offerId` instead — the identifier the adapter genuinely
+ * has in scope — rather than adding a `SELECT` before the `UPDATE` just to
+ * recover a `refillRequestId` for the message (that would contradict
+ * design.md D-D's "single narrow UPDATE, no prior SELECT" shape).
  */
 export class OfertaYaAceptadaError extends Error {
-  constructor(refillRequestId: string) {
-    super(`Ya existe una oferta aceptada para la solicitud ${refillRequestId}.`);
+  constructor(offerId: string) {
+    super(
+      `No se pudo aceptar la oferta ${offerId}: ya existe otra oferta aceptada para la misma solicitud.`,
+    );
     this.name = 'OfertaYaAceptadaError';
   }
 }

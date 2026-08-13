@@ -480,3 +480,257 @@ Ready for next batch (PR3a — Phase 3a `KyselyOfferRepository`, per tasks.md's
 own PR sequencing; `Deviations from Design` above flags 2 items — the
 `precioPorUnidad` formula's evidence source and the narrower factory
 parameter types — for `sdd-verify`'s attention, neither blocking).
+
+---
+
+# PR3a "Persistencia — `KyselyOfferRepository`" (Phase 3a, tasks 3a.1–3a.11)
+
+**Mode**: Strict TDD (project-wide `strict_tdd: true`, `openspec/config.yaml`)
+**Batch**: PR3a (Phase 3a, tasks 3a.1–3a.11) — THIRD apply batch. PR1's
+groundwork (migration 16, row types, both `ports-out/` ports, all 8
+`domain/oferta.errors.ts` classes) and PR2's domain layer
+(`domain/offer.entity.ts`, 5 pure functions) are complete and available
+as-is. **Independent of PR3b** per tasks.md's own dependency notes — this
+batch touches zero files PR3b touches (`kysely-offer-opportunity.repository.ts`/
+`.spec.ts`), confirmed no PR3b section existed in this file or in `tasks.md`
+at the time this batch started (both re-read fresh immediately before this
+write, per the concurrency note in this batch's own launch prompt).
+
+## TDD Note for This Batch
+
+Every task pair in this batch is genuinely strict-TDD, one RED → GREEN pair
+at a time, run against the actual Jest spec file after each half
+(`pnpm jest src/domains/ofertas/adapters/persistence/kysely-offer.repository.spec.ts`),
+never batched together — same discipline as PR2. The first RED (3a.1)
+failed with `Cannot find module './kysely-offer.repository'`, not merely a
+failing assertion — the file did not exist. Task 3a.11 (`findByRefillRequest`)
+is NOT a RED/GREEN pair in tasks.md's own text ("Confirm ... stays declared
+... do not wire it to anything") — it was implemented with confirming tests
+added directly in GREEN state (no RED step), consistent with its own literal
+task description, not force-fit into an artificial RED/GREEN shape.
+
+**One correction made to a PR1 artifact, surfaced here rather than silently
+applied**: `oferta.errors.ts`'s `OfertaYaAceptadaError` constructor
+originally took `refillRequestId: string` (per its own PR1 doc comment's
+wording). Implementing task 3a.7/3a.8 exposed that `OfferRepository
+.marcarAceptada(offerId, tx)` — the port's own final form, also fixed in
+PR1 — never receives a `refillRequestId`; design.md's Diagrama D-D calls it
+with only `offerId`. That value was never actually obtainable at the one
+call site that throws this error without adding a `SELECT` before the
+`UPDATE` (which would contradict design.md D-D's "single narrow UPDATE, no
+prior SELECT" shape). Fixed by changing the constructor to take `offerId`
+instead — grep-verified before the edit that no other file referenced this
+constructor (`OfertaYaAceptadaError` had zero callers anywhere in PR1/PR2,
+confirmed via `grep -rln "OfertaYaAceptadaError"` returning only
+`oferta.errors.ts` itself plus this change's own docs). See "Deviations
+from Design" below for the full detail.
+
+## TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 3a.1/3a.2 `save()` | `adapters/persistence/kysely-offer.repository.spec.ts` | Unit | N/A (new file) | ✅ Written — `Cannot find module './kysely-offer.repository'` | ✅ 9/9 passed | ✅ 9 cases (status explicit, bulk multi-row insert, numeric-string formatting, alt_size/alt_qty NULL-not-0 on write, alt_size/alt_qty populated write, refill_item_id/provider_catalog_item_id dual-nullable both directions, refill_request_id NULL-vs-populated, tx propagation) | ➖ None needed — INSERT-only method, no existence-check branch to simplify |
+| 3a.3/3a.4 `findById()` | same file | Unit | ✅ 9/9 (save block) | ✅ Written — `repo.findById is not a function`, 9 new tests failed, 9 prior still passed | ✅ 18/18 passed | ✅ 9 cases (null on no match, reactiva mapping, proactiva mapping, numeric-to-number costo_despacho/total/precio, alt_size/alt_qty NULL→undefined never 0, alt_size/alt_qty populated→number, multi-row-single-offer collapse, exact SELECT+JOIN shape, tx propagation) | ➖ None |
+| 3a.5/3a.6 `findByUser()` | same file | Unit | ✅ 18/18 (prior blocks) | ✅ Written — `repo.findByUser is not a function`, 5 new tests failed, 18 prior still passed | ✅ 23/23 passed | ✅ 5 cases ([] on no match, 2-offers-1-item-each grouping, 1-offer-2-items collapse into one Offer, exact WHERE on user_id, tx propagation) | ➖ None — `groupRowsByOfferId` extracted directly during GREEN, not as a separate refactor pass |
+| 3a.7/3a.8 `marcarAceptada()` | same file | Unit + Adapter | ✅ 23/23 (prior blocks) | ✅ Written — `repo.marcarAceptada is not a function`, 4 new tests failed, 23 prior still passed | ✅ 27/27 passed | ✅ 4 cases (exact narrow UPDATE shape, 23505-on-target-constraint → `OfertaYaAceptadaError`, 23505-on-different-constraint → re-thrown as-is, non-23505 error → re-thrown as-is) | ✅ `OfertaYaAceptadaError`'s constructor param corrected `refillRequestId` → `offerId` mid-cycle (see note above) — re-ran 27/27 green after |
+| 3a.9/3a.10 `desplazarHermanas()` | same file | Unit | ✅ 27/27 (prior blocks) | ✅ Written — `repo.desplazarHermanas is not a function`, 4 new tests failed, 27 prior still passed | ✅ 31/31 passed | ✅ 4 cases (exact 3-predicate WHERE shape, `.returning('id')` called + updateTable called exactly once total — no prior SELECT, [] when nobody displaced, 2 displaced ids in RETURNING order) | ➖ None |
+| 3a.11 `findByRefillRequest()` | same file | Unit | ✅ 31/31 (prior blocks) | ➖ N/A — task text is "Confirm ... stays declared ... no caller", not a RED/GREEN pair; tests written directly against the already-decided GREEN implementation | ✅ 34/34 passed | ✅ 3 cases ([] on no match, exact WHERE on refill_request_id + items inline, tx propagation) | ➖ None |
+
+## Test Summary
+
+- **Total tests written**: 34 (all in `adapters/persistence/kysely-offer.repository.spec.ts`, one file, 6 `describe` blocks: `save` 9, `findById` 9, `findByUser` 5, `marcarAceptada` 4, `desplazarHermanas` 4, `findByRefillRequest` 3)
+- **Total tests passing**: 34/34
+- **Layers used**: Unit (30), Adapter/driver-error-translation (4 — the `marcarAceptada` 23505 cases), Integration (0 — this batch's opt-in Postgres round-trip is 3b.13, not 3a's), E2E (0)
+- **Approval tests** (refactoring): None
+- **Methods implemented**: 6 (`save`, `findById`, `findByUser`, `marcarAceptada`, `desplazarHermanas`, `findByRefillRequest`) — all 6 of `OfferRepository`'s methods, closing PR1's "zero implementers" gap entirely
+
+## Completed Tasks (11/11 in this batch)
+
+- [x] 3a.1 RED: `save()` on a NEW reactiva `Offer` — 1 insert `offers` (status explicit) + 1 bulk insert `offer_items`; numeric mapper; alt_size/alt_qty NULL survive as undefined on the write path.
+- [x] 3a.2 GREEN: `save()`'s insert path — INSERT-only (no existence check, `Offer` entities are immutable once persisted per design.md D-D).
+- [x] 3a.3 RED (extend): `findById(offerId)` — `Offer | null`, items inline, 1 query with join.
+- [x] 3a.4 GREEN (extend): `findById()`.
+- [x] 3a.5 RED (extend): `findByUser(userId)` — `obtenerBandeja`'s read, items inline, no N+1.
+- [x] 3a.6 GREEN (extend): `findByUser()`'s first real implementation.
+- [x] 3a.7 RED (extend, R4): `marcarAceptada(offerId, tx)` — narrow UPDATE + 23505 translation.
+- [x] 3a.8 GREEN (extend): `marcarAceptada()`.
+- [x] 3a.9 RED (extend): `desplazarHermanas(refillRequestId, exceptoOfferId, tx)` — `UPDATE ... RETURNING id`, no prior SELECT.
+- [x] 3a.10 GREEN (extend): `desplazarHermanas()`.
+- [x] 3a.11 `findByRefillRequest()` — real trivial implementation (tasks.md's own explicitly-allowed option, chosen over a "not implemented" throw), confirmed zero callers anywhere in the codebase via `grep`.
+
+## Files Changed
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `services/core-api/src/domains/ofertas/adapters/persistence/kysely-offer.repository.ts` | Created (320 lines) | `KyselyOfferRepository implements OfferRepository` — all 6 methods; row↔domain mappers (`toOffer`/`toOfferItem`/`toOfferRowValues`/`toOfferItemRowValues`/`groupRowsByOfferId`); numeric mapper for `costo_despacho`/`total`/`precio` (always-safe `Number()`) and the nullable `alt_size`/`alt_qty` exception (`=== null ? undefined : Number(...)`); `23505`-on-`offers_refill_request_id_aceptada_uidx` → `OfertaYaAceptadaError` translation in `marcarAceptada`, any other error re-thrown as-is |
+| `services/core-api/src/domains/ofertas/adapters/persistence/kysely-offer.repository.spec.ts` | Created (754 lines) | 34 tests across 6 `describe` blocks, strict-TDD RED-then-GREEN per task pair (except 3a.11, see TDD note), triangulated with 3-9 cases per method |
+| `services/core-api/src/domains/ofertas/domain/oferta.errors.ts` | Modified (+15/-2 lines) | `OfertaYaAceptadaError` constructor param corrected `refillRequestId: string` → `offerId: string`, message and doc comment updated to explain the correction and why (design.md D-D's "no prior SELECT" constraint means the adapter never has `refillRequestId` in scope at the throw site) |
+| `openspec/changes/backend-core-api-ofertas/tasks.md` | Modified | Tasks 3a.1–3a.11 marked `[x]` (11 lines changed, checkbox flips only — Phase 3b's checkboxes untouched, confirmed still `[ ]` before this edit) |
+
+## Commands Run and Results
+
+| Command | Result |
+|---|---|
+| `find services/core-api/src/domains/ofertas -type f` (before starting) | Confirmed `adapters/persistence/` did not exist yet — only `domain/`, `ofertas.module.ts`, both `ports-out/` files present, matching PR2's own "what PR3a/PR3b should know" note |
+| `grep -rln "23505"` / `grep -n "code ==="` across `services/core-api/src` | No existing driver-error-code-translation precedent anywhere in the repo — this is the first one; `identidad/adapters/persistence/supabase-auth.provider.ts`'s `error.code === 'invalid_credentials'` is the closest analog (Supabase Auth error code, not a Postgres `DatabaseError`) |
+| `grep -n "code\|constraint"` on `pg-protocol`'s `messages.d.ts` | Confirmed `DatabaseError.code`/`.constraint` are both mutable `string \| undefined` fields, and `@types/pg` re-exports `DatabaseError` from `pg-protocol` — safe to `import { DatabaseError } from 'pg'` and `error instanceof DatabaseError` in the adapter |
+| `grep -n "uidx\|unique" supabase/migrations/20260803120500_05_ofertas.sql` | Confirmed the exact constraint name `offers_refill_request_id_aceptada_uidx` matches design.md's D-D pseudocode byte-for-byte |
+| `grep -rln "OfertaYaAceptadaError"` (before editing its constructor) | Only `oferta.errors.ts` itself, plus this change's own `tasks.md`/`design.md`/`apply-progress.md` — confirmed zero code callers before the signature correction, safe edit |
+| `pnpm jest src/domains/ofertas/adapters/persistence/kysely-offer.repository.spec.ts` (RED, 3a.1) | `Cannot find module './kysely-offer.repository'` — genuine RED |
+| ... (GREEN, 3a.2) | 9/9 passed |
+| ... (RED, 3a.3) | 9 new failed (`repo.findById is not a function`), 9 prior still passed |
+| ... (GREEN, 3a.4) | 18/18 passed |
+| ... (RED, 3a.5) | 5 new failed (`repo.findByUser is not a function`), 18 prior still passed |
+| ... (GREEN, 3a.6) | 23/23 passed |
+| ... (RED, 3a.7 + 3a.9 combined — both `marcarAceptada`/`desplazarHermanas` test blocks written together before either implementation) | 8 new failed (4 `marcarAceptada` + 4 `desplazarHermanas`), 23 prior still passed |
+| ... (GREEN, 3a.8 + 3a.10 combined) | 31/31 passed |
+| ... (GREEN, 3a.11, no RED per task text) | 34/34 passed |
+| `grep -rn "findByRefillRequest"` excluding spec/port/adapter files | Zero matches — confirmed no caller wired anywhere |
+| `pnpm typecheck` (workspace root) | Clean — `packages/types` and `services/core-api` |
+| `pnpm lint` (workspace root) | Clean, zero errors |
+| `pnpm test` (workspace root, full suite) | `services/core-api`: **62 unit suites / 534 tests** passed (up from PR2's baseline 61/500 — exactly +1 suite/+34 tests, zero regressions); **17 e2e suites / 106 tests** passed (unchanged) |
+| `pnpm build` (workspace root) | `tsc -p tsconfig.build.json` — clean |
+| `pnpm run format:check` (workspace root, first pass) | **FAILED** — `kysely-offer.repository.spec.ts` had Prettier style issues |
+| `pnpm exec prettier --write` on the 3 touched files | Only the spec file reformatted (152ms); `.repository.ts`/`oferta.errors.ts` already compliant (unchanged) |
+| `pnpm jest .../kysely-offer.repository.spec.ts` (after prettier --write) | 34/34 passed — reformat was whitespace-only |
+| `pnpm run format:check` / `pnpm lint` / `pnpm typecheck` (final re-verification pass) | All clean |
+
+## Deviations from Design
+
+**`OfertaYaAceptadaError`'s constructor signature corrected** (see "TDD Note
+for This Batch" above for the full reasoning) — `refillRequestId: string` →
+`offerId: string`. This is a correction to a PR1 artifact, not a deviation
+from `design.md` itself: design.md's own Diagrama D-D pseudocode always
+calls `marcarAceptada(offerId, tx)` with only `offerId` in scope, so the
+PR1 constructor's `refillRequestId` parameter was never satisfiable at its
+one real call site without contradicting D-D's "single narrow UPDATE, no
+prior SELECT" shape. Flagged explicitly for `sdd-verify`'s attention as a
+PR1-artifact correction made during PR3a, not a silent rewrite.
+
+**No deviation from design.md's D-D/D-G.1/D-G.5/"Row types de Kysely"
+sections otherwise.** `marcarAceptada`/`desplazarHermanas` both take `tx:
+TransactionContext` **required** (no `?`), matching D-G.5's deliberate
+hardening exactly — this is enforced by the TypeScript compiler (calling
+either without a `tx` argument is a compile error), not merely a runtime
+check. `desplazarHermanas` issues exactly the SQL shape D-D's pseudocode
+names (`UPDATE ... SET status = 'rechazada' WHERE refill_request_id = $1
+AND id <> $2 AND status = 'pendiente' RETURNING id`), with zero SELECT
+anywhere in the method body — verified by the mock harness never exposing a
+`selectFrom` mock to this describe block at all (an omission, not an
+oversight: there is nothing to call). `save()` is INSERT-only, never an
+upsert/update path — confirmed against `Offer`'s own immutability
+(design.md D-D: acceptance is `marcarAceptada`'s narrow UPDATE, never a
+`save()` rewrite), unlike `KyselyRefillRepository.save()`'s dual
+insert/update path, which does not apply here.
+
+**`findByRefillRequest()` given a real trivial implementation, not a
+"not implemented" throw.** tasks.md 3a.11's own text names both options as
+acceptable ("it's fine to leave it throwing 'not implemented' or give it a
+real trivial implementation matching the port signature"). Chose the real
+implementation — same shape as `findByUser`, filtered on
+`refill_request_id` instead of `user_id`, reusing the same
+`groupRowsByOfferId`/`toOffer` mappers — because a working, tested method
+is cheaper to maintain than a throw that would surprise whoever eventually
+wires a caller to it (`ofertas/SPEC.md` still names this method, per PR1's
+own doc comment on the port). Confirmed via `grep` that this change adds
+zero callers anywhere, satisfying tasks.md 3a.11's actual constraint ("no
+caller added"), which is about wiring, not about the method body.
+
+## Issues Found
+
+**None beyond the PR1 constructor-signature correction already covered
+above** (not a bug introduced by this batch — a latent mismatch in PR1's
+own error class, only surfaced once this batch tried to actually call it
+from the one real call site design.md specifies). The formatting fix
+(Prettier reformatting the new spec file) was mechanical, zero behavior
+change, confirmed by re-running the 34-test suite green afterward.
+
+## What PR3b / PR4a / PR7a (next batches) should know
+
+- **`OfferRepository` now has all 6 methods implemented** —
+  `KyselyOfferRepository` in `adapters/persistence/kysely-offer.repository.ts`.
+  PR3b's `KyselyOfferOpportunityRepository` is untouched by this batch (own
+  file, own port, confirmed zero overlap) and can proceed independently, as
+  tasks.md's dependency notes already state.
+- **`marcarAceptada(offerId, tx)`/`desplazarHermanas(refillRequestId,
+  exceptoOfferId, tx)` both require `tx: TransactionContext` with no
+  default** — Phase 7a's `AceptarOfertaUseCase` must call both from
+  *inside* the same `runInTransaction` callback that already opened `tx`
+  for `findById`; there is no overload that accepts `tx?`.
+- **`OfertaYaAceptadaError`'s constructor now takes `offerId`, not
+  `refillRequestId`** — if `sdd-verify` or a future phase reads PR1's
+  original doc comment text describing this class, that wording is now
+  stale in spirit (superseded by this batch's correction) though the doc
+  comment itself was updated in place to explain the change; no other file
+  currently constructs this error, so no ripple effect exists yet, but
+  Phase 7b's `ofertas-exception.filter.ts` (409 `OFERTA_YA_ACEPTADA`
+  mapping) only needs the error's `instanceof`/`.message`, never its
+  constructor arguments, so this correction is invisible at the HTTP layer.
+- **`save()` is INSERT-only** — Phase 5a/6b's `EnviarOfertaUseCase`/
+  `EnviarOfertaProactivaUseCase` must construct a complete `Offer` via
+  `crearOfertaReactiva`/`crearOfertaProactiva` (PR2) BEFORE calling
+  `save()`; there is no update path to fall back on if a caller tries to
+  `save()` an offer whose `id` already exists — it will attempt a second
+  INSERT and fail on the `offers` PK constraint, which is the correct
+  failure mode for a misuse this repository's contract does not support.
+- **`findById(offerId)` does NOT filter by owner** (matches `RefillRepository
+  .findById`'s established precedent, D11) — Phase 7a's
+  `AceptarOfertaUseCase`/`ObtenerBandejaUseCase` must compare
+  `entity.userId` against `actor.profileId` themselves and throw
+  `OfferNotFoundError` on mismatch (byte-identical to the nonexistent-id
+  case, per design.md D-D).
+- **`findByRefillRequest()` is implemented and tested but has zero
+  callers** — available if a future change needs it, but nothing in this
+  change's remaining phases (4a/4b/5a/5b/6a/6b/7a/7b/8a/8b) is expected to
+  call it, matching design.md's own "declarado y sin caller" framing.
+- Local Supabase still has migration 16 live from PR1 — no new migration
+  work needed for Phase 4a/4b/5a/5b/etc.
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, per tasks.md's Review Workload
+  Forecast — PR3a forecast "280-350, Low-Medium", explicitly independent of
+  PR3b and parallelizable per tasks.md's own Dependency Notes)
+- Current work unit: Unit 3a "Persistencia: `KyselyOfferRepository` (6
+  métodos)" — PR3a, tasks 3a.1–3a.11
+- Boundary: starts from PR2's committed domain layer (`domain/offer.entity.ts`,
+  `domain/oferta.errors.ts`'s 8 classes, zero `OfferRepository` implementers);
+  ends with `KyselyOfferRepository` fully implementing all 6
+  `OfferRepository` methods, 34/34 tests green, `pnpm lint`/`pnpm typecheck`/
+  `pnpm test`/`pnpm build`/`pnpm run format:check` all clean
+- Estimated review budget impact: **~1,089 lines of implementation content**
+  (320 `kysely-offer.repository.ts` + 754 `kysely-offer.repository.spec.ts`
+  + 15 net lines in `oferta.errors.ts`, `wc -l`/`git diff --numstat`-verified)
+  + `tasks.md`'s own 11-line checkbox-flip delta (process, not
+  implementation). This is well over tasks.md's own 280-350 forecast for
+  this PR (roughly 3x the upper bound) and crosses the repo-wide 400-line
+  review budget guard significantly. Flagged honestly, same discipline as
+  PR1/PR2's own overruns: the direct sibling precedent for this exact PR
+  shape (one Kysely repository adapter + its Jest spec covering 4-6
+  methods including a driver-error-translation branch,
+  `KyselyRefillRepository` + `.spec.ts`) is 319 + 629 = **948 lines** — close
+  to, and slightly under, this batch's 1,089, for a repository with 4
+  methods vs. this batch's 6 (including the numeric-mapper gotcha AND a
+  brand-new-to-this-repo 23505-translation branch neither
+  `KyselyRefillRepository` nor any prior domain's persistence adapter had
+  to cover). No split proposed: `kysely-offer.repository.ts` is the single
+  file design.md's own file structure names for ALL of `OfferRepository`'s
+  6 methods (`adapters/persistence/ kysely-offer.repository.ts (mapper
+  numeric->number; traduce 23505)` — one line in design.md's own tree);
+  splitting the test file from the implementation file, or splitting
+  methods across multiple files, would not reduce total review surface,
+  only make the numeric mapper harder to review against both its write-path
+  and read-path call sites simultaneously. Flagged for the orchestrator's
+  awareness — tasks.md's own forecast for this exact PR (280-350) appears
+  under-calibrated for a 6-method repository with a driver-error-translation
+  branch, consistent with PR1/PR2's own forecast-miscalibration pattern
+  already noted twice in this file.
+
+## Status
+
+**Cumulative**: 31/31 tasks complete across PR1 (10/10) + PR2 (10/10) + PR3a
+(11/11). PR3b (Phase 3b, tasks 3b.1–3b.13, `KyselyOfferOpportunityRepository`)
+remains open and independent — this batch touched zero files PR3b owns.
+Ready for PR4a (Phase 4a, `RegistrarOportunidadUseCase` + `MatchEncontradoListener`)
+once PR3b lands, per tasks.md's dependency chain
+(`PR1 → PR2 → {PR3a ∥ PR3b} → PR4a → ...`).
