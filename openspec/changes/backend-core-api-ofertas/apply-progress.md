@@ -1083,3 +1083,302 @@ gap). Both `{PR3a, PR3b}` parallel-track PRs are now done. Ready for PR4a
 `ListarSolicitudesElegiblesUseCase` + `GET /ofertas/oportunidades`'s writer
 half), per tasks.md's dependency chain
 (`PR1 → PR2 → {PR3a ∥ PR3b} → PR4a → PR4b → ...`).
+
+---
+
+# PR4a "Descubrimiento (writer + listener)" (Phase 4a, tasks 4a.1–4a.7)
+
+**Mode**: Strict TDD (project-wide `strict_tdd: true`, `openspec/config.yaml`)
+**Batch**: PR4a (Phase 4a, tasks 4a.1–4a.7) — FIFTH apply batch. PR1's
+groundwork, PR2's domain layer, PR3a's `KyselyOfferRepository` (6 methods),
+and PR3b's `KyselyOfferOpportunityRepository` (5 methods, the D5 writer) are
+all complete and available as-is. **This is design.md's explicit split
+candidate #1, half a** — the first PR in this change that (a) wires real
+providers into `ofertas.module.ts` (previously a 2-line `@Module({})`
+placeholder) and (b) makes `ofertas` consume a real event from the sibling
+`refill-matching` domain. Confirmed the file this batch touches
+(`ofertas.module.ts`) had zero uncommitted changes from any prior batch
+before starting (`git status --porcelain` showed only the previously-landed
+PR1/PR2/PR3a/PR3b artifacts as tracked/committed).
+
+## TDD Note for This Batch
+
+Two genuine RED → GREEN pairs, both confirmed RED via a real `pnpm jest` run
+against a nonexistent module before any implementation code existed — same
+discipline as every prior batch in this change:
+
+- **4a.3/4a.4** (`RegistrarOportunidadUseCase`): first RED run failed with
+  `Cannot find module './registrar-oportunidad.use-case'`. 5 tests written
+  first (transaction-wrapping count, `reemplazar` call count + `tx`
+  propagation, snapshot-built-1:1 assertion, `companyIds: []`-not-suppressed,
+  constructor-injection smoke test), all failing for the "module does not
+  exist" reason, then the implementation was written once and ran GREEN
+  (5/5) on the first pass.
+- **4a.5/4a.6** (`MatchEncontradoListener`) — **task 4a.5 is explicitly one
+  of the 5 mandatory D18 negative tests** (`core-api-ofertas` spec "A
+  projection write failure does not propagate to the emitter", R5). First
+  RED run failed with `Cannot find module './match-encontrado.listener'`. 5
+  tests written first: the mandatory R5 negative (`registrarOportunidad`
+  mocked to reject → handler still resolves, `logger.error` called, never
+  re-thrown) plus a second non-`Error`-rejection variant of the same
+  negative (triangulation), the happy-path call-shape assertion, and **2**
+  structural inspection tests for the D2 negative ("RefillCreado alone
+  creates no opportunity") — one asserting the class exposes EXACTLY one
+  `@OnEvent`-decorated method registered on `'refill.match_encontrado'`
+  (enumerating the whole prototype surface, not just checking the one method
+  that was written), and a second one explicitly scanning for any
+  `@OnEvent('refill.creado')` handler anywhere on the prototype and asserting
+  zero matches — per the task's own instruction ("an enumeration/inspection
+  assertion, not just 'we didn't write one'"). All 5 failed for the "module
+  does not exist" reason first, then the implementation was written once and
+  ran GREEN (5/5) on the first pass.
+
+Task 4a.1 (payload interfaces), 4a.2 (local input type), and 4a.7 (module
+wiring) are non-Jest-testable scaffolding/wiring by their own nature (a pure
+type declaration and a DI wiring file, matching this change's own PR1
+precedent for "cero comportamiento" tasks) — verified by `pnpm typecheck`/
+`pnpm lint`/`pnpm test`/`pnpm build` compiling and passing cleanly instead of
+a Jest RED/GREEN pair, same discipline PR1's own apply-progress note already
+established for this class of task.
+
+## TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 4a.1 payload interfaces | N/A (type-only file) | N/A | N/A | ➖ Not a Jest cycle — pure type declarations, zero runtime behavior (same class as PR1's row-type/port-interface tasks) | ✅ Verified via `pnpm typecheck`/`pnpm lint` compiling cleanly with the intended field shape | ➖ N/A | ➖ N/A |
+| 4a.2 `RegistrarOportunidadInput` (local, `ports-in/`) | N/A (type-only, exercised indirectly by 4a.3's spec) | N/A | N/A | ➖ Not a standalone Jest cycle — the type is exercised by 4a.3/4a.4's own RED/GREEN below | ✅ Confirmed structurally field-for-field identical to 4a.1's payload via `pnpm typecheck` accepting `event.payload` (a `MatchEncontradoPayload`) as a valid `RegistrarOportunidadInput` argument with zero cast in the listener | ➖ N/A | ➖ N/A |
+| 4a.3/4a.4 `RegistrarOportunidadUseCase` | `ports-in/registrar-oportunidad.use-case.spec.ts` | Unit | N/A (new file) | ✅ Written — `Cannot find module './registrar-oportunidad.use-case'`, confirmed via real `pnpm jest` run before the implementation file existed | ✅ 5/5 passed | ✅ 5 cases: `runInTransaction` called exactly once, `reemplazar` called exactly once with the `tx` `runInTransaction` handed it, snapshot built 1:1 from the input (`toEqual` on the full object, not a partial match), `companyIds: []` still calls `reemplazar` with `companyIds: []` intact (never suppressed), constructor accepts exactly its 2 declared dependencies without throwing | ➖ None needed — single implementation pass satisfied all 5 on first GREEN run |
+| 4a.5/4a.6 `MatchEncontradoListener` | `adapters/events/match-encontrado.listener.spec.ts` | Unit | N/A (new file) | ✅ Written — `Cannot find module './match-encontrado.listener'`, confirmed via real `pnpm jest` run before the implementation file existed | ✅ 5/5 passed | ✅ 5 cases: **D18-5 mandatory negative** — `execute()` rejects with an `Error` → handler resolves, `logger.error` called once, never re-thrown; the same negative with a non-`Error` rejection value (triangulates the `error instanceof Error ? error.stack : String(error)` branch); happy-path exactly-once call with the exact payload; structural inspection — exactly 1 `@OnEvent`-decorated method on the whole prototype, registered on `'refill.match_encontrado'` only; structural inspection — zero `@OnEvent('refill.creado')` handlers anywhere on the prototype (D2 negative, enumeration-based) | ➖ None needed — single implementation pass satisfied all 5 on first GREEN run |
+| 4a.7 `ofertas.module.ts` wiring | N/A (DI wiring, no dedicated spec file) | N/A | N/A | ➖ Not a Jest cycle — module wiring, same class as PR1's DI-token-declaration tasks | ✅ Verified by (1) `pnpm typecheck`/`pnpm build` compiling the module with both `useClass` bindings resolving against their port tokens, (2) `pnpm --filter core-api exec jest src/domains/ofertas` (all 5 spec files, incl. this batch's 2 new ones) passing 105/105 with the module file present, confirming no DI wiring regression | ➖ N/A | ➖ N/A |
+
+## Test Summary
+
+- **Total tests written this batch**: 10 (5 in `registrar-oportunidad.use-case.spec.ts`, 5 in `match-encontrado.listener.spec.ts`)
+- **Total tests passing this batch**: 10/10
+- **`ofertas` domain full suite after this batch**: 5 spec files / 105 tests, all passing (up from PR3b's baseline of 3 spec files / 95 tests — `kysely-offer.repository.spec.ts` 34 + `kysely-offer-opportunity.repository.spec.ts` 33 [after the orchestrator's PR3b review added the `.limit(1)` test] + `offer.entity.spec.ts` 28 = 95, plus this batch's 2 new files / 10 tests = 105)
+- **Layers used**: Unit (10 — both new files use hand-rolled mocks, no Nest `Test.createTestingModule`, same convention as `crear-borrador-refill.use-case.spec.ts`/`refill-auto-solicitado.listener.spec.ts`, this batch's direct structural templates), Integration (0), E2E (0 — first HTTP/e2e surface for this domain is PR4b)
+- **Approval tests** (refactoring): None
+- **Methods/classes implemented**: 2 (`RegistrarOportunidadUseCase.execute`, `MatchEncontradoListener.onMatchEncontrado`) + 1 wiring file (`ofertas.module.ts`, rewritten from an empty placeholder to its first real provider set)
+
+## Completed Tasks (7/7 in this batch)
+
+- [x] 4a.1 `adapters/events/refill-matching-event.payloads.ts` (NEW) — `MatchEncontradoItemPayload`/`MatchEncontradoPayload`, `Urgencia` imported from `@repon/types`; `providerCatalogItemIds` deliberately not declared (D8 enforcement at the type level).
+- [x] 4a.2 `ports-in/registrar-oportunidad.use-case.ts` — `RegistrarOportunidadInput`/`RegistrarOportunidadItemInput` declared locally, field-for-field matching 4a.1's payload shape; zero import from `adapters/`.
+- [x] 4a.3 RED: `ports-in/registrar-oportunidad.use-case.spec.ts` — `runInTransaction` wraps exactly 1 `reemplazar(snapshot, tx)` call; snapshot built 1:1; `companyIds: []` still calls `reemplazar`; constructor injects `TRANSACTION_MANAGER`.
+- [x] 4a.4 GREEN: `ports-in/registrar-oportunidad.use-case.ts` — `RegistrarOportunidadUseCase` implemented.
+- [x] 4a.5 RED (D18-5, mandatory): `adapters/events/match-encontrado.listener.spec.ts` — `@OnEvent('refill.match_encontrado')` by channel-name string; the R5 catch-log-never-rethrow negative; the D2 "no `refill.creado` handler" structural inspection.
+- [x] 4a.6 GREEN: `adapters/events/match-encontrado.listener.ts` — `MatchEncontradoListener` implemented, try/execute/catch-and-log, never re-throw.
+- [x] 4a.7 `ofertas.module.ts` — rewritten from `@Module({})` to `imports: [DatabaseModule]`, `OFFER_OPPORTUNITY_REPOSITORY`→`KyselyOfferOpportunityRepository`, `OFFER_REPOSITORY`→`KyselyOfferRepository`, `providers: [..., RegistrarOportunidadUseCase, MatchEncontradoListener]`, `exports: []`.
+
+## Files Changed
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `services/core-api/src/domains/ofertas/adapters/events/refill-matching-event.payloads.ts` | Created (69 lines) | `MatchEncontradoItemPayload` (5 fields) + `MatchEncontradoPayload` (6 fields incl. `items`/`companyIds`), `Urgencia` imported from `@repon/types` (never from `domains/refill-matching/*`); doc comment names both the "never import the sibling domain's event class" rule and the deliberate `providerCatalogItemIds` omission as the D8 enforcement mechanism |
+| `services/core-api/src/domains/ofertas/ports-in/registrar-oportunidad.use-case.ts` | Created (92 lines) | `RegistrarOportunidadItemInput`/`RegistrarOportunidadInput` (local, `ports-in/`-owned vocabulary) + `RegistrarOportunidadUseCase` — constructor injects `OFFER_OPPORTUNITY_REPOSITORY` + `TRANSACTION_MANAGER` (no `EVENT_PUBLISHER` — publishes nothing on either branch, D2's own "CERO EVENTOS, CERO push" framing); `execute()` wraps exactly 1 `reemplazar(snapshot, tx)` call inside `runInTransaction` |
+| `services/core-api/src/domains/ofertas/ports-in/registrar-oportunidad.use-case.spec.ts` | Created (144 lines) | 5 tests across 4 `describe` blocks, strict-TDD RED-then-GREEN, hand-rolled mocks (`jest.Mocked<OfferOpportunityRepository>`/`jest.Mocked<TransactionManager>`), same harness shape as `crear-borrador-refill.use-case.spec.ts` |
+| `services/core-api/src/domains/ofertas/adapters/events/match-encontrado.listener.ts` | Created (57 lines) | `MatchEncontradoListener` — `@OnEvent('refill.match_encontrado')` on `onMatchEncontrado(event: { payload: MatchEncontradoPayload })`; try/execute/catch-log-never-rethrow (R5); doc comment names both the payload-nesting gotcha (`event.payload`, never a flattened parameter) and the deliberate absence of any `@OnEvent('refill.creado')` handler (D2) |
+| `services/core-api/src/domains/ofertas/adapters/events/match-encontrado.listener.spec.ts` | Created (129 lines) | 5 tests across 4 `describe` blocks; the D18-5 mandatory negative (2 variants: `Error` rejection and non-`Error` rejection); the happy-path call-shape assertion; 2 structural-inspection tests (exactly-1-handler enumeration + explicit zero-`refill.creado`-handlers scan) via `Reflect.getMetadata('EVENT_LISTENER_METADATA', ...)`, same technique `refill-auto-solicitado.listener.spec.ts` established |
+| `services/core-api/src/domains/ofertas/ofertas.module.ts` | Rewritten (9 → 55 lines, +50/-4 net) | From the exploration.md-era `@Module({})` placeholder to the first real provider set: `imports: [DatabaseModule]` (NOT `CatalogoModule` — that lands in PR5b); both repository tokens bound to their Kysely implementations; `RegistrarOportunidadUseCase` + `MatchEncontradoListener` registered in `providers` (no `controllers` array yet — PR4b's job); `exports: []` (D15) |
+| `openspec/changes/backend-core-api-ofertas/tasks.md` | Modified | Tasks 4a.1–4a.7 marked `[x]` (7 lines changed, checkbox flips only) |
+
+## Commands Run and Results
+
+| Command | Result |
+|---|---|
+| `git status --porcelain` / `find services/core-api/src/domains/ofertas -type f` (before starting) | Confirmed `adapters/events/`/`ports-in/` did not exist yet; `ofertas.module.ts` was still the 9-line `@Module({})` placeholder; `ofertas` domain had exactly 5 files before this batch (`kysely-offer.repository.ts`/`.spec.ts`, `kysely-offer-opportunity.repository.ts`/`.spec.ts`, `oferta.errors.ts`, `offer.entity.ts`/`.spec.ts`, both ports-out files) |
+| `pnpm --filter core-api exec jest src/domains/ofertas/ports-in/registrar-oportunidad.use-case.spec.ts` (RED, 4a.3) | `Cannot find module './registrar-oportunidad.use-case'` — genuine RED |
+| `pnpm --filter core-api exec jest src/domains/ofertas/ports-in/registrar-oportunidad.use-case.spec.ts` (GREEN, 4a.4) | 5/5 passed |
+| `pnpm --filter core-api exec jest src/domains/ofertas/adapters/events/match-encontrado.listener.spec.ts` (RED, 4a.5) | `Cannot find module './match-encontrado.listener'` — genuine RED |
+| `pnpm --filter core-api exec jest src/domains/ofertas/adapters/events/match-encontrado.listener.spec.ts` (GREEN, 4a.6) | 5/5 passed |
+| `pnpm --filter core-api exec jest src/domains/ofertas` (after 4a.7's module rewrite) | 5 suites / 105 tests passed |
+| `pnpm typecheck` (workspace root, first pass) | **FAILED** — 2x `TS2352` in `registrar-oportunidad.use-case.spec.ts`: a `mock.calls[0] as [OportunidadSnapshot]` tuple cast didn't account for the mock's real 2-argument call shape (`[snapshot, tx]`); fixed by widening both casts to `[OportunidadSnapshot, TransactionContext]`, no production-code change |
+| `pnpm --filter core-api exec jest src/domains/ofertas/ports-in/registrar-oportunidad.use-case.spec.ts` (after the typecheck fix) | 5/5 passed |
+| `pnpm typecheck` (workspace root, second pass) | Clean — both `packages/types` and `services/core-api` |
+| `pnpm lint` (workspace root) | Clean, zero errors (exit 0) |
+| `pnpm test` (workspace root, first pass) | Unit: **65 unit suites / 577 tests** passed (up from PR3b's post-review baseline of 63/567 — exactly +2 suites/+10 tests, zero regressions on `identidad`/`catalogo`/`consumo`/`refill-matching`). E2e: **15/17 suites, 101/106 tests passed** — the same 2 pre-existing failing suites as PR3b (`refill-crear-solicitud.e2e-spec.ts`, `refill-completar-borrador.e2e-spec.ts`, 5 tests), all `Connection terminated due to connection timeout` from `pg-pool`, unrelated to this batch's diff |
+| `pnpm build` (workspace root) | `tsc -p tsconfig.build.json` — clean |
+| `pnpm run format:check` (workspace root, first pass) | **FAILED** — both new spec files (`match-encontrado.listener.spec.ts`, `registrar-oportunidad.use-case.spec.ts`) had Prettier style issues |
+| `pnpm exec prettier --write` on both new spec files | Both reformatted (38ms/8ms, whitespace/quote-style only); the 3 new non-spec files (`refill-matching-event.payloads.ts`, `match-encontrado.listener.ts`, `registrar-oportunidad.use-case.ts`, `ofertas.module.ts`) were already compliant, unchanged |
+| `pnpm --filter core-api exec jest src/domains/ofertas` (after prettier --write) | 5 suites / 105 tests passed — reformat was whitespace/quote-style only |
+| `pnpm run format:check` (workspace root, second pass) | Clean |
+| `pnpm lint` / `pnpm typecheck` (workspace root, final re-verification pass) | Both clean |
+| `pnpm test` (workspace root, final pass) | Unchanged from the first pass: 65/65 unit suites (577/577 tests), 15/17 e2e suites (101/106 tests, same 2 pre-existing environmental failures) |
+| `docker ps` | `Error response from daemon: Docker Desktop is manually paused. Unpause it through the Whale menu or Dashboard.` — confirmed directly, not assumed from PR3b's note |
+| `supabase status` | `LegacyStatusDbInspectError` — same root cause, no local stack reachable |
+| `git add -N <5 new files>` + `git diff --numstat -- services/core-api/src/domains/ofertas` | Exact line counts for the workload estimate below: 129+57+69+50+4+142+92 = 543 changed lines (additions+deletions) |
+
+## Deviations from Design
+
+**None from design.md's D-F/D-G.1/D13/Diagrama 1/"Wiring de módulos" sections.**
+`MatchEncontradoPayload`'s 6 fields (`refillRequestId`, `userId`, `comuna`,
+`urgencia`, `companyIds`, `items`) match D-F's snippet verbatim, including the
+`providerCatalogItemIds` omission. `RegistrarOportunidadUseCase` wraps exactly
+1 `reemplazar` call inside `runInTransaction`, matches Diagrama 1 step 3a
+exactly, and does not inject `EVENT_PUBLISHER` (Diagrama 1 step 3b: "CERO
+EVENTOS, CERO push"). `MatchEncontradoListener` subscribes by the exact
+channel-name string `'refill.match_encontrado'`, never imports
+`refill-matching`'s real `MatchEncontrado` class, and catches-logs-never-
+rethrows (R5). `ofertas.module.ts` matches design.md's "Wiring de módulos"
+snippet for this phase exactly: `imports: [DatabaseModule]` only (no
+`CatalogoModule` yet — confirmed absent), both repository tokens bound,
+`RegistrarOportunidadUseCase`/`MatchEncontradoListener` in `providers`, no
+`controllers` array, `exports: []`.
+
+**One typing choice worth naming explicitly, not a deviation**:
+`MatchEncontradoListener.onMatchEncontrado` calls
+`this.registrarOportunidadUseCase.execute(event.payload)` passing an
+`adapters/events/`-typed `MatchEncontradoPayload` directly where
+`ports-in/`'s own `RegistrarOportunidadInput` is expected, relying on
+TypeScript's structural typing (both interfaces are field-for-field
+identical, confirmed by `pnpm typecheck` accepting this with zero cast). This
+does NOT violate task 4a.2's "never imports the adapter's payload type from
+`ports-in/`" rule — `registrar-oportunidad.use-case.ts` itself imports
+nothing from `adapters/`; only the listener (which legitimately lives in
+`adapters/events/` and already imports both types) does the structural
+hand-off. This mirrors how `RefillAutoSolicitadoListener` hands
+`RefillAutoSolicitadoPayload` (a `consumo-event.payloads.ts` type) directly
+to `CrearBorradorRefillUseCase.execute()` in the exact same way — no
+adaptation function needed because the two interfaces were designed to match
+field-for-field from the start (design.md's own instruction for task 4a.2).
+
+**No other deviations.** `TRANSACTION_MANAGER` injection, the `tx`-required
+`reemplazar` signature honored, and the `exports: []`/no-`controllers`
+module shape all match design.md's tables directly.
+
+## Issues Found
+
+**One typecheck error caught and fixed before this batch's tests were
+considered done** (see "Commands Run and Results" above): two `mock.calls[0]`
+tuple casts in `registrar-oportunidad.use-case.spec.ts` were narrowed to
+`[OportunidadSnapshot]` (a 1-element tuple) when the real mock call captured
+2 arguments (`[snapshot, tx]`) — `tsc` correctly rejected the cast as
+insufficiently overlapping. Fixed by widening both casts to
+`[OportunidadSnapshot, TransactionContext]`. Zero production-code impact,
+zero test-assertion-logic change (only the destructuring type annotation).
+
+**2 e2e suites failed on the full `pnpm test` run — confirmed environmental,
+identical to PR3b's own finding, not a new regression.** Same 2 suites
+(`refill-crear-solicitud.e2e-spec.ts`, `refill-completar-borrador.e2e-spec.ts`,
+5 tests), same root cause (`Connection terminated due to connection timeout`
+from `pg-pool`/Kysely's `PostgresDriver.acquireConnection` — Docker Desktop
+manually paused, confirmed directly via `docker ps`/`supabase status` in this
+batch, not merely assumed from the prior batch's note). Confirmed not a
+regression from this batch: (1) neither failing suite belongs to `ofertas` or
+touches any file this batch changed (`git status --porcelain` before/after
+shows only the 5 new `ofertas/` files + `tasks.md`); (2) the unit suite is
+100% green, 65/65 suites (up from PR3b's 63/63, +2 new suites from this
+batch, zero prior suites broken); (3) PR3b's own baseline was already "15/17
+e2e suites, 101/106 tests" for the identical reason — this batch's e2e
+numbers are byte-identical to that baseline, confirming zero new e2e breakage.
+Not fixed here: unpausing Docker Desktop is outside this agent's authority
+(same reasoning PR3b's apply-progress already recorded), and this batch
+introduces zero new e2e coverage of its own (PR4a has no HTTP surface —
+`OfertasController` is PR4b's job).
+
+**One formatting fix, mechanical.** Both new spec files had a few Prettier
+style deviations (quote style, line wrapping) on first draft;
+`prettier --write` fixed both automatically with zero behavior change
+(confirmed by re-running the 5-suite/105-test `ofertas` domain suite green
+afterward).
+
+## Orchestrator Review Notes (PR4a)
+
+Fresh code-review (medium effort, forked context, ran as several parallel angle-specific passes on this larger diff) surfaced 3 findings, verified against the actual code:
+
+1. **Fixed**: `MatchEncontradoListener`'s error log only included `refillRequestId`, dropping `userId`/`comuna`/`urgencia`/`companyIds`/`items` from the log context — inconsistent with the sibling `RefillAutoSolicitadoListener` (`refill-matching`), which logs `{ evento, ...event.payload }`. Changed to spread the full payload, matching the established sibling convention. If `reemplazar()` fails in production, the log line now carries the actual snapshot that failed to write, not just its id. Re-verified: 5/5 tests in this listener's spec still pass (no test asserted the narrower shape), full workspace suite still green (65 unit suites/577 tests), lint/typecheck/format all clean.
+2. **Flagged, not fixed**: the try/catch/logger.error/never-rethrow listener body is now duplicated a 3rd time in the repo (after `refill-auto-solicitado.listener.ts` and `catalogo`'s `company-visibility.listener.ts`), with no shared base class or helper extracted. Same category as PR3b's `groupRowsBy*` duplication finding — low severity, out of this PR's declared scope (would touch shared listener infrastructure, not requested), left as a documented recurring pattern for a future cleanup PR if it recurs a 4th time.
+3. **Investigated, confirmed not a defect**: one review pass raised whether `reemplazar()`'s unconditional bulk items upsert (statement 5, no `if (items.length > 0)` guard, unlike statement 3's `companyIds` guard) could crash on an empty `items` array (verified: it would, with a Postgres syntax error, if reached). A separate cross-file trace confirmed this state is structurally unreachable in production: `MatchEncontrado` can only be published over an active solicitud, and `RefillRequestActiva`'s domain factory + the HTTP DTO's `@ArrayNotEmpty()` both guarantee `items.length >= 1` before any such event exists. This is PR3b's own documented assumption ("items nunca llega vacío por contrato del evento"), not a gap introduced by this batch — no code change made, existing repo-wide convention of not defending against unreachable states upheld.
+
+## What PR4b (next batch) should know
+
+- **`ofertas.module.ts` is no longer a placeholder** — it now has real
+  `imports`/`providers`. PR4b's own tasks (4b.1–4b.7) EXTEND this same file's
+  `providers` array (adding `ListarSolicitudesElegiblesUseCase` +
+  `OfertasController` + `OfertasExceptionFilter`) and add the module's first
+  `controllers` array entry — never replace this batch's work. `imports`
+  stays `[DatabaseModule]` for PR4b too (`CatalogoModule` is PR5b's edge, not
+  PR4b's — PR4b's `listarPorCompany` needs no catalog access).
+- **`OFFER_OPPORTUNITY_REPOSITORY`/`OFFER_REPOSITORY` are now both bound in
+  the module**, not just declared in `ports-out/` — any use case PR4b/5a/6b/
+  7a registers can now actually resolve its repository dependency at runtime
+  (Nest DI), not just at the type level. This batch is what makes that true
+  for the first time in this domain.
+- **`RegistrarOportunidadUseCase`/`MatchEncontradoListener` are both live**
+  end-to-end from an e2e/contract-test perspective (once wired into a real
+  Nest app with `moduleRef.init()`, per tasks.md 8a.7's own warning about the
+  `catalogo` PR8b `.compile()`-vs-`.init()` bug) — PR4b does not need to
+  re-verify this batch's listener; it is complete and independently tested.
+  PR8a's own e2e contract test (`ofertas-contrato-match-encontrado.e2e-spec.ts`)
+  is the first point in the chain that will exercise this listener against a
+  REAL event bus end-to-end; this batch's 5 unit tests are the only coverage
+  until then, by design (tasks.md's own PR sequencing).
+- **`RegistrarOportunidadInput`/`RegistrarOportunidadItemInput` are declared
+  in `ports-in/registrar-oportunidad.use-case.ts`, not `@repon/types`** —
+  matching design.md's own note that neither goes to the shared package (no
+  `SPEC.md` names them). PR4b's `ListarSolicitudesElegiblesUseCase` has no
+  reason to import either; it reads via `listarPorCompany` (PR3b), a
+  completely separate method with its own return type (`SolicitudElegible[]`,
+  already in `@repon/types`).
+- **`findElegible`/`listarPorCompany`/`existeRelacion` (PR3b) remain
+  untouched by this batch** — PR4b's `ListarSolicitudesElegiblesUseCase`
+  calls `listarPorCompany(companyId)` directly; no new repository work is
+  needed, only the use case + controller + filter + DTO + module wiring
+  layers tasks.md 4b.1–4b.7 name.
+- Local Supabase/Docker is still unreachable in this environment (confirmed
+  directly again this batch, not just inherited from PR3b's note) — this
+  does not block PR4b's own unit tests (mocked ports throughout, same as this
+  batch), but PR4b's task 4b.7 (its first e2e spec file for this domain) will
+  need it. Not this batch's problem to fix, flagged again for continuity.
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, same as every prior batch —
+  tasks.md's Review Workload Forecast names PR4a at "220-280, Low-Medium",
+  design.md's own explicit split candidate #1 half a, sequenced first only
+  to match design.md's slice ordering — its real dependency is PR3b alone,
+  per tasks.md's Dependency Notes)
+- Current work unit: Unit 4a "`registrarOportunidad` + `MatchEncontradoListener`"
+  — PR4a, tasks 4a.1–4a.7, all complete
+- Boundary: starts from PR3b's committed state (`OfferOpportunityRepository`
+  fully implemented via `KyselyOfferOpportunityRepository`, `ofertas.module.ts`
+  still the empty placeholder); ends with the module wired to its first 2 real
+  use cases (one internal write use case + its listener), 10/10 new tests
+  green, `ofertas` domain suite 5/5 files / 105/105 tests green, `pnpm lint`/
+  `pnpm typecheck`/`pnpm build`/`pnpm run format:check` all clean, unit suite
+  100% green workspace-wide with zero regressions (e2e suite has the same 2
+  pre-existing environmentally-failing suites as PR3b, confirmed unrelated to
+  this diff)
+- Estimated review budget impact: **543 changed lines** (`git diff --numstat`-
+  verified via `git add -N` on the 5 new files + the tracked `ofertas.module.ts`
+  diff: 129 + 57 + 69 + 50/4 + 142 + 92 = 543 additions+deletions) +
+  `tasks.md`'s own 7-line checkbox-flip delta (process, not implementation).
+  This is over tasks.md's own 220-280 forecast for this PR (roughly 94-147%
+  over the upper bound), consistent with the same forecast-miscalibration
+  pattern every prior batch in this change has already flagged (PR1 ~20%
+  over, PR2 ~80-130% over, PR3a ~3x over, PR3b ~3.5-4.5x over) — heavy
+  doc-comments cross-referencing design.md/tasks.md by D-number and scenario
+  name throughout, a repo-wide convention this domain also follows, not
+  scope creep. The direct sibling precedent for this PR's shape (one internal
+  use case + its own `@OnEvent` listener + a locally-declared payload
+  interface + a module rewrite from placeholder to first real providers) is
+  `refill-matching`'s own PR6a (`CrearBorradorRefillUseCase` +
+  `RefillAutoSolicitadoListener` + `consumo-event.payloads.ts`) — not
+  independently re-measured here, but structurally the same shape this batch
+  followed line-for-line as its template. No split proposed: `tasks.md`
+  itself already pre-splits Phase 4 into 4a (this batch, writer + listener,
+  zero HTTP) and 4b (read + route, first HTTP surface) — this batch IS
+  design.md's own named split candidate #1 half a, already at its intended
+  granularity. Splitting further (e.g. payload file separate from the use
+  case) would separate a type declaration from its one real consumer, adding
+  review overhead without reducing total surface. Flagged for the
+  orchestrator's awareness, same discipline as every prior batch.
+
+## Status
+
+**Cumulative**: 50/51 tasks complete across PR1 (10/10) + PR2 (10/10) + PR3a
+(11/11) + PR3b (12/13 — 3b.13 deferred, environmental blocker, not a code
+gap) + PR4a (7/7). Ready for PR4b (Phase 4b, `ListarSolicitudesElegiblesUseCase`
++ `GET /ofertas/oportunidades` + `OfertasController`/`OfertasExceptionFilter`
+bootstrap — this domain's first HTTP surface), per tasks.md's dependency
+chain (`PR1 → PR2 → {PR3a ∥ PR3b} → PR4a → PR4b → PR5a → ...`).
