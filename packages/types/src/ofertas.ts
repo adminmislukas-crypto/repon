@@ -1,3 +1,5 @@
+import type { Urgencia } from './refill-matching.js';
+
 export type OfferKind = 'reactiva' | 'proactiva';
 
 /**
@@ -72,3 +74,63 @@ interface OfferCommon {
 export type Offer =
   | (OfferCommon & { kind: 'reactiva'; refillRequestId: string; items: OfferItemReactiva[] })
   | (OfferCommon & { kind: 'proactiva'; refillRequestId?: never; items: OfferItemProactiva[] });
+
+// design.md D14 (backend-core-api-ofertas) — the 3 additions below. `Offer`/
+// `OfferItem` above are unchanged by this domain change.
+
+/** Item de una oferta reactiva a componer (`enviarOferta`'s input) —
+ *  mirrors `OfferItemReactiva`'s discriminant shape, `providerCatalogItemId`
+ *  structurally excluded via `?: never`. */
+export type NuevoOfferItemReactiva = OfferItemPricing &
+  OfferItemAlt & {
+    refillItemId: string;
+    providerCatalogItemId?: never;
+  };
+
+/** Item de una oferta proactiva a componer (`enviarOfertaProactiva`'s
+ *  input) — mirrors `OfferItemProactiva`, `refillItemId` excluded. */
+export type NuevoOfferItemProactiva = OfferItemPricing &
+  OfferItemAlt & {
+    providerCatalogItemId: string;
+    refillItemId?: never;
+  };
+
+/**
+ * Input shape for both `enviarOferta`/`enviarOfertaProactiva` — structurally
+ * identical to `OfferItem` TODAY, but deliberately a **named type**, never
+ * an alias of `OfferItem` (`shared-types-package` spec, reconciliation
+ * table row 9): an alias would turn the first future divergence between
+ * "what a client submits" and "what got persisted" (e.g. a `cantidad`
+ * field) into a breaking rename instead of an additive field.
+ */
+export type NuevoOfferItem = NuevoOfferItemReactiva | NuevoOfferItemProactiva;
+
+/** Delivery terms attached to a composed offer (`enviarOferta`'s input,
+ *  `db-schema-ofertas`'s `offers.tiempo_entrega_horas`/`.costo_despacho`). */
+export interface DatosEntrega {
+  tiempoEntregaHoras: number;
+  costoDespacho: number;
+}
+
+export interface SolicitudElegibleItem {
+  refillItemId: string;
+  nombre: string;
+  categoria: string;
+  precioReferencia: number;
+  catalogProductId?: string;
+}
+
+/**
+ * `listarSolicitudesElegibles`'s read model (design.md Diagrama 3) —
+ * `urgencia` reuses `Urgencia` from `./refill-matching.js`, never
+ * re-declared. Deliberately **no** `userId` field: the provider does not
+ * need the recipient's `profileId` to compose an offer, and exposing it
+ * would turn this route into a profile enumerator.
+ */
+export interface SolicitudElegible {
+  refillRequestId: string;
+  comuna: string;
+  urgencia: Urgencia;
+  matchedAt: string;
+  items: SolicitudElegibleItem[];
+}

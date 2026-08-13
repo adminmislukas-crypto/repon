@@ -33,7 +33,14 @@ import type { Generated } from 'kysely';
 // .../20260807120000_14_refill_matching_estado_borrador.sql (the 'borrador'
 // enum value) and .../20260807120100_15_refill_matching_completitud_diferida.sql
 // (the 4 nullable columns + `consumption_id` + its partial unique index) —
-// from this domain's own backend-core-api-refill-matching PR 1 (design.md D-A/D10/D-D.2).
+// from this domain's own backend-core-api-refill-matching PR 1 (design.md D-A/D10/D-D.2);
+// .../20260803120500_05_ofertas.sql (offers, offer_items — already applied,
+// typed here for the first time, NOT edited by this change, fix-forward)
+// plus .../20260808120000_16_ofertas_discovery_projection.sql
+// (offer_opportunities, offer_opportunity_companies, offer_opportunity_items)
+// — from this domain's own backend-core-api-ofertas PR 1 (design.md D-A/D14).
+// The remaining 1 table (`pedidos-pagos`) gets typed here as its owning
+// domain change lands.
 
 export type CompanyStatusRow = 'pendiente' | 'activo' | 'suspendido';
 export type RoleRow = 'user' | 'provider' | 'admin';
@@ -206,6 +213,79 @@ export interface RefillItemsTable {
   // ya no es del todo cierta; se declara ahí, no se agrega la columna acá).
 }
 
+export type OfferKindRow = 'reactiva' | 'proactiva';
+export type OfferStatusRow = 'pendiente' | 'aceptada' | 'rechazada' | 'expirada';
+
+export interface OffersTable {
+  id: Generated<string>;
+  user_id: string;
+  refill_request_id: string | null; // NULL <=> kind = 'proactiva'
+  company_id: string;
+  kind: OfferKindRow;
+  status: Generated<OfferStatusRow>; // tiene default 'pendiente' -> Generated.
+  // El adaptador lo escribe SIEMPRE explicito (misma regla que
+  // refill_requests.estado, design.md D-G's own table).
+  tiempo_entrega_horas: number; // integer -> number (pg SI parsea int4)
+  costo_despacho: string; // numeric(12,2) -> STRING
+  total: string; // numeric(12,2) -> STRING
+  mensaje: string | null;
+  created_at: Generated<string>;
+  updated_at: Generated<string>;
+}
+
+export interface OfferItemsTable {
+  id: Generated<string>;
+  offer_id: string;
+  // Dual-nullable, CHECK exactamente uno de los dos en la migracion 05
+  // (offer.kind = 'reactiva' -> refill_item_id; 'proactiva' -> provider_catalog_item_id).
+  refill_item_id: string | null;
+  provider_catalog_item_id: string | null;
+  is_alt: Generated<boolean>;
+  alt_size: string | null; // numeric -> STRING, y ademas nullable
+  alt_qty: string | null; // numeric -> STRING, y ademas nullable
+  alt_note: string | null;
+  precio: string; // numeric(12,2) -> STRING
+  created_at: Generated<string>; // sin updated_at: offer_items es inmutable
+}
+
+export interface OfferOpportunitiesTable {
+  refill_request_id: string; // PK provista por el caller -> sin Generated
+  user_id: string;
+  comuna: string;
+  urgencia: RefillUrgenciaRow; // `text` en Postgres (design.md D-A.1), tipado
+  // acá con la MISMA union TS que refill-matching, nunca re-declarada.
+  matched_at: Generated<string>;
+  cerrada_at: string | null; // la setea aceptarOferta (D12); nadie la vuelve a NULL (D-A.3)
+  created_at: Generated<string>;
+  updated_at: Generated<string>;
+}
+
+export interface OfferOpportunityCompaniesTable {
+  refill_request_id: string;
+  company_id: string;
+  vigente: Generated<boolean>; // baja logica del reemplazo de D5 (design.md D-A.2)
+  created_at: Generated<string>;
+  updated_at: Generated<string>;
+}
+
+export interface OfferOpportunityItemsTable {
+  refill_item_id: string; // PK provista por el caller
+  refill_request_id: string;
+  nombre: string;
+  categoria: string;
+  // numeric(12,2) -> STRING. NOT NULL a diferencia de refill_items.categoria/
+  // .precio_referencia (nullable desde el batch 15): MatchEncontrado SOLO se
+  // publica sobre una solicitud activa, y RefillRequestActiva garantiza
+  // ambos campos completos — Number(row.precio_referencia) es seguro en
+  // esta tabla por el contrato del evento, no por suerte (design.md's
+  // "El gotcha de numeric sigue vigente" callout).
+  precio_referencia: string;
+  catalog_product_id: string | null;
+  vigente: Generated<boolean>;
+  created_at: Generated<string>;
+  updated_at: Generated<string>;
+}
+
 export interface DB {
   companies: CompaniesTable;
   profiles: ProfilesTable;
@@ -219,4 +299,9 @@ export interface DB {
   consumption_logs: ConsumptionLogsTable;
   refill_requests: RefillRequestsTable;
   refill_items: RefillItemsTable;
+  offers: OffersTable;
+  offer_items: OfferItemsTable;
+  offer_opportunities: OfferOpportunitiesTable;
+  offer_opportunity_companies: OfferOpportunityCompaniesTable;
+  offer_opportunity_items: OfferOpportunityItemsTable;
 }
