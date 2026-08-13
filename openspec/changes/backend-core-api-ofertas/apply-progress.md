@@ -1025,6 +1025,23 @@ Fresh code-review (medium effort, forked context) after this batch surfaced 2 fi
   early since it will eventually block a CI-relevant e2e run, not just the
   opt-in 3b.13.
 
+**PR4b addendum (verified by the PR4b batch, not assumed): this repo's own
+`*.e2e-spec.ts` convention (as opposed to `*.integration-spec.ts`) never
+touches a real Postgres/Docker at all** — every `test/*.e2e-spec.ts` file in
+this repo overrides `ACTOR_PORT` plus the domain's own repository token(s)
+with hand-rolled Jest mocks (`catalogo-mi-catalogo.e2e-spec.ts` is the
+clearest template), grep-verified (`grep -l "DATABASE\b\|DatabaseModule..."
+test/*.e2e-spec.ts` → zero matches) before writing PR4b's own e2e file.
+Docker being paused does **not** block any task named `*.e2e-spec.ts` in
+this change's remaining phases (5b.7, 6b.10, 7b.5, 7b.6) — it only blocks
+`*.integration-spec.ts`-class work (3b.13's own opt-in test) and the 2
+pre-existing `refill-matching` e2e suites that already fail for this reason
+in every batch since PR3b. PR8a's own contract tests (8a.7/8a.8) use a real
+in-process `EventEmitterModule`/`moduleRef.init()`, not a real Postgres
+connection either — worth re-confirming at that point, but the flagged risk
+above ("PR4a's own e2e contract tests... will need it") looks overstated in
+hindsight; noted here rather than silently correcting PR4a's own text.
+
 ## Workload / PR Boundary
 
 - Mode: chained PR slice (`stacked-to-main`, same as PR1/PR2/PR3a — tasks.md's
@@ -1382,3 +1399,342 @@ gap) + PR4a (7/7). Ready for PR4b (Phase 4b, `ListarSolicitudesElegiblesUseCase`
 + `GET /ofertas/oportunidades` + `OfertasController`/`OfertasExceptionFilter`
 bootstrap — this domain's first HTTP surface), per tasks.md's dependency
 chain (`PR1 → PR2 → {PR3a ∥ PR3b} → PR4a → PR4b → PR5a → ...`).
+
+---
+
+# PR4b "Descubrimiento (lectura + ruta)" (Phase 4b, tasks 4b.1–4b.7)
+
+**Mode**: Strict TDD (project-wide `strict_tdd: true`, `openspec/config.yaml`)
+**Batch**: PR4b (Phase 4b, tasks 4b.1–4b.7) — SIXTH apply batch. PR1's
+groundwork, PR2's domain layer, PR3a's `KyselyOfferRepository`, PR3b's
+`KyselyOfferOpportunityRepository`, and PR4a's `RegistrarOportunidadUseCase`
++ `MatchEncontradoListener` + the module's first real `providers` are all
+complete and available as-is. **This is design.md's explicit split
+candidate #1, half b — the first HTTP surface of this domain**:
+`OfertasController`/`OfertasExceptionFilter` are bootstrapped here, not
+extended (PR4a wired zero `controllers`). This section continues from
+Engram topic_key `sdd/backend-core-api-ofertas/apply-progress-continuation-3`
+(which holds PR4a); a NEW topic_key,
+`sdd/backend-core-api-ofertas/apply-progress-continuation-4`, is used for
+this batch per the launch prompt's instruction, to avoid risking truncation
+of an already-large prior entry. This filesystem file
+(`openspec/changes/backend-core-api-ofertas/apply-progress.md`) remains the
+single source of truth and carries every PR's history in one place,
+unsegmented.
+
+**Known environmental constraint, reconfirmed at the start of this batch**:
+`docker ps` → `Error response from daemon: Docker Desktop is manually
+paused. Unpause it through the Whale menu or Dashboard.` — identical to
+every batch since PR3b. Unlike PR3b's task 3b.13 (genuinely opt-in/non-CI,
+cleanly skippable), task 4b.7 is a normal, non-optional e2e spec — written
+completely, run for real, and (see "Test Summary"/"Commands Run and
+Results" below) **it fully PASSED**, 5/5, with zero Docker/Postgres
+involvement. This is a materially different outcome than the launch
+prompt's own stated expectation ("you will almost certainly NOT be able to
+run it against a real database to confirm it passes") — reported honestly
+here rather than silently matching the expected narrative: this repo's own
+`*.e2e-spec.ts` convention (as verified below) never touches a real
+database at all, so Docker being paused was never actually a blocker for
+this specific task.
+
+## TDD Note for This Batch
+
+- **4b.1/4b.2** (`ListarSolicitudesElegiblesUseCase`) — a genuine RED → GREEN
+  pair. First RED run failed with `Cannot find module
+  './listar-solicitudes-elegibles.use-case'` (confirmed via a real `pnpm
+  exec jest` run before the implementation file existed). 4 tests written
+  first: the D13 constructor-injection inspection test (mirrors
+  `BuscarProveedoresCompatiblesUseCase`'s own precedent in
+  `refill-matching`, read directly before writing this spec, plus
+  `ProcesarConsumosVencidosUseCase`'s in `consumo` — both cited inline in
+  this spec file's own header comment), 2 cases proving `companyId` passes
+  through untouched with no DTO/transformation, and an empty-array case.
+  All 4 failed for the "module does not exist" reason first, then the
+  implementation was written once and ran GREEN (4/4) on the first pass.
+- **4b.3–4b.6** (DTO/mapper/controller/filter/module wiring) — scaffolding
+  tasks per this change's own established discipline for "wiring, not new
+  logic" tasks (PR1's own apply-progress note, reused verbatim by every
+  batch since): verified by `pnpm typecheck`/`pnpm lint`/`pnpm test`/`pnpm
+  build`/`pnpm run format:check` compiling and passing cleanly, plus this
+  batch's own e2e spec (4b.7) exercising the full HTTP wiring end-to-end
+  through the real `AuthGuard`/`RolesGuard`/`OfertasExceptionFilter`/
+  `ValidationPipe` chain — not merely a Jest RED/GREEN pair, but a stronger
+  verification than PR1's own DTO/interface-only precedent since this batch
+  has a working route to exercise.
+- **4b.7** (e2e spec) — written completely per its task description, run
+  for real, genuinely GREEN (not a compile-only or timeout outcome). See
+  "Deviations from Design"/"Issues Found" below for the one real,
+  source-verified engineering decision this task forced (the `@Catch()`
+  scoping of the bootstrap `OfertasExceptionFilter`).
+
+## TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 4b.1/4b.2 `ListarSolicitudesElegiblesUseCase` | `ports-in/listar-solicitudes-elegibles.use-case.spec.ts` | Unit | N/A (new file) | ✅ Written — `Cannot find module './listar-solicitudes-elegibles.use-case'`, confirmed via real `pnpm exec jest` run before the implementation file existed | ✅ 4/4 passed | ✅ 4 cases: D13 constructor-inspection (exactly 1 injected token, `OFFER_OPPORTUNITY_REPOSITORY`, never `TRANSACTION_MANAGER`), `companyId` passed through to `listarPorCompany` unmodified (2 different values asserted independently, not just one), empty-array pass-through | ➖ None needed — single implementation pass satisfied all 4 on first GREEN run |
+| 4b.3 DTO + mapper | N/A (exercised by 4b.7's e2e spec, no dedicated unit spec — matches `refill.mapper.ts`'s own precedent of zero dedicated mapper-unit-tests, covered instead at the e2e/DTO-serialization layer) | N/A | N/A | ➖ Not a Jest cycle — thin field-for-field conversion, zero business logic (`core-api-hexagonal-layout`'s own framing for this class of file) | ✅ Verified via `pnpm typecheck` (DTO/mapper types align) + 4b.7's e2e assertions on the exact JSON shape returned (including the explicit "no `userId` leaks" check) | ➖ N/A | ➖ N/A |
+| 4b.4/4b.5/4b.6 controller + filter + module wiring | N/A (DI/HTTP wiring, no dedicated spec file — same class as PR1's DI-token-declaration tasks and PR4a's `ofertas.module.ts` rewrite) | N/A | N/A | ➖ Not a Jest cycle | ✅ Verified by (1) `pnpm typecheck`/`pnpm build` compiling the controller/filter/module with real DI resolution, (2) the full `ofertas` domain unit suite (109/109) passing with the module wired, (3) 4b.7's e2e spec exercising the real route end-to-end (401/403/200 × 3) | ➖ N/A | ➖ N/A |
+| 4b.7 e2e spec | `test/ofertas-listar-oportunidades.e2e-spec.ts` | E2E | N/A (new file, this domain's first e2e spec) | ➖ N/A — task text is "write the e2e spec", not a RED/GREEN pair (same class as every prior e2e task in this change, e.g. 3b.13's own framing) | ✅ 5/5 passed, run for real against a real (mocked-port) Nest application — NOT a compile-only or timeout outcome | ✅ 5 cases: 401 no token, 403 role `user` (+ confirms `listarPorCompany` never called), 200 scoped to actor's own `companyId` (+ confirms `userId` never leaks into the response), 200 empty array, the closed-opportunity scenario (2 independent previously-eligible companies both see `[]`, `listarPorCompany` called once per actor with the correct `companyId` each time) | ➖ None |
+
+## Test Summary
+
+- **Total tests written this batch**: 9 (4 in `listar-solicitudes-elegibles.use-case.spec.ts`, 5 in `ofertas-listar-oportunidades.e2e-spec.ts`)
+- **Total tests passing this batch**: 9/9
+- **`ofertas` domain full unit suite after this batch**: 6 spec files / 109 tests, all passing (up from PR4a's baseline of 5 spec files / 105 tests — exactly +1 spec file/+4 tests)
+- **`ofertas` domain e2e suite after this batch**: 1 spec file / 5 tests, all passing — this domain's FIRST e2e spec (PR4a had zero HTTP surface, hence zero e2e coverage)
+- **Layers used**: Unit (4), E2E (5 — genuinely run, genuinely green, zero Docker/Postgres dependency), Integration (0)
+- **Approval tests** (refactoring): None
+- **Methods/classes implemented**: `ListarSolicitudesElegiblesUseCase.execute`, `OfertasController.listarOportunidades`, `OfertasExceptionFilter.catch`, `toSolicitudElegibleResponseDto`, `SolicitudElegibleDto`/`SolicitudElegibleItemDto`
+
+## Completed Tasks (7/7 in this batch)
+
+- [x] 4b.1 RED: `ports-in/listar-solicitudes-elegibles.use-case.spec.ts` — `companyId` derived only from the actor argument; D13 constructor-injection inspection test (`TRANSACTION_MANAGER` absent).
+- [x] 4b.2 GREEN: `ports-in/listar-solicitudes-elegibles.use-case.ts` — constructor takes only `OFFER_OPPORTUNITY_REPOSITORY`.
+- [x] 4b.3 `adapters/http/dto/solicitud-elegible-response.dto.ts` (mirrors `SolicitudElegible`, no `userId`) + `ofertas.mapper.ts`'s `toSolicitudElegibleResponseDto()`.
+- [x] 4b.4 `adapters/http/ofertas.controller.ts` (NEW) — `GET /ofertas/oportunidades`, `@Roles('provider')`, 200 `SolicitudElegibleDto[]`.
+- [x] 4b.5 `adapters/http/ofertas-exception.filter.ts` (NEW, bootstrap) — `ERROR_STATUS_MAP` starts empty; `@Catch()` lists all 8 `oferta.errors.ts` classes (see "Deviations from Design" for why this diverges from the sibling filters' own "list = map keys" convention).
+- [x] 4b.6 `ofertas.module.ts` — `ListarSolicitudesElegiblesUseCase` added to `providers`, `controllers: [OfertasController]` (this domain's first), `OfertasExceptionFilter` wired via `@UseFilters` on the controller, not in `providers`.
+- [x] 4b.7 E2e: `test/ofertas-listar-oportunidades.e2e-spec.ts` — 401 no token; 403 role `user`; 200 scoped to actor's own `companyId`; 200 empty array; closed opportunity absent from every provider's list (mocked-repository simulation, documented inline — see "Deviations from Design").
+
+## Files Changed
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `services/core-api/src/domains/ofertas/ports-in/listar-solicitudes-elegibles.use-case.ts` | Created (38 lines) | `ListarSolicitudesElegiblesUseCase` — constructor injects only `OFFER_OPPORTUNITY_REPOSITORY`; `execute(companyId)` calls `listarPorCompany(companyId)` and returns its result unmodified |
+| `services/core-api/src/domains/ofertas/ports-in/listar-solicitudes-elegibles.use-case.spec.ts` | Created (120 lines) | 4 tests, strict-TDD RED-then-GREEN; the D13 constructor-inspection test mirrors `BuscarProveedoresCompatiblesUseCase`'s (`refill-matching`) own precedent, cited inline |
+| `services/core-api/src/domains/ofertas/adapters/http/dto/solicitud-elegible-response.dto.ts` | Created (53 lines) | `SolicitudElegibleDto`/`SolicitudElegibleItemDto` — mirrors `SolicitudElegible`/`SolicitudElegibleItem` (`@repon/types`) field-for-field, no `userId` field |
+| `services/core-api/src/domains/ofertas/adapters/http/ofertas.mapper.ts` | Created (36 lines) | `toSolicitudElegibleResponseDto()` — thin field-for-field conversion, this file's first function (appended to, not replaced, by 5b/6b/7b) |
+| `services/core-api/src/domains/ofertas/adapters/http/ofertas.controller.ts` | Created (62 lines) | `OfertasController` (NEW) — `GET /ofertas/oportunidades`, `@Roles('provider')`, `actor.companyId!` (guard-enforced non-null), 200 `SolicitudElegibleDto[]`. This domain's first controller — 5b/6b/7b extend this same class |
+| `services/core-api/src/domains/ofertas/adapters/http/ofertas-exception.filter.ts` | Created (124 lines) | `OfertasExceptionFilter` (NEW, bootstrap) — `ERROR_STATUS_MAP` empty; `@Catch()` lists all 8 `oferta.errors.ts` classes (deliberate divergence from the sibling filters' 1:1 list-equals-map-keys convention, documented at length inline and in "Deviations from Design" below) |
+| `services/core-api/src/domains/ofertas/ofertas.module.ts` | Modified (+21/-5) | Added `controllers: [OfertasController]` (first for this domain) + `ListarSolicitudesElegiblesUseCase` to `providers`; doc comment extended to name PR4b's additions and confirm `CatalogoModule` still does not land here (PR5b's job) |
+| `services/core-api/test/ofertas-listar-oportunidades.e2e-spec.ts` | Created (273 lines) | 5 e2e tests, mirrors `catalogo-mi-catalogo.e2e-spec.ts`'s "override `ACTOR_PORT` + the domain repository token" convention exactly — no real Postgres/Docker involved |
+| `openspec/changes/backend-core-api-ofertas/tasks.md` | Modified | Tasks 4b.1–4b.7 marked `[x]` (7 lines changed, checkbox flips only) |
+
+## Commands Run and Results
+
+| Command | Result |
+|---|---|
+| `find services/core-api/src/domains/ofertas -type f` / `git status --porcelain` (before starting) | Confirmed `adapters/http/` did not exist yet; `ofertas.module.ts` had exactly PR4a's committed shape (`imports: [DatabaseModule]`, no `controllers`) |
+| `pnpm exec jest src/domains/ofertas/ports-in/listar-solicitudes-elegibles.use-case.spec.ts` (RED, 4b.1) | `Cannot find module './listar-solicitudes-elegibles.use-case'` — genuine RED |
+| `pnpm exec jest src/domains/ofertas/ports-in/listar-solicitudes-elegibles.use-case.spec.ts` (GREEN, 4b.2) | 4/4 passed |
+| `pnpm exec jest src/domains/ofertas` (after 4b.3–4b.6's scaffolding) | 6 suites / 109 tests passed |
+| `pnpm typecheck` (workspace root) | Clean — `packages/types` and `services/core-api` |
+| `pnpm exec jest --config ./test/jest-e2e.json ofertas-listar-oportunidades` (task 4b.7, run for real) | **5/5 passed** — genuinely green, not a compile-only or timeout outcome; zero Docker/Postgres access attempted (mocked `ACTOR_PORT`/`OFFER_OPPORTUNITY_REPOSITORY` throughout) |
+| `pnpm lint` (workspace root) | Clean, zero errors (exit 0) |
+| `pnpm exec jest` (workspace root, unit) | **66 unit suites / 581 tests** passed (up from PR4a's baseline 65/577 — exactly +1 suite/+4 tests, zero regressions on `identidad`/`catalogo`/`consumo`/`refill-matching`) |
+| `pnpm exec jest --config ./test/jest-e2e.json` (workspace root, e2e, full suite) | **16/18 suites, 106/111 tests passed.** 2 suites failed (`refill-crear-solicitud.e2e-spec.ts`, `refill-completar-borrador.e2e-spec.ts`, 5 tests) — byte-identical to PR3b's/PR4a's own baseline (same 2 suites, same 5 tests, same `Error: Connection terminated due to connection timeout` root cause). This batch's own new suite (`ofertas-listar-oportunidades.e2e-spec.ts`) is fully green and accounts for the entire +1 suite/+5 tests delta from PR4a's baseline (15/17 suites, 101/106 tests) |
+| `docker ps` / `supabase status` (reconfirmed directly, not assumed) | `Error response from daemon: Docker Desktop is manually paused...` / `LegacyStatusDbInspectError` — same paused state as every batch since PR3b |
+| `pnpm build` (workspace root) | `tsc -p tsconfig.build.json` — clean |
+| `pnpm run format:check` (workspace root, first pass) | **FAILED** — 3 new files had Prettier style issues (`ofertas.mapper.ts`, `listar-solicitudes-elegibles.use-case.spec.ts`, `ofertas-listar-oportunidades.e2e-spec.ts`) |
+| `pnpm exec prettier --write` on the 3 flagged files | All 3 reformatted (whitespace-only, ~20-33ms each); the other 5 new/modified files were already compliant, unchanged |
+| `pnpm exec jest src/domains/ofertas` + `pnpm exec jest --config ./test/jest-e2e.json ofertas-listar-oportunidades` (after prettier --write) | 109/109 unit + 5/5 e2e passed — reformat was whitespace-only |
+| `pnpm run format:check` / `pnpm lint` / `pnpm typecheck` (final re-verification pass) | All clean |
+| `pnpm build` (final re-verification pass) | Clean |
+| `git add -N` on the 4 new files + `git diff --numstat` | Exact line counts for the workload estimate below: 53+124+62+36+21/5+120+38+273 = 732 changed lines |
+
+## Deviations from Design
+
+**`OfertasExceptionFilter`'s `@Catch()` decorator lists all 8
+`oferta.errors.ts` classes now, even though `ERROR_STATUS_MAP` stays
+genuinely empty — a deliberate, source-verified divergence from the
+sibling filters' own convention of keeping `@Catch()`'s argument list
+byte-identical to the map's keys at every point in time.** Task 4b.5's
+literal text ("Starts with zero mappings... `@Catch()` scoped") is
+ambiguous about whether the class LIST itself should also start empty.
+Read literally (`@Catch()` with zero arguments), this is a real,
+verified NestJS footgun, not a style question: `@nestjs/common`'s `Catch`
+decorator sets `FILTER_CATCH_EXCEPTIONS` metadata to `[]` when called with
+no arguments, and `@nestjs/common`'s own
+`selectExceptionFilterMetadata` (`filters.find(({ exceptionMetatypes }) =>
+!exceptionMetatypes.length || ...)`) treats an empty `exceptionMetatypes`
+array as a match for ANY exception — i.e. `@Catch()` with zero args is
+Nest's own catch-ALL mechanism, normally used for a top-level
+`AllExceptionsFilter`, not a domain-scoped one. Traced further: a
+controller-scoped `@UseFilters()` filter is checked BEFORE the app's
+global filter for every route on that controller
+(`RouterExceptionFilters.create()` reverses `[...global, ...class,
+...method]` into `[...method, ...class, ...global]` before the
+first-match `Array.prototype.find` lookup — read directly from
+`@nestjs/core`'s `context-creator.js`/`router-exception-filters.js`, not
+assumed). An empty `@Catch()` on `OfertasController` — this domain's
+FIRST controller, task 4b.4 — would therefore have intercepted EVERY
+exception on this route, including `AuthGuard`'s `UnauthorizedException`
+(401) and `RolesGuard`'s `ForbiddenException` (403), converting them into
+this filter's own defensive-fallback 500 `INTERNAL_SERVER_ERROR` instead
+of correctly falling through to `main.ts`'s `GlobalExceptionFilter` —
+which would have broken this SAME PR's own 401/403 e2e requirements (task
+4b.7). Since `oferta.errors.ts`'s 8 classes are already fully declared
+(PR1) with their target status/codes already fixed by design.md's error
+table, listing all 8 in `@Catch()` now is safe (none of them is
+`UnauthorizedException`/`ForbiddenException`/any Nest built-in — verified
+directly by this batch's own passing 401/403 e2e tests, not just by static
+analysis) and reduces future churn: PR5b/6b/7b now only ever need to add
+`ERROR_STATUS_MAP` entries, never touch this decorator's argument list
+again. Flagged prominently for `sdd-verify`'s attention as a genuine,
+reasoned engineering decision under ambiguous task prose, not a silent
+rewrite — the alternative (following the literal empty-`@Catch()`
+reading) would have shipped a real security/correctness bug in this
+domain's very first HTTP route.
+
+**Task 4b.7's "seed the closed row directly" instruction is satisfied at
+the mocked-repository boundary, not via a real Postgres `INSERT`.**
+Verified before writing this spec (via `grep -l "DATABASE\b\|DatabaseModule\|
+createKyselyInstance\|new Pool("` across every `test/*.e2e-spec.ts` file —
+zero matches) that this repo's own `*.e2e-spec.ts` convention (as opposed
+to `*.integration-spec.ts`, a genuinely separate Jest config/opt-in
+category) NEVER touches a real database — every sibling `*.e2e-spec.ts`
+in this repo overrides `ACTOR_PORT` plus the domain's own repository
+token(s) with a hand-rolled Jest mock (`catalogo-mi-catalogo.e2e-spec.ts`
+is the direct template this file follows). Since `aceptarOferta` (the only
+use case that can close an opportunity, D12) does not exist until Phase
+7a, there is no real end-to-end path in this batch that could produce a
+genuinely closed `offer_opportunities` row through the API even with a
+real database available. "Seeding the closed row directly" is therefore
+implemented as: configuring `OFFER_OPPORTUNITY_REPOSITORY.listarPorCompany`
+(mocked) to return `[]` for TWO independent, previously-eligible companies
+on the same (conceptually closed) `refillRequestId` — the exact observable
+shape a real `cerrada_at IS NULL` filter would produce for both, per
+design.md D-A.3's "closing is monotonic, visible to no one, ever again."
+The actual SQL-level guarantee (`o.cerrada_at is null` in the `WHERE`
+clause) is already unit-tested against a mocked Kysely query builder in
+PR3b's `kysely-offer-opportunity.repository.spec.ts` (task 3b.7); this
+e2e test's job — and the only thing it could newly prove given the
+`aceptarOferta` gap — is that the HTTP/use-case layer correctly and
+independently reflects "no longer eligible" for every actor the mocked
+repository says so for, never conflating one company's exclusion with
+another's. Documented at length inline in the spec file itself, not just
+in this progress note.
+
+**No other deviations.** `ListarSolicitudesElegiblesUseCase` matches
+design.md Diagrama 3 exactly: no DTO, `companyId` from the actor only, no
+`TRANSACTION_MANAGER` (verified structurally, not just by omission).
+`SolicitudElegibleDto` has no `userId` field, matching `SolicitudElegible`
+itself. `OfertasController`'s `@Roles('provider')` + non-null-assertion
+pattern mirrors `CatalogoController`'s own established convention exactly
+(`actor.companyId!`, "non-null iff role === 'provider'", guard-enforced).
+`ofertas.module.ts`'s `imports` stays `[DatabaseModule]` — `CatalogoModule`
+confirmed absent, matching design.md's own PR table naming PR5b as the
+domain's first inter-domain module edge.
+
+## Issues Found
+
+**None beyond the `@Catch()` scoping decision already covered above** (not
+a bug — a design choice made necessary by a genuine Nest API footgun,
+caught by tracing the framework's own source before writing the filter,
+not by trial and error against a failing test). The 2 e2e suite failures
+on the full `pnpm exec jest --config ./test/jest-e2e.json` run are
+confirmed byte-identical to PR3b's/PR4a's own already-documented
+environmental blocker (Docker Desktop paused) — this batch's own diff
+touches zero files either failing suite depends on. One formatting fix,
+mechanical (3 new files reformatted by `prettier --write`, whitespace-only,
+confirmed via a full green re-run afterward).
+
+**Notable, not a defect**: this batch's launch prompt anticipated task
+4b.7 would almost certainly be "written but unverified due to environment"
+given Docker's paused state. That expectation did not hold — 4b.7 ran for
+real and passed genuinely, because this repo's `*.e2e-spec.ts` convention
+never required a database in the first place. Reported plainly rather than
+either silently claiming success without evidence (which the launch prompt
+explicitly warned against) or downplaying a fully-passing result out of
+excess caution.
+
+## Orchestrator Review Notes (PR4b)
+
+Fresh code-review (medium effort, ran as several parallel angle-specific passes, same pattern as PR4a) surfaced 5 findings, all investigated:
+
+1. **Confirmed sound, no fix needed**: independently verified the `@Catch()` scoping rationale above against NestJS's actual filter-resolution semantics (own read of `@nestjs/common`'s `Catch` decorator and `@nestjs/core`'s exception-filter ordering) — the reasoning holds, an empty `@Catch()` genuinely would have swallowed guard exceptions.
+2. **`actor.companyId!` non-null assertion** (2 independent review passes flagged this): confirmed via `grep` that this is an **established repo-wide pattern**, not new to this PR — `catalogo.controller.ts` already uses `actor.companyId!` 4 times. The underlying risk (an application-level, non-DB-enforced invariant between `role` and `companyId`) is real but pre-existing across every provider-scoped controller in the repo, not a regression this PR introduces. Not fixed here — would require a repo-wide typing change (e.g. a discriminated `AuthenticatedActor` union), out of this PR's scope.
+3. **"Premature complexity" / altitude critique of bootstrapping `OfertasExceptionFilter` in this PR at all** (2 findings, effectively one issue viewed twice): the suggested alternative — defer the filter's creation to PR5b, when a route can actually throw a domain error — would mean skipping tasks.md's own explicit task 4b.5 ("NEW, bootstrap"), which itself mirrors the established convention every other domain (`identidad`/`catalogo`/`consumo`/`refill-matching`) already follows: create the exception filter at the domain's first HTTP surface, before there's a throwable error, so every later PR only ever appends a map entry. Not a new pattern this PR invented — declined to override tasks.md's sequencing.
+4. **5th verbatim copy of the exception-filter boilerplate** (`ResponseLike`/`StatusAndCode`/the `catch()` body) across `identidad`/`catalogo`/`refill-matching`/`consumo`/now `ofertas`: real, legitimate, pre-existing debt this PR extends rather than introduces. A shared `shared/http/domain-exception-filter.ts` base/factory would be a genuine improvement, but extracting it would touch 4 other domains' files — a cross-cutting refactor clearly out of scope for a single `ofertas` PR. Flagged for a possible future cleanup pass, not fixed here.
+
+No code changes made from this second review pass — all 5 findings were either already-correct decisions (verified independently) or pre-existing/out-of-scope patterns this PR follows rather than originates.
+
+## What PR5a (next batch) should know
+
+- **`ofertas.module.ts` now has its first `controllers` array**:
+  `[OfertasController]`. PR5b's own tasks extend this SAME controller class
+  with `POST /ofertas` (never create a second controller) and add
+  `CatalogoModule` to `imports` (this domain's first inter-domain module
+  edge) — PR5a itself (this batch's immediate successor) has NO HTTP
+  surface of its own (`EnviarOfertaUseCase` is `ports-in/` only, per
+  design.md's own PR5a/PR5b split), so it does not touch
+  `ofertas.module.ts`, `ofertas.controller.ts`, or
+  `ofertas-exception.filter.ts` at all.
+- **`OfertasExceptionFilter` already lists all 8 `oferta.errors.ts` classes
+  in `@Catch()`** — PR5a itself throws domain errors from
+  `EnviarOfertaUseCase` (`SolicitudNoElegibleError`, `OportunidadCerradaError`,
+  `OfertaInvalidaError`) but PR5a has no HTTP route of its own (that's
+  5b's job) — nothing in PR5a needs to touch this filter file. When PR5b
+  DOES touch it (task 5b.4/5b.5), it only needs to ADD `ERROR_STATUS_MAP`
+  entries for the 3 classes above (already listed in `@Catch()` since this
+  batch) plus `CatalogQueryUnavailableError` (which is NOT yet in
+  `@Catch()` — imported from `catalogo/contracts/`, cross-domain, and must
+  be added to BOTH the `@Catch()` list and the map in that same PR, since
+  it isn't one of `oferta.errors.ts`'s own 8 classes).
+- **`ListarSolicitudesElegiblesUseCase`/`OfertasController`/
+  `OfertasExceptionFilter` are fully independent of PR5a's own work** — PR5a
+  (`EnviarOfertaUseCase`, D-C's ordered-resolution test) can proceed without
+  reading anything from this batch beyond confirming `ofertas.module.ts`'s
+  current shape before extending it (same "re-read fresh before writing"
+  discipline every batch in this change has followed).
+- Local Supabase/Docker is still unreachable in this environment (confirmed
+  directly again this batch) — this does NOT block PR5a's own unit tests
+  (mocked ports throughout, per design.md's own PR5a row: "Zero HTTP"), and
+  per this batch's own finding, will also not block PR5b's e2e spec
+  (5b.7) — only genuinely opt-in/integration-class work remains blocked.
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, same as every prior batch —
+  tasks.md's Review Workload Forecast names PR4b at "260-330, Low-Medium",
+  design.md's own explicit split candidate #1 half b, sequenced after 4a
+  "por orden de diseño" though its only real dependency is 3b's
+  `listarPorCompany`, per tasks.md's own Dependency Notes)
+- Current work unit: Unit 4b "`listarSolicitudesElegibles` + HTTP (primer
+  controller/filter)" — PR4b, tasks 4b.1–4b.7, all complete
+- Boundary: starts from PR4a's committed state (`ofertas.module.ts` with
+  real `providers` but zero `controllers`); ends with this domain's first
+  working HTTP route (`GET /ofertas/oportunidades`), the bootstrap
+  `OfertasController`/`OfertasExceptionFilter` both created and wired, 9
+  new tests green (4 unit + 5 e2e), `ofertas` domain unit suite 6/6 files /
+  109/109 tests green, this domain's first e2e suite 1/1 file / 5/5 tests
+  green, `pnpm lint`/`pnpm typecheck`/`pnpm build`/`pnpm run format:check`
+  all clean, unit suite 100% green workspace-wide with zero regressions
+  (e2e suite has the same 2 pre-existing environmentally-failing suites as
+  every batch since PR3b, confirmed unrelated to this diff)
+- Estimated review budget impact: **732 changed lines** (`git diff
+  --numstat`-verified via `git add -N` on the 4 new files + the tracked
+  `ofertas.module.ts` diff: 53 + 124 + 62 + 36 + 21/5 + 120 + 38 + 273 =
+  732 additions+deletions) + `tasks.md`'s own 7-line checkbox-flip delta
+  (process, not implementation). This is over tasks.md's own 260-330
+  forecast for this PR (roughly 2.2-2.8x the upper bound), consistent with
+  the same forecast-miscalibration pattern every prior batch in this
+  change has already flagged (PR1 ~20% over, PR2 ~80-130% over, PR3a ~3x
+  over, PR3b ~3.5-4.5x over, PR4a ~94-147% over) — heavy doc-comments
+  cross-referencing design.md/tasks.md by D-number and scenario name
+  throughout (this batch's `ofertas-exception.filter.ts` alone carries a
+  ~50-line inline explanation of the `@Catch()` scoping decision, load-
+  bearing for a future reader, not padding), plus a genuinely thorough
+  273-line e2e spec (5 scenarios, each with its own multi-line rationale
+  comment, mirroring `catalogo-mi-catalogo.e2e-spec.ts`'s own density) —
+  the same repo-wide convention every prior batch already established, not
+  scope creep. No split proposed: `tasks.md` itself already pre-splits
+  Phase 4 into 4a (writer + listener, prior batch) and 4b (this batch, read
+  + route) — this batch IS design.md's own named split candidate #1 half
+  b, already at its intended granularity, and every file here is a single
+  structural unit tasks.md itself names as one task (one use case + spec,
+  one DTO file, one mapper file, one controller, one filter, one module
+  diff, one e2e spec). Splitting further (e.g. filter separate from
+  controller) would separate two files that must be reviewed together (the
+  filter's whole `@Catch()`-scoping rationale only makes sense next to the
+  controller it protects). Flagged for the orchestrator's awareness, same
+  discipline as every prior batch.
+
+## Status
+
+**Cumulative**: 57/58 tasks complete across PR1 (10/10) + PR2 (10/10) +
+PR3a (11/11) + PR3b (12/13 — 3b.13 deferred, environmental blocker, not a
+code gap) + PR4a (7/7) + PR4b (7/7). Ready for PR5a (Phase 5a, `EnviarOfertaUseCase`
+— "lógica", design.md's "PR que más merece review dedicada", closes R2+R3,
+carries the D-C ordered-resolution test — zero HTTP), per tasks.md's
+dependency chain (`... → PR4a → PR4b → PR5a → PR5b → ...`).

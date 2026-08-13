@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from '../../shared/database/database.module';
 import { MatchEncontradoListener } from './adapters/events/match-encontrado.listener';
+import { OfertasController } from './adapters/http/ofertas.controller';
 import { KyselyOfferOpportunityRepository } from './adapters/persistence/kysely-offer-opportunity.repository';
 import { KyselyOfferRepository } from './adapters/persistence/kysely-offer.repository';
+import { ListarSolicitudesElegiblesUseCase } from './ports-in/listar-solicitudes-elegibles.use-case';
 import { RegistrarOportunidadUseCase } from './ports-in/registrar-oportunidad.use-case';
 import { OFFER_OPPORTUNITY_REPOSITORY } from './ports-out/offer-opportunity-repository.port';
 import { OFFER_REPOSITORY } from './ports-out/offer-repository.port';
@@ -34,21 +36,35 @@ import { OFFER_REPOSITORY } from './ports-out/offer-repository.port';
  * `RefillAutoSolicitadoListener` already established in
  * `refill-matching.module.ts`.
  *
- * `exports: []`, deliberately (D15): this domain has no `contracts/` yet and
- * nothing else imports from it. `controllers` stays absent — the first HTTP
- * surface of this domain (`OfertasController`) is PR4b's job, not this one.
+ * **PR4b (tasks.md 4b.6) adds this domain's first `controllers` entry**:
+ * `OfertasController` (`GET /ofertas/oportunidades`) +
+ * `ListarSolicitudesElegiblesUseCase` in `providers`.
+ * `OfertasExceptionFilter` is deliberately NOT listed in `providers` — it
+ * has zero DI dependencies of its own, and `@UseFilters(OfertasExceptionFilter)`
+ * on the controller instantiates it directly, the exact same convention
+ * `RefillExceptionFilter`/`ConsumoExceptionFilter`/`CatalogoExceptionFilter`
+ * already established for their own domains.
  *
- * Every later PR EXTENDS this same `providers`/`imports` array, never
- * replaces this file (same discipline `refill-matching.module.ts`'s own doc
- * comment documents phase-by-phase).
+ * `imports` stays `[DatabaseModule]` — `CatalogoModule` is PR5b's edge
+ * (`EnviarOfertaUseCase`'s `CatalogQueryPort` need), not this PR's:
+ * `listarPorCompany` needs no catalog access.
+ *
+ * `exports: []`, deliberately (D15): this domain has no `contracts/` yet and
+ * nothing else imports from it.
+ *
+ * Every later PR EXTENDS this same `providers`/`imports`/`controllers`
+ * array, never replaces this file (same discipline
+ * `refill-matching.module.ts`'s own doc comment documents phase-by-phase).
  */
 @Module({
   imports: [DatabaseModule],
+  controllers: [OfertasController],
   providers: [
     { provide: OFFER_REPOSITORY, useClass: KyselyOfferRepository },
     { provide: OFFER_OPPORTUNITY_REPOSITORY, useClass: KyselyOfferOpportunityRepository },
     RegistrarOportunidadUseCase,
     MatchEncontradoListener,
+    ListarSolicitudesElegiblesUseCase,
   ],
   exports: [],
 })

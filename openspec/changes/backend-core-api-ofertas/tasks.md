@@ -141,13 +141,13 @@ Depends on Phase 3b's `reemplazar`. Design.md's explicit split candidate #1, hal
 
 Depends on Phase 3b's `listarPorCompany`. **First HTTP surface of this domain** — controller/filter created here, not extended, mirroring `refill-matching`'s 4b/`consumo`'s 2b precedent.
 
-- [ ] 4b.1 RED: `ports-in/listar-solicitudes-elegibles.use-case.spec.ts` — derives `companyId` only from the actor argument (no DTO input); constructor-injection inspection test: `TRANSACTION_MANAGER` absent (D13, `core-api-ofertas` Scenario "The two read use cases have no transaction manager injected" — first half; `obtenerBandeja` is the other half, Phase 7a).
-- [ ] 4b.2 GREEN: `ports-in/listar-solicitudes-elegibles.use-case.ts` — constructor takes only `OFFER_OPPORTUNITY_REPOSITORY`.
-- [ ] 4b.3 `adapters/http/dto/solicitud-elegible-response.dto.ts` (mirrors `SolicitudElegible`, no `userId` field — Diagram 3) + `ofertas.mapper.ts`: `toSolicitudElegibleResponseDto()`.
-- [ ] 4b.4 `adapters/http/ofertas.controller.ts` (NEW): `GET /ofertas/oportunidades`, `@Roles('provider')`, 200 `SolicitudElegibleDto[]`.
-- [ ] 4b.5 `adapters/http/ofertas-exception.filter.ts` (NEW, bootstrap): mirrors `RefillExceptionFilter`/`ConsumoExceptionFilter`/`CatalogoExceptionFilter` exactly — constructor-keyed map, `{ statusCode, code, message }` envelope, `@Catch()` scoped. Starts with **zero** mappings (this route throws no domain error); later PRs extend this same file's map incrementally, never replace it.
-- [ ] 4b.6 `ofertas.module.ts`: add `ListarSolicitudesElegiblesUseCase` + `OfertasController` + `OfertasExceptionFilter` (not in `providers` — `@UseFilters` instantiates it directly, same convention as the repo's other 3 filters).
-- [ ] 4b.7 E2e: `test/ofertas-listar-oportunidades.e2e-spec.ts` — 401 no token; 403 role `user`; 200 scoped to the actor's own `companyId` (`core-api-ofertas` Scenario "A provider sees only solicitudes where their own company is eligible"); a closed opportunity absent from every provider's list (Scenario "A closed opportunity does not appear in any provider's list" — seed the closed row directly since `aceptarOferta` doesn't exist until Phase 7, document why).
+- [x] 4b.1 RED: `ports-in/listar-solicitudes-elegibles.use-case.spec.ts` — derives `companyId` only from the actor argument (no DTO input); constructor-injection inspection test: `TRANSACTION_MANAGER` absent (D13, `core-api-ofertas` Scenario "The two read use cases have no transaction manager injected" — first half; `obtenerBandeja` is the other half, Phase 7a).
+- [x] 4b.2 GREEN: `ports-in/listar-solicitudes-elegibles.use-case.ts` — constructor takes only `OFFER_OPPORTUNITY_REPOSITORY`.
+- [x] 4b.3 `adapters/http/dto/solicitud-elegible-response.dto.ts` (mirrors `SolicitudElegible`, no `userId` field — Diagram 3) + `ofertas.mapper.ts`: `toSolicitudElegibleResponseDto()`.
+- [x] 4b.4 `adapters/http/ofertas.controller.ts` (NEW): `GET /ofertas/oportunidades`, `@Roles('provider')`, 200 `SolicitudElegibleDto[]`.
+- [x] 4b.5 `adapters/http/ofertas-exception.filter.ts` (NEW, bootstrap): mirrors `RefillExceptionFilter`/`ConsumoExceptionFilter`/`CatalogoExceptionFilter` exactly — constructor-keyed map, `{ statusCode, code, message }` envelope, `@Catch()` scoped. Starts with **zero** mappings (this route throws no domain error); later PRs extend this same file's map incrementally, never replace it.
+- [x] 4b.6 `ofertas.module.ts`: add `ListarSolicitudesElegiblesUseCase` + `OfertasController` + `OfertasExceptionFilter` (not in `providers` — `@UseFilters` instantiates it directly, same convention as the repo's other 3 filters).
+- [x] 4b.7 E2e: `test/ofertas-listar-oportunidades.e2e-spec.ts` — 401 no token; 403 role `user`; 200 scoped to the actor's own `companyId` (`core-api-ofertas` Scenario "A provider sees only solicitudes where their own company is eligible"); a closed opportunity absent from every provider's list (Scenario "A closed opportunity does not appear in any provider's list" — seed the closed row directly since `aceptarOferta` doesn't exist until Phase 7, document why).
 
 ## Phase 5a: Creación (lógica) — Spec: `core-api-ofertas`
 
