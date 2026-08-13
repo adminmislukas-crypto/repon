@@ -169,6 +169,18 @@ describe('crearOfertaReactiva', () => {
 
     expect(offer.total).toBe(17500);
   });
+
+  it('rejects a negative costoDespacho with OfertaInvalidaError — code-review finding on PR5a', () => {
+    expect(() =>
+      crearOfertaReactiva(
+        COMPANY_ID,
+        REFILL_REQUEST_ID,
+        [itemReactiva()],
+        entrega({ costoDespacho: -50000 }),
+        USER_ID,
+      ),
+    ).toThrow(OfertaInvalidaError);
+  });
 });
 
 // core-api-ofertas spec / tasks.md 2.3/2.4: crearOfertaProactiva() has no
@@ -249,6 +261,12 @@ describe('crearOfertaProactiva', () => {
     );
 
     expect(offer.total).toBe(13990);
+  });
+
+  it('rejects a negative costoDespacho with OfertaInvalidaError — code-review finding on PR5a', () => {
+    expect(() =>
+      crearOfertaProactiva(COMPANY_ID, USER_ID, [itemProactiva()], entrega({ costoDespacho: -1 })),
+    ).toThrow(OfertaInvalidaError);
   });
 });
 

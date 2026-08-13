@@ -1738,3 +1738,350 @@ code gap) + PR4a (7/7) + PR4b (7/7). Ready for PR5a (Phase 5a, `EnviarOfertaUseC
 — "lógica", design.md's "PR que más merece review dedicada", closes R2+R3,
 carries the D-C ordered-resolution test — zero HTTP), per tasks.md's
 dependency chain (`... → PR4a → PR4b → PR5a → PR5b → ...`).
+
+---
+
+# PR5a "Creación (lógica)" (Phase 5a, tasks 5a.1–5a.9)
+
+**Mode**: Strict TDD (project-wide `strict_tdd: true`, `openspec/config.yaml`)
+**Batch**: PR5a (Phase 5a, tasks 5a.1–5a.9) — SEVENTH apply batch. PR1's
+groundwork, PR2's domain layer, PR3a's `KyselyOfferRepository`, PR3b's
+`KyselyOfferOpportunityRepository`, PR4a's `RegistrarOportunidadUseCase`/
+`MatchEncontradoListener`, and PR4b's `ListarSolicitudesElegiblesUseCase`/
+`OfertasController`/`OfertasExceptionFilter` are all complete and available
+as-is (re-confirmed by reading `apply-progress.md` and `tasks.md` fresh
+immediately before this batch started, per this change's own established
+discipline). Design.md's own framing: this is **"el PR que más merece
+review dedicada"** in the entire 14-PR chain — it closes R2 (404
+cross-tenant/non-eligible, never 403) and R3 (the C2 ordering guarantee —
+the D-C test), and carries "the single most important test in the entire
+change" (D-C's ordered-resolution test, task 5a.5). **Zero HTTP surface**:
+`EnviarOfertaUseCase` is `ports-in/` only — this batch does NOT touch
+`ofertas.module.ts`, `ofertas.controller.ts`, or
+`ofertas-exception.filter.ts` at all (confirmed via `git status` before and
+after this batch: only the 4 new files below are in the diff).
+
+## TDD Note for This Batch
+
+Genuinely strict-TDD, but in the **"write many failing tests first, then
+implement once"** shape tasks.md itself names explicitly for this phase —
+NOT 7 separate RED/GREEN pairs. Tasks 5a.2 through 5a.8 are all RED steps
+that built up ONE shared spec file
+(`ports-in/enviar-oferta.use-case.spec.ts`, 18 tests across 7 `describe`
+blocks) before task 5a.9's single GREEN implementation
+(`ports-in/enviar-oferta.use-case.ts`). The RED run failed with `Cannot
+find module './enviar-oferta.use-case'` — the file did not exist yet, a
+genuine RED, not merely a failing assertion. The single GREEN
+implementation pass then made all 18 tests pass on the first run (no
+iteration needed) — verified by running the spec file in isolation
+immediately after writing the implementation, then again after the
+project-wide `prettier --write` reformat, and a third time as part of the
+full unit suite.
+
+Task 5a.1 (`events/oferta-enviada.payload.ts` + `.event.ts`) has no
+dedicated Jest spec — same precedent as every other `.event.ts`/`.payload.ts`
+pair in the repo (`MatchEncontrado`, `RefillCreado`, `DosisRegistrada`,
+etc.): plain interface + a 3-line `DomainEvent` implementer with no branch
+logic, verified by `pnpm typecheck` compiling and by the use case's own
+tests asserting the published event's exact shape (this batch's "publishes
+OfertaEnviada only AFTER save (commit) resolves" test asserts
+`publishedEvent.payload` field-by-field).
+
+## TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 5a.1 events/payload | N/A — no dedicated spec (repo-wide precedent for `.event.ts`/`.payload.ts` pairs) | N/A | N/A | ➖ | ✅ `pnpm typecheck` clean; shape asserted transitively by 5a.8's "publishes OfertaEnviada" test | ➖ | ➖ |
+| 5a.2 D18-1 (404 byte-identical) | `ports-in/enviar-oferta.use-case.spec.ts` | Unit | N/A (new file) | ✅ Written — `Cannot find module './enviar-oferta.use-case'` | ✅ (see 5a.9 row — one shared GREEN pass) | ✅ 3 cases (null→404, byte-identical-error assertion via `Promise.all` + `toEqual`, zero-write-on-reject) | ➖ |
+| 5a.3 Q4 (409 after eligibility) | same file | Unit | ✅ (grows cumulatively as each RED task's tests are added) | ✅ Written | ✅ (5a.9) | ✅ 3 cases (closed→409, non-eligible-on-closed still 404, zero-write-on-reject) | ➖ |
+| 5a.4 item membership (400) | same file | Unit | ✅ | ✅ Written | ✅ (5a.9) | ✅ 2 cases (foreign refillItemId rejected, zero-write-on-reject) | ➖ |
+| 5a.5 D-C ordered-resolution | same file | Unit | ✅ | ✅ Written — near-verbatim from design.md's own D-C snippet | ✅ (5a.9) | ✅ 1 case, standalone (per tasks.md's own instruction not to fold it into another scenario) | ➖ |
+| 5a.6 catalog outage propagates | same file | Unit | ✅ | ✅ Written | ✅ (5a.9) | ✅ 1 case (uncaught + zero-write) | ➖ |
+| 5a.7 D-G.2 hard rule + ceiling | same file | Unit | ✅ | ✅ Written | ✅ (5a.9) | ✅ 4 cases (no-live-match rejected, non-isAlt-over-ceiling rejected, isAlt-over-ceiling accepted, zero-write-on-reject) | ➖ |
+| 5a.8 happy path | same file | Unit | ✅ | ✅ Written | ✅ (5a.9) | ✅ 4 cases (user_id from projection, total computation, publish-after-save ordering + exact payload shape, sendPush best-effort after publish) | ➖ |
+| 5a.9 GREEN | `ports-in/enviar-oferta.use-case.ts` | Unit | ✅ 18/18 (all of 5a.2-5a.8's tests, run together) | N/A — this is the GREEN step | ✅ 18/18 passed on the FIRST run, no iteration needed | N/A | ➖ None — implementation matched the spec on the first pass; only a mechanical `prettier --write` reformat afterward (whitespace-only, re-verified green) |
+
+## Test Summary
+
+- **Total tests written**: 18 (all in `ports-in/enviar-oferta.use-case.spec.ts`, one file, 7 `describe` blocks: D18-1 3, Q4 3, item-membership 2, D-C 1, catalog-outage 1, D-G.2 4, happy-path 4)
+- **Total tests passing**: 18/18
+- **Layers used**: Unit (18), Integration (0), E2E (0) — matches design.md's own PR5a row ("Zero HTTP")
+- **Approval tests** (refactoring): None — no refactoring tasks, 100% new production code
+- **New production code**: 1 use case class (`EnviarOfertaUseCase`, 6 injected ports/tokens), 1 event class (`OfertaEnviada`), 1 payload interface (`OfertaEnviadaPayload`)
+
+## Completed Tasks (9/9 in this batch)
+
+- [x] 5a.1 `events/oferta-enviada.payload.ts` + `events/oferta-enviada.event.ts` — `OfertaEnviadaPayload` (`offerId`, `kind`, `companyId`, `userId`, `refillRequestId: string | null`, `total`, `tiempoEntregaHoras`), `type = 'ofertas.oferta_enviada'`, payload nested under `.payload`.
+- [x] 5a.2 RED (D18-1): non-eligible company → `SolicitudNoElegibleError`; nonexistent `refillRequestId` → the same error, byte-identical.
+- [x] 5a.3 RED (extend, Q4): closed opportunity → `OportunidadCerradaError`/409, checked after eligibility.
+- [x] 5a.4 RED (extend): foreign `refillItemId` → `OfertaInvalidaError`/400, rejected before any write.
+- [x] 5a.5 RED (extend, D-C/Q7/R3): the ordered-resolution test, standalone.
+- [x] 5a.6 RED (extend): `CatalogQueryUnavailableError` propagates uncaught.
+- [x] 5a.7 RED (extend, D-G.2): hard rule (no live match → rejected) + techo de precio (non-isAlt over `precioMaximo` → rejected; isAlt over `precioMaximo` → NOT rejected).
+- [x] 5a.8 RED (extend): happy path — `user_id` from the projection, `total` in the domain, `publish` after commit, `sendPush` best-effort.
+- [x] 5a.9 GREEN: `ports-in/enviar-oferta.use-case.ts` implementing Diagram 2's exact 10-step order; 18/18 green on the first run.
+
+## Files Changed
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `services/core-api/src/domains/ofertas/events/oferta-enviada.payload.ts` | Created | `OfertaEnviadaPayload` interface — 7 fields verbatim D6, `refillRequestId: string \| null` documented as the D18-3 negative the `refill-matching` listener (Phase 8a) branches on |
+| `services/core-api/src/domains/ofertas/events/oferta-enviada.event.ts` | Created | `OfertaEnviada implements DomainEvent` — `type = 'ofertas.oferta_enviada'`, payload nested under `.payload`, mirrors `MatchEncontrado`'s exact shape |
+| `services/core-api/src/domains/ofertas/ports-in/enviar-oferta.use-case.spec.ts` | Created (~400 lines) | 18 tests across 7 `describe` blocks, all RED-first per D18, triangulated with 1-4 cases per behavior |
+| `services/core-api/src/domains/ofertas/ports-in/enviar-oferta.use-case.ts` | Created (~200 lines) | `EnviarOfertaUseCase` — 6-token constructor (`OFFER_OPPORTUNITY_REPOSITORY`, `OFFER_REPOSITORY`, `CATALOG_QUERY_PORT`, `TRANSACTION_MANAGER`, `EVENT_PUBLISHER`, `NOTIFICATION_PORT`), Diagram 2's exact 10-step order |
+| `openspec/changes/backend-core-api-ofertas/tasks.md` | Modified | Tasks 5a.1–5a.9 marked `[x]` (9 lines changed, checkbox flips only) |
+
+## Commands Run and Results
+
+| Command | Result |
+|---|---|
+| `git status --porcelain services/core-api/src/domains/ofertas/` (before starting) | Confirmed PR4b's state (module/controller/filter present, no `events/oferta-enviada.*`, no `enviar-oferta.use-case.*`) |
+| `pnpm jest src/domains/ofertas/ports-in/enviar-oferta.use-case.spec.ts` (RED, before the use case file existed) | `Cannot find module './enviar-oferta.use-case'` — genuine RED, not a failing assertion |
+| `pnpm jest src/domains/ofertas/ports-in/enviar-oferta.use-case.spec.ts` (GREEN, after 5a.9's implementation) | 18/18 passed, first run |
+| `pnpm typecheck` (workspace root) | Clean — both `packages/types` and `services/core-api` |
+| `pnpm lint` (workspace root, first pass) | **FAILED** — 1 error: `CATALOG_QUERY_PORT` imported but unused in the spec file (only its type + `CatalogQueryUnavailableError` were actually used) |
+| Fixed: removed the unused `CATALOG_QUERY_PORT` value import from the spec file, kept `type CatalogQueryPort` + `CatalogQueryUnavailableError` | — |
+| `pnpm lint` (workspace root, second pass) | Clean |
+| `pnpm run format:check` (workspace root, first pass) | **FAILED** — both new `ports-in/` files had Prettier line-wrapping issues |
+| `pnpm exec prettier --write` on all 4 new files | 2 files reformatted (whitespace-only), 2 unchanged (already compliant) |
+| `pnpm jest src/domains/ofertas/ports-in/enviar-oferta.use-case.spec.ts` (after prettier --write) | 18/18 passed — reformat was whitespace-only |
+| `pnpm lint` / `pnpm typecheck` / `pnpm run format:check` (workspace root, final pass) | All clean |
+| `pnpm exec jest` (services/core-api, unit-only) | **67 unit suites / 599 tests** passed — up from PR4b's cumulative baseline by exactly +1 suite/+18 tests, zero regressions on `identidad`/`catalogo`/`consumo`/`refill-matching`/the rest of `ofertas` |
+| `pnpm --filter core-api test` (unit + e2e) | Unit portion clean (599/599); e2e portion: **2 suites / 5 tests failed**, all in `test/refill-completar-borrador.e2e-spec.ts` (`refill-matching` domain) with `Error: Connection terminated due to connection timeout` |
+| `docker ps` | `Error response from daemon: Docker Desktop is manually paused. Unpause it through the Whale menu or Dashboard.` |
+| `supabase status` | `LegacyStatusDbInspectError` — same Docker-paused root cause |
+| `git status --porcelain services/core-api/ openspec/` (after the e2e failure, to rule out this batch's diff) | Only the 4 new `ofertas` files + `tasks.md`'s checkbox flips — **zero files under `refill-matching/` touched by this batch** |
+
+## Deviations from Design
+
+**None from design.md's Diagram 2 sequence itself.** One genuine judgment
+call, made explicit here because neither `design.md` nor
+`specs/core-api-ofertas/spec.md` pins down the exact mechanism, and I want
+`sdd-verify`/a human reviewer to check it deliberately rather than discover
+it silently:
+
+**How "an item with no live match in the catalog result" (task 5a.7's hard
+rule, design.md D-G.2 rule 1) is correlated.** `CatalogQueryPort.buscarCoincidencias`
+returns a flat, deduplicated `ProviderCatalogItem[]` — it does NOT preserve
+which `RefillItem` in `itemsSolicitados` each returned item matched
+(verified by reading `KyselyCatalogQueryAdapter.buscarCoincidencias`'s real
+implementation: the query is a single `OR`-combined `WHERE` across all
+requested items, C6's "one round trip", with no per-item tagging in the
+result rows). Neither `design.md` nor the approved `core-api-ofertas`
+spec.md scenario list names the exact correlation mechanism — searched both
+directly; the "hard rule" is design.md's own prose addition (its own
+reconciliation table row 10: "Ningún spec cubre qué hace `enviarOferta` con
+el resultado del puerto... design agrega"), with no Given/When/Then
+scenario pinning the arithmetic/matching key down.
+
+Implemented as: for each offer item, resolve its underlying `RefillItem`
+(via `refillItemId`, already validated to exist in step 6), then require
+`matches` to contain at least one `ProviderCatalogItem` correlated by
+`catalogProductId` (exact match) when the `RefillItem` carries one, else by
+`categoria` — **the same two branches `CatalogQueryPort`'s own C7 doc
+comment already uses** ("catalogProductId presente ⇒ match exacto...
+ausente ⇒ categoria exacta + nombre por trigram"). `nombre`-trigram
+similarity itself is NOT reproduced client-side in the use case (it is a
+Postgres `ilike`/pg_trgm operation, not something to duplicate outside the
+adapter) — `categoria` is the reliable, always-populated correlating field
+available on both sides regardless of which C7 branch produced a given
+match. This is the most defensible, minimal-scope reading available given
+the two named behaviors design.md explicitly wants observable (a suspended
+provider → zero matches → every item fails; a stale/removed catalog line →
+that specific item fails) without reimplementing fuzzy matching inside
+`ports-in/`. **Flagged explicitly for `sdd-verify`/a human reviewer**:
+this correlation rule has no dedicated spec.md scenario today: if
+product/design wants a different or more precise correlation (e.g. requiring
+`catalogProductId` presence on every reactiva `RefillItem`, removing the
+`categoria`-fallback branch entirely), that is a design decision this batch
+surfaces rather than resolves unilaterally.
+
+**`total()` is not called a second time from the use case.** Design.md
+Diagrama 2 step 9 reads "total = suma(precios) + costoDespacho <- dominio
+puro" as a step distinct from step 10's `runInTransaction`. PR2's own
+`crearOfertaReactiva` factory already computes `total` internally (calls
+`total()` itself, per `offer.entity.ts` line 81) as part of building the
+`Offer`. Building the `Offer` via `crearOfertaReactiva` — which this use
+case does at what corresponds to step 9, strictly before `runInTransaction`
+— already satisfies "total computed in the domain, before the transaction
+opens" without a redundant second call. Confirmed via the "computes total
+in the domain" test (`offer.total === item.precio + entrega.costoDespacho`).
+Not a deviation from the design's OBSERVABLE order (total is still computed
+before the tx opens); only a note that no separate `total(items,
+costoDespacho)` call site exists in this file beyond the factory's own
+internal one.
+
+**Constructor signature confirmed against Diagrama 2, not the D-C section's
+inline pseudocode.** Design.md's D-C section's own test snippet writes
+`useCase.execute(actor, refillRequestId, items, entrega)` (passing `actor`
+as the first argument), while Diagrama 2 itself explicitly shows
+`execute(actor.companyId, refillRequestId, items, entrega)` and states "el
+caso de uso recibe `actor.companyId` como parámetro plano" — this batch's
+own launch prompt also confirmed this reading explicitly. Implemented
+`execute(companyId: string, refillRequestId: string, items, entrega)`,
+matching both Diagrama 2 and `ofertas/SPEC.md`'s own raw signature
+(`enviarOferta(companyId: string, refillRequestId: string, items:
+NuevoOfferItem[], entrega: DatosEntrega): Promise<Offer>`) — the D-C
+section's `actor` in its illustrative snippet is resolved in favor of the
+more precise, spec-matching Diagrama 2 signature, not a literal
+contradiction to preserve.
+
+**No other deviations.** Every check in Diagram 2 (steps 3-12) is
+implemented in the exact stated order: `findElegible` (no tx) → 404 → 409
+→ item-membership 400 → `buscarCoincidencias` (outside any tx, uncaught on
+failure) → hard-rule/ceiling 400s → `crearOfertaReactiva` (which computes
+`total`) → `runInTransaction{save}` → publish → `sendPush` best-effort.
+
+## Issues Found
+
+**One lint error, mechanical, fixed before considering this batch
+done**: the spec file imported the `CATALOG_QUERY_PORT` Symbol value but
+never used it directly (only `CatalogQueryUnavailableError` and the
+`CatalogQueryPort` type were actually referenced) — `@typescript-eslint/no-unused-vars`
+caught it. Fixed by removing the unused import; zero behavior change.
+
+**One formatting fix, mechanical.** Both new `ports-in/` files had a few
+Prettier line-wrapping preferences on multi-line object literals/JSDoc;
+`prettier --write` fixed both automatically, confirmed whitespace-only by
+re-running the 18-test suite green immediately after.
+
+**2 e2e suites fail — same pre-existing Docker-paused environmental
+blocker every batch since PR3b has documented, NOT caused by this batch.**
+`test/refill-completar-borrador.e2e-spec.ts` (entirely inside
+`refill-matching`, a domain this batch's diff never touches) fails 5 tests
+with `Error: Connection terminated due to connection timeout` because
+`docker ps`/`supabase status` both confirm Docker Desktop is manually
+paused in this environment (identical root cause PR3b's 3b.13, PR4a, and
+PR4b's own apply-progress notes already named). `git status --porcelain`
+after the failing run confirms this batch's diff is exactly the 4 new
+`ofertas` files + `tasks.md`'s checkbox flips — zero files under
+`refill-matching/` were touched. This batch has **zero HTTP/e2e surface of
+its own** (`EnviarOfertaUseCase` is `ports-in/` only, per design.md's own
+PR5a/PR5b split), so there is no e2e spec in this batch's own scope to be
+affected either way. The unit suite (the layer this batch's own 18 tests
+belong to) is 100% green: 67/67 suites, 599/599 tests.
+
+## What PR5b (next batch) should know
+
+- **`EnviarOfertaUseCase` exists at `ports-in/enviar-oferta.use-case.ts`,
+  fully implemented and tested (18/18), with ZERO HTTP wiring** —
+  `ofertas.module.ts` does not register it yet (PR5b's job: register the
+  provider AND add `CatalogoModule` to `imports`, this domain's first
+  inter-domain module edge). `ofertas.controller.ts` does not have a
+  `POST /ofertas` route yet. `ofertas-exception.filter.ts` does not map any
+  of `SolicitudNoElegibleError`/`OportunidadCerradaError`/`OfertaInvalidaError`/
+  `CatalogQueryUnavailableError` yet — per PR4b's own note, `@Catch()`
+  already lists all 8 `oferta.errors.ts` classes (PR4b's bootstrap
+  decision), so PR5b's task 5b.4/5b.5 only needs to ADD `ERROR_STATUS_MAP`
+  entries for these 3 (`SolicitudNoElegibleError`→404, `OportunidadCerradaError`→409,
+  `OfertaInvalidaError`→400) plus `CatalogQueryUnavailableError`→503 (which
+  is NOT one of `oferta.errors.ts`'s 8 classes — imported from
+  `catalogo/contracts/`, so it needs adding to BOTH the `@Catch()` list AND
+  the map in the same PR).
+- **The use case's signature is `execute(companyId, refillRequestId, items:
+  readonly NuevoOfferItemReactiva[], entrega): Promise<Offer>`** — PR5b's
+  DTO (`dto/enviar-oferta.dto.ts`, `{ refillRequestId, items, entrega }`,
+  no `companyId` per D11) maps directly to this; `actor.companyId` is
+  passed as the first positional arg at the controller call site, same
+  pattern `OfertasController`'s existing `GET /ofertas/oportunidades` route
+  (PR4b) already established for `actor.companyId!`.
+  `NuevoOfferItemDto[]`'s validated/class-transformed shape needs to be
+  assignable to `readonly NuevoOfferItemReactiva[]` — no adaptation
+  expected since the DTO layer already knows this route is reactiva-only.
+- **The `OfertaEnviada` event is published with `refillRequestId` always
+  non-null** in this PR (reactiva path only) — PR6b's
+  `EnviarOfertaProactivaUseCase` will publish the same event class/payload
+  shape with `refillRequestId: null`, the D18-3 negative the
+  `refill-matching` listener (Phase 8a) branches on. Nothing in this file
+  needs to change for that — the payload's `refillRequestId: string | null`
+  type already accommodates it.
+- **The D-G.2 hard-rule/ceiling correlation logic (categoria/catalogProductId-based)
+  lives entirely inside `EnviarOfertaUseCase`, not in any shared helper** —
+  PR6b's `EnviarOfertaProactivaUseCase` has its OWN cardinality-based
+  validation per design.md D-B ("el caller compara cardinalidades"), a
+  genuinely different rule (fewer items returned than requested, not a
+  per-item categoria/catalogProductId correlation), so this is NOT expected
+  to be extracted/reused as-is — flagged so PR6b doesn't assume a shared
+  function exists.
+- **Local Docker/Supabase is still unreachable in this environment**
+  (re-confirmed this batch) — does not block PR5b's own unit tests (mocked
+  ports) nor, per PR4b's own precedent, its e2e spec (this repo's
+  `*.e2e-spec.ts` convention never touches a real database — see PR4b's own
+  finding on this). Only genuinely opt-in/integration-class work (3b.13)
+  remains blocked.
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, same as every prior batch —
+  tasks.md's Review Workload Forecast names PR5a at "300-380,
+  Medium-High")
+- Current work unit: Unit 5a "`enviarOferta` (lógica + el test de orden
+  C2)" — PR5a, tasks 5a.1–5a.9, all complete
+- Boundary: starts from PR4b's committed state (`ofertas.module.ts`/
+  `ofertas.controller.ts`/`ofertas-exception.filter.ts` all present with
+  only the discovery-read route wired, zero `enviarOferta` surface
+  anywhere); ends with `EnviarOfertaUseCase` fully implemented and tested
+  (18/18, zero HTTP), `pnpm lint`/`pnpm typecheck`/`pnpm run format:check`
+  all clean, unit suite 100% green workspace-wide (67/67 suites, 599/599
+  tests, +1 suite/+18 tests over PR4b's baseline, zero regressions) — the
+  2 e2e failures are the same pre-existing Docker-paused blocker every
+  batch since PR3b has already documented, confirmed unrelated to this
+  batch's diff by `git status`
+- Estimated review budget impact: **~600 changed lines** (`enviar-oferta.use-case.ts`
+  ~200 lines + `enviar-oferta.use-case.spec.ts` ~400 lines + the 2 small
+  event/payload files ~35 lines combined) + `tasks.md`'s own 9-line
+  checkbox-flip delta (process, not implementation). Within tasks.md's own
+  300-380 forecast's general order of magnitude but likely somewhat over
+  the upper bound, consistent with the same forecast-miscalibration pattern
+  every prior batch in this change has already flagged (heavy doc-comments
+  cross-referencing design.md/tasks.md by D-number and scenario name
+  throughout — this batch's use case file alone carries a ~75-line JSDoc
+  walking through Diagram 2's 10 steps, load-bearing for the reviewer this
+  PR is explicitly meant to scrutinize most closely, not padding). No split
+  proposed: design.md's own PR table already names this PR5a as its own
+  unit ("lógica" only, HTTP deferred to 5b) — the smallest coherent slice
+  that still lets a reviewer see the full C2 ordering guarantee (the use
+  case body) next to the test that proves it (the D-C test) in one diff.
+  Flagged for the orchestrator's awareness, same discipline as every prior
+  batch.
+
+## Orchestrator Review Notes (PR5a)
+
+Given design.md's own framing of this PR as the one that "más merece review dedicada," ran code-review at **high** effort (vs. medium for prior PRs). 8 findings, all investigated individually against the actual source.
+
+**Fixed** (2, both cheap and unambiguous):
+
+1. **Duplicate `refillItemId` within one offer was never rejected.** Two lines for the same `refillItemId` both passed the membership/catalog checks independently, and `total()` would silently sum both — doubling the persisted total with no error. Fixed in `enviar-oferta.use-case.ts`'s step-6 loop with a `Set`-based check, rejected before any catalog call or write. 2 new tests added (`A duplicate refillItemId within the same offer is rejected before any write`).
+2. **`costoDespacho` was never validated** in `crearOfertaReactiva`/`crearOfertaProactiva` (PR2's own code) — a negative value would flow straight into `total()` and produce an `Offer` with a negative total, with no DTO layer yet (PR5b) to catch it first. Fixed by adding `assertEntregaValida()` to `offer.entity.ts`, called from both factories. 2 new tests added (one per factory). Same precedent as PR3a's fix to a PR1 defect — a real, cheap, well-scoped correction to already-committed code, verified safe and re-tested.
+
+All fixes verified: 131/131 tests in the `ofertas` domain (up from 127), 603/603 workspace-wide (up from 599), `pnpm lint`/`pnpm typecheck`/`pnpm run format:check`/`pnpm build` all clean.
+
+**Investigated, NOT fixed, needs a decision — surfaced to the user rather than resolved unilaterally:**
+
+3. **The categoria-based catalog-match correlation (D-G.2's "hard rule", step 8) can attribute a match to the wrong item, or accept an item the provider does not actually carry.** `buscarCoincidencias(oportunidad.items, companyId)` runs one OR'd SQL query across all requested items (`(categoria AND nombre ILIKE) OR (categoria AND nombre ILIKE) OR ...`, per `kysely-catalog-query.adapter.ts`) and returns a single flat, deduplicated pool with NO per-item correlation. Concrete scenario a reviewer verified: item A (categoria=alimento, nombre='Royal Canin') and item B (categoria=alimento, nombre='Whiskas') are both requested; the provider's catalog has ONLY Royal Canin. `matches` = `[RoyalCaninRow]` (present only because of item A's own nombre match). The use case's correlation (`catalogProductId` if present, else `categoria` equality) finds `RoyalCaninRow` for item B too — since it only re-checks `categoria`, never `nombre` — so item B (Whiskas, which this provider does NOT sell) passes the hard-match rule and gets its price validated against Royal Canin's `precioMaximo`, not rejected as it should be.
+   - This is confirmed **reachable** (verified: no uniqueness constraint on `categoria` within a solicitud's items — a user can request 2 items in the same category).
+   - It is **not fixable within this use case alone**: the only correct fix requires either (a) a contract change to `catalogo`'s frozen `CatalogQueryPort` to return per-item correlation (the kind of `contracts/` delta this proposal already restricts to D9's one already-used exception), or (b) reproducing Postgres's `pg_trgm` nombre-similarity matching in application code, which is not a faithful reproduction and would risk giving false confidence.
+   - The categoria-only heuristic is not something this batch invented carelessly — it mirrors the best available signal given `buscarCoincidencias`'s existing (frozen) contract, and the alternative the proposal's own D9 already rejected ("armar `RefillItem`s falsos" to abuse `buscarCoincidencias`'s fuzzy matching) applies here too.
+   - **Left in place, undocumented risk elevated to explicit**: the code's own doc comment already named this as a "genuine design gap... flagged for sdd-verify," but a reviewer confirmed a concrete failure scenario, not just a hypothetical ambiguity — this deserves human visibility before the chain proceeds much further, since PR6b (`enviarOfertaProactiva`) will exercise a related but distinct code path (`obtenerItemsDeProveedor`, which IS exact-id-based and does NOT have this problem — D9's method takes ids directly, no fuzzy correlation).
+
+**Investigated, confirmed low-severity, correctly left unfixed (5):**
+
+4. Near-identical `crearOfertaReactiva`/`crearOfertaProactiva` factories with `userId` at different positional argument slots — a maintainability footgun for a future refactor, not a live bug today. Restructuring the signatures is a design change beyond this PR's scope.
+5. `groupRowsByOfferId`/`groupRowsByRefillRequestId` duplication — already flagged in PR3b/PR4a's own review notes, same pre-existing, out-of-scope cross-file debt.
+6. `offer_opportunity_items_refill_request_id_idx` lacks the `where vigente` partial predicate that its sibling `offer_opportunity_companies` index has — a real efficiency gap in PR1's already-applied migration. Not fixed: this repo's fix-forward convention means an applied migration is never edited; correcting the index would need a new migration, which is a larger, separate change outside this PR's scope.
+7. `OfertaEnviadaPayload` is built from local variables instead of read off the constructed `offer` entity — currently correct (no divergence exists), but fragile if `crearOfertaReactiva` ever normalizes a field. Low severity, flagged for awareness.
+8. Test-mock-builder duplication across spec files (`buildOpportunityRepository`, etc.) — pre-existing test-code debt, same category as prior PRs' reuse findings, not fixed.
+
+## Status
+
+**Cumulative**: 66/67 tasks complete across PR1 (10/10) + PR2 (10/10) +
+PR3a (11/11) + PR3b (12/13 — 3b.13 deferred, environmental blocker, not a
+code gap) + PR4a (7/7) + PR4b (7/7) + PR5a (9/9, plus 2 orchestrator fixes
+for real defects found in dedicated high-effort review). Ready for PR5b
+(Phase 5b, "Creación (HTTP)" — DTOs, `POST /ofertas`, the 4 filter
+mappings, `CatalogoModule` import, e2e), per tasks.md's dependency chain
+(`... → PR5a → PR5b → {PR6a, independent} → PR6b → ...`). **Finding #3
+above (catalog-match correlation) is pending a decision from the user
+before being considered closed — not blocking PR5b/PR6a mechanically, but
+material to PR6b's own review since it uses a related but distinct,
+unaffected code path.**

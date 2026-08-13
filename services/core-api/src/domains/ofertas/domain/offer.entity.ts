@@ -44,6 +44,21 @@ function assertItemValido(item: ItemValidable): void {
   }
 }
 
+// El dominio no confía en el tipo TS de ningún caller (mismo criterio que
+// assertItemValido, arriba): `DatosEntrega.costoDespacho` es `number` a
+// nivel de tipo pero nada impide que un caller pase un valor negativo o
+// no-finito antes de que exista una capa de DTO/class-validator (Phase
+// 4b/5b). `total()` lo suma directo al total persistido — sin este
+// chequeo, una oferta con `total` negativo pasaría por esta factory sin
+// que nada lo detecte (hallazgo de code-review sobre PR5a).
+function assertEntregaValida(entrega: DatosEntrega): void {
+  if (!Number.isFinite(entrega.costoDespacho) || entrega.costoDespacho < 0) {
+    throw new OfertaInvalidaError(
+      `costoDespacho (${entrega.costoDespacho}) debe ser un número finito >= 0.`,
+    );
+  }
+}
+
 // ============================================================
 // crearOfertaReactiva (tasks.md 2.1/2.2)
 // ============================================================
@@ -68,6 +83,7 @@ export function crearOfertaReactiva(
   mensaje?: string,
 ): Offer {
   assertItemsValidos(items);
+  assertEntregaValida(entrega);
 
   const itemsOferta: OfferItemReactiva[] = items.map((item) => ({ ...item }));
 
@@ -107,6 +123,7 @@ export function crearOfertaProactiva(
   mensaje?: string,
 ): Offer {
   assertItemsValidos(items);
+  assertEntregaValida(entrega);
 
   const itemsOferta: OfferItemProactiva[] = items.map((item) => ({ ...item }));
 
