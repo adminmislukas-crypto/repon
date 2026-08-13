@@ -111,19 +111,19 @@ Depends on Phase 2's entities. **Independent of Phase 3b** — can proceed in pa
 
 Depends on Phase 1's port/row types. **Independent of Phase 3a**. Gets its own PR: design.md's own words, "el PR con la mecánica más delicada del cambio."
 
-- [ ] 3b.1 RED (**D18-4, mandatory, written first**): `adapters/persistence/kysely-offer-opportunity.repository.spec.ts` — `reemplazar(snapshot, tx)`: assert the exact 5-statement order against a mocked query builder — (1) upsert cabecera, `cerrada_at` **excluded** from the `ON CONFLICT DO UPDATE SET` (D-A.3); (2) `UPDATE companies SET vigente = false WHERE refill_request_id = $R AND vigente = true` happens **before** (3) upsert companies `SET vigente = true`; (4) `UPDATE items SET vigente = false` happens **before** (5) upsert items `SET vigente = true`. Reversing retire↔upsert is "the easiest bug to introduce in this file" (design.md) — this is the test that catches it. `companyIds: []` omits statement 3 only.
-- [ ] 3b.2 GREEN: `kysely-offer-opportunity.repository.ts` — `reemplazar()`, with the order-is-not-commutative comment inline.
-- [ ] 3b.3 RED (extend, D-A.3): a re-run on an already-closed opportunity refreshes the header but the `SET` clause never touches `cerrada_at` — closing is monotonic, a `MatchEncontrado` can never reopen it.
-- [ ] 3b.4 GREEN (extend): confirm 3b.2 satisfies this, or adjust the `SET` clause.
-- [ ] 3b.5 RED (extend): `findElegible(refillRequestId, companyId)` — returns `OportunidadElegible` (cabecera + items with `vigente = true`, mapped 1:1 to `RefillItem[]`) only when this `companyId` currently appears in `offer_opportunity_companies` with `vigente = true`; `null` otherwise (feeds `enviarOferta`'s D11 404, Phase 5a).
-- [ ] 3b.6 GREEN (extend): `findElegible()`.
-- [ ] 3b.7 RED (extend): `listarPorCompany(companyId)` — 1 query, 2 joins, filters `c.vigente AND o.cerrada_at IS NULL AND i.vigente` (Diagram 3); items inline, no N+1; excludes `userId`.
-- [ ] 3b.8 GREEN (extend): `listarPorCompany()`.
-- [ ] 3b.9 RED (extend, D10): `existeRelacion(companyId, userId)` — true iff at least one `offer_opportunities` row owned by `userId` has ever listed this `companyId` as eligible.
-- [ ] 3b.10 GREEN (extend): `existeRelacion()`.
-- [ ] 3b.11 RED (extend, D12): `cerrar(refillRequestId, tx)` — idempotent, monotonic `UPDATE ... WHERE cerrada_at IS NULL`.
-- [ ] 3b.12 GREEN (extend): `cerrar()`.
-- [ ] 3b.13 Opt-in integration test (`supabase start` local, not CI): real Postgres round-trip of `reemplazar` — `[A,B] → [A]` leaves B unreadable as eligible; an identical re-run doesn't duplicate rows; zero `DELETE` statements issued across the whole `ofertas` persistence layer (3a + 3b).
+- [x] 3b.1 RED (**D18-4, mandatory, written first**): `adapters/persistence/kysely-offer-opportunity.repository.spec.ts` — `reemplazar(snapshot, tx)`: assert the exact 5-statement order against a mocked query builder — (1) upsert cabecera, `cerrada_at` **excluded** from the `ON CONFLICT DO UPDATE SET` (D-A.3); (2) `UPDATE companies SET vigente = false WHERE refill_request_id = $R AND vigente = true` happens **before** (3) upsert companies `SET vigente = true`; (4) `UPDATE items SET vigente = false` happens **before** (5) upsert items `SET vigente = true`. Reversing retire↔upsert is "the easiest bug to introduce in this file" (design.md) — this is the test that catches it. `companyIds: []` omits statement 3 only.
+- [x] 3b.2 GREEN: `kysely-offer-opportunity.repository.ts` — `reemplazar()`, with the order-is-not-commutative comment inline.
+- [x] 3b.3 RED (extend, D-A.3): a re-run on an already-closed opportunity refreshes the header but the `SET` clause never touches `cerrada_at` — closing is monotonic, a `MatchEncontrado` can never reopen it.
+- [x] 3b.4 GREEN (extend): confirm 3b.2 satisfies this, or adjust the `SET` clause.
+- [x] 3b.5 RED (extend): `findElegible(refillRequestId, companyId)` — returns `OportunidadElegible` (cabecera + items with `vigente = true`, mapped 1:1 to `RefillItem[]`) only when this `companyId` currently appears in `offer_opportunity_companies` with `vigente = true`; `null` otherwise (feeds `enviarOferta`'s D11 404, Phase 5a).
+- [x] 3b.6 GREEN (extend): `findElegible()`.
+- [x] 3b.7 RED (extend): `listarPorCompany(companyId)` — 1 query, 2 joins, filters `c.vigente AND o.cerrada_at IS NULL AND i.vigente` (Diagram 3); items inline, no N+1; excludes `userId`.
+- [x] 3b.8 GREEN (extend): `listarPorCompany()`.
+- [x] 3b.9 RED (extend, D10): `existeRelacion(companyId, userId)` — true iff at least one `offer_opportunities` row owned by `userId` has ever listed this `companyId` as eligible.
+- [x] 3b.10 GREEN (extend): `existeRelacion()`.
+- [x] 3b.11 RED (extend, D12): `cerrar(refillRequestId, tx)` — idempotent, monotonic `UPDATE ... WHERE cerrada_at IS NULL`.
+- [x] 3b.12 GREEN (extend): `cerrar()`.
+- [ ] 3b.13 Opt-in integration test (`supabase start` local, not CI): real Postgres round-trip of `reemplazar` — `[A,B] → [A]` leaves B unreadable as eligible; an identical re-run doesn't duplicate rows; zero `DELETE` statements issued across the whole `ofertas` persistence layer (3a + 3b). **NOT RUN this batch — environmental blocker, not skipped silently**: `supabase status` confirms no local stack is currently up, and `docker ps` fails with `Error response from daemon: Docker Desktop is manually paused. Unpause it through the Whale menu or Dashboard.` Checked for a CLI-only fix first (`docker desktop start` → "already running"; `docker desktop --help` → no `resume`/`unpause` subcommand exists, only GUI "Whale menu or Dashboard") before concluding it's blocked — this is a deliberate paused state, not "Docker missing", and forcing it via a GUI action is outside this agent's authority. Opt-in/non-CI per its own task text, so this does not block `pnpm test` below. Left for the orchestrator/user to run once Docker Desktop is unpaused; the mocked-query-builder tests in 3b.1-3b.12 already cover the same 5-statement order and idempotency-by-upsert structurally.
 
 ## Phase 4a: Descubrimiento (writer + listener) — Spec: `core-api-ofertas`
 
