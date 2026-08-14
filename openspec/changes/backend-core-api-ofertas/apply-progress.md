@@ -2766,3 +2766,333 @@ tested since PR3a/PR3b), per tasks.md's dependency chain
 pending a user decision, still not blocking. This batch's own discovery (the
 duplicate-id cardinality reasoning) is fully resolved within this batch's
 own doc comment, not carried forward as an open item.
+
+---
+
+# PR7a "Aceptación (lógica) + bandeja" (Phase 7a, tasks 7a.1–7a.9)
+
+**Mode**: Strict TDD (project-wide `strict_tdd: true`, `openspec/config.yaml`)
+**Batch**: PR7a (Phase 7a, tasks 7a.1–7a.9) — TENTH apply batch. PR1–PR6b
+are complete and committed on `main` (latest: `5bdd7fe`, PR6b
+"add ofertas EnviarOfertaProactivaUseCase"). This PR adds TWO use cases:
+`AceptarOfertaUseCase` (the domain's most transactionally complex use case —
+3 writes in 1 transaction) and `ObtenerBandejaUseCase` (a simple read). Zero
+HTTP surface — both are `ports-in/` only (PR7b's job to wire routes).
+
+## The transaction shape — the reason this is "the domain's most complex use case"
+
+`AceptarOfertaUseCase`'s execution shape is **structurally different** from
+`EnviarOfertaUseCase`'s (PR5a) in a way worth stating explicitly, since it is
+this batch's central design fact:
+
+- **`EnviarOfertaUseCase` (PR5a)**: `findElegible` (no tx) → 404/409 checks →
+  item-membership check → `buscarCoincidencias` (an ALIEN port,
+  `catalogo/contracts/`) **outside any transaction, by construction** (D13/R3
+  — the single most important test in the whole change, D-C) → `total()` →
+  `runInTransaction{save}` → publish + push. The transaction wraps exactly
+  ONE write (`save`), and everything before it — including a cross-domain
+  port round-trip — happens deliberately outside it.
+- **`AceptarOfertaUseCase` (this batch, design.md D-D)**: there is **no**
+  alien port to resolve. `findById` (WITH `tx` — the transaction is already
+  open when the read happens), the 404/409 checks, `marcarAceptada`, and the
+  conditional `desplazarHermanas`+`cerrar` ALL happen **inside one single
+  `runInTransaction` call**. There is no "outside the tx" phase in this use
+  case at all — the D-C-style ordering test PR5a needed has no equivalent
+  here, because there is nothing to order against the transaction boundary.
+  `publish(OfertaAceptada)` is the only thing that happens after commit.
+
+Implemented via `runInTransaction<T>`'s generic return value — the callback
+`return`s `{ offer: aceptada, desplazadas }`, which `runInTransaction`
+resolves to after commit, rather than assigning to an outer `let` captured
+by closure. This is a small implementation choice (not itself named by
+design.md, which only pseudocodes the flow) documented here because it
+differs stylistically from `EnviarOfertaUseCase`'s own shape (which builds
+`offer` OUTSIDE the transaction and only calls `save` inside it — there was
+nothing for that transaction to compute and hand back).
+
+## TDD Note for This Batch
+
+Tasks 7a.2–7a.6 are RED steps building one shared spec file
+(`aceptar-oferta.use-case.spec.ts`) before 7a.7's GREEN — the same "many RED,
+one GREEN" shape PR5a/PR6b used, confirmed genuinely RED (not merely a
+failing assertion): the first `pnpm exec jest` run against the new spec
+failed with `Cannot find module './aceptar-oferta.use-case'` (module did not
+exist). All 16 tests in that file passed on the single GREEN implementation
+(7a.7) — implemented once, matching design.md D-D verbatim, not iterated
+test-by-test.
+
+Task 7a.8 is a separate, standalone RED step for `ObtenerBandejaUseCase`
+(`obtener-bandeja.use-case.spec.ts`) — confirmed genuinely RED the same way
+(`Cannot find module './obtener-bandeja.use-case'`), followed by 7a.9's GREEN
+(5/5 passed on the first implementation pass). This use case is a near-exact
+structural mirror of `ListarSolicitudesElegiblesUseCase` (PR4b) — same
+single-token constructor, same D13 structural-inspection test technique
+(`SELF_DECLARED_DEPS_METADATA`), same "derives its only input from the actor
+argument, no DTO" discipline — task 7a.8's own constructor-inspection test is
+explicitly named in tasks.md as "completes D13's Scenario, second half of
+4b.1," and this batch's spec file says so in its own `describe` block text.
+
+Task 7a.1 (the event/payload files) is not itself a RED/GREEN pair in
+tasks.md's own text — `OfertaAceptadaPayload`/`OfertaAceptada` are plain
+interface/class declarations with no independently-testable behavior of
+their own (mirrors PR5a's 5a.1 precedent for `OfertaEnviadaPayload`/
+`OfertaEnviada`). Their correctness is exercised transitively by
+`aceptar-oferta.use-case.spec.ts`'s own payload-shape assertions (`toEqual`
+on `publishedEvent.payload`), not by a standalone spec file.
+
+## TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 7a.1 events | `events/oferta-aceptada.{payload,event}.ts` (new) | N/A | N/A | ➖ Not independently Jest-testable (plain interface/class, mirrors 5a.1's own precedent) | ✅ `pnpm typecheck` clean; exercised transitively by `aceptar-oferta.use-case.spec.ts`'s payload-shape assertions | ➖ | ➖ |
+| 7a.2 D18-2 | `aceptar-oferta.use-case.spec.ts` (new file) | Unit | N/A (new file) | ✅ Written — `Cannot find module './aceptar-oferta.use-case'`, confirmed via a direct `pnpm exec jest` run before the use-case file existed | ✅ 4/4 passed (part of the 16/16 total after 7a.7) | ✅ 4 cases: nonexistent `offerId` → `OfferNotFoundError`; owned-by-another-user → the SAME error; byte-identical class+message comparison (mirrors PR5a's 5a.2/refill-matching's own D13 technique); never calls `marcarAceptada`/`desplazarHermanas`/`cerrar`/`publish` on this branch | ➖ Folded into the single end-of-batch GREEN (7a.7), same "many RED, one GREEN" shape as PR5a/PR6b |
+| 7a.3 D-G.3 | same file (extend) | Unit | ✅ 4/4 (7a.2's describe block, same batched RED file) | ✅ Written alongside 7a.2/7a.4/7a.5/7a.6 before 7a.7's implementation existed | ✅ 4/4 passed | ✅ 4 cases: `it.each` over `'aceptada'`/`'rechazada'`/`'expirada'` (mirrors PR2's own `aceptar()` transition tests) → `TransicionInvalidaError`; never calls `marcarAceptada`/`desplazarHermanas`/`cerrar`/`publish` when the transition is invalid | ➖ |
+| 7a.4 D12 proactiva | same file (extend) | Unit | ✅ 8/8 (prior blocks) | ✅ Written alongside the others | ✅ 2/2 passed | ✅ 2 cases: `marcarAceptada` called but NEITHER `desplazarHermanas` NOR `cerrar` for a proactiva offer; `OfertaAceptada.refillRequestId: null` + `desplazadas: []` in the published payload | ➖ |
+| 7a.5 D12 reactiva | same file (extend) | Unit | ✅ 10/10 (prior blocks) | ✅ Written alongside the others | ✅ 2/2 passed | ✅ 2 cases: `desplazarHermanas(refillRequestId, offerId, tx)` + `cerrar(refillRequestId, tx)` called with the exact args; `OfertaAceptada.desplazadas` equals EXACTLY the mocked `desplazarHermanas` return value (`['sibling-b', 'sibling-c']`), asserting "no separate computation" by construction | ➖ |
+| 7a.6 R4 | same file (extend) | Unit | ✅ 12/12 (prior blocks) | ✅ Written alongside the others | ✅ 2/2 passed | ✅ 2 cases: `marcarAceptada` rejecting with `OfertaYaAceptadaError` propagates uncaught (never wrapped); `desplazarHermanas`/`cerrar` never called when `marcarAceptada` itself rejects | ➖ |
+| 7a.7 GREEN | `aceptar-oferta.use-case.ts` (new) | Unit | ✅ 14/14 (7a.2–7a.6's tests, all RED before this task) | N/A — this is the GREEN step | ✅ 16/16 passed on the single implementation pass (also covers 2 non-tasks.md-numbered describe blocks added for parity with PR5a/PR6b's own transaction-shape coverage — `runInTransaction` called exactly once + `findById` receives the same `tx`, and publish-only-after-commit ordering; both flagged in "Deviations" below) | N/A | ➖ None needed — implementation matched every test on the first pass |
+| 7a.8 RED | `obtener-bandeja.use-case.spec.ts` (new file) | Unit | N/A (new file) | ✅ Written — `Cannot find module './obtener-bandeja.use-case'`, confirmed via a direct `pnpm exec jest` run before the use-case file existed | ✅ 5/5 passed (part of the 5/5 total after 7a.9) | ✅ 5 cases: D13 constructor-inspection (`OFFER_REPOSITORY` only, `TRANSACTION_MANAGER` absent); `findByUser(profileId)` called exactly once, result returned unmodified; a different `profileId` passed through untouched; items inline (no second request); `[]` for an empty tray, never throws | ➖ |
+| 7a.9 GREEN | `obtener-bandeja.use-case.ts` (new) | Unit | ✅ 5/5 (7a.8's tests, all RED before this task) | N/A — this is the GREEN step | ✅ 5/5 passed on the single implementation pass — a 1-line delegate to `offerRepository.findByUser(profileId)`, near-exact structural mirror of `ListarSolicitudesElegiblesUseCase` | N/A | ➖ None needed |
+
+## Test Summary
+
+- **Total tests written**: 16 (unit, `aceptar-oferta.use-case.spec.ts`) + 5
+  (unit, `obtener-bandeja.use-case.spec.ts`) = **21 new tests**
+- **Total tests passing**: 21/21 new; zero regressions on any pre-existing
+  test (unit: 71/71 suites, 649/649 tests, up from PR6b's baseline 69/628 by
+  exactly +2 suites/+21 tests; e2e: 18 passed/2 failed suites, 119/124 tests
+  passed, IDENTICAL to PR6b's own baseline — the 2 failures are the same
+  pre-existing Docker-paused `refill-matching` blocker every batch has
+  documented since PR3b, unrelated to this batch's diff)
+- **Layers used**: Unit (21), E2E (0) — no HTTP surface in this PR by design
+  (PR7b's job), no new persistence code (`marcarAceptada`/`desplazarHermanas`
+  were already implemented and tested in PR3a, `cerrar` in PR3b — this batch
+  is their first genuine consumer)
+- **Approval tests** (refactoring): None — no refactoring tasks
+- **New production code**: 2 new use cases (`AceptarOfertaUseCase`, 145
+  lines; `ObtenerBandejaUseCase`, 31 lines), 1 new event class + 1 new
+  payload interface (`OfertaAceptada`/`OfertaAceptadaPayload`)
+
+## Completed Tasks (9/9 in this batch)
+
+- [x] 7a.1 `events/oferta-aceptada.payload.ts` + `events/oferta-aceptada.event.ts` — `OfertaAceptadaPayload` (`offerId`, `companyId`, `userId`, `refillRequestId: string | null`, `total`, `desplazadas: readonly string[]`) verbatim D6; `type = 'ofertas.oferta_aceptada'`.
+- [x] 7a.2 RED (D18-2, written first): `ports-in/aceptar-oferta.use-case.spec.ts` — user A on user B's offer → `OfferNotFoundError`; nonexistent `offerId` → the same error, byte-identical.
+- [x] 7a.3 RED (extend, D-G.3): offer exists and is owned but `status !== 'pendiente'` → `TransicionInvalidaError`/409.
+- [x] 7a.4 RED (extend, D12): a `'proactiva'` offer — accepting it calls neither `desplazarHermanas` nor `cerrar`.
+- [x] 7a.5 RED (extend, D12): a `'reactiva'` offer with 2 pending siblings — displaces exactly those 2, closes the opportunity, `desplazadas` matches `desplazarHermanas`'s return exactly.
+- [x] 7a.6 RED (extend, R4): `OfertaYaAceptadaError` propagates out of the transaction as a domain error, never wrapped.
+- [x] 7a.7 GREEN: `ports-in/aceptar-oferta.use-case.ts` — `runInTransaction{findById → 404/409 checks → marcarAceptada → if reactiva: desplazarHermanas+cerrar else []}`, `publish(OfertaAceptada)` after commit. 16/16 green.
+- [x] 7a.8 RED: `ports-in/obtener-bandeja.use-case.spec.ts` — returns only the actor's own offers with items inline; constructor-injection inspection: `TRANSACTION_MANAGER` absent (completes D13's Scenario, second half of 4b.1).
+- [x] 7a.9 GREEN: `ports-in/obtener-bandeja.use-case.ts` — constructor takes only `OFFER_REPOSITORY`. 5/5 green.
+
+## Files Changed
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `services/core-api/src/domains/ofertas/events/oferta-aceptada.payload.ts` | Created (33 lines) | `OfertaAceptadaPayload` — `offerId`, `companyId`, `userId`, `refillRequestId: string \| null`, `total`, `desplazadas: readonly string[]` verbatim D6, doc comment naming the D18-3 negative and the `desplazarHermanas`-`RETURNING` provenance of `desplazadas` |
+| `services/core-api/src/domains/ofertas/events/oferta-aceptada.event.ts` | Created (16 lines) | `OfertaAceptada implements DomainEvent` — `type = 'ofertas.oferta_aceptada'`, mirrors `OfertaEnviada`'s shape exactly |
+| `services/core-api/src/domains/ofertas/ports-in/aceptar-oferta.use-case.spec.ts` | Created (369 lines) | 16 tests across 7 `describe` blocks: D18-2 (4), D-G.3 (2), D12 proactiva (2), D12 reactiva (2), R4 (2), plus 2 non-tasks.md-numbered transaction-shape tests (2, see "Deviations") |
+| `services/core-api/src/domains/ofertas/ports-in/aceptar-oferta.use-case.ts` | Created (145 lines) | `AceptarOfertaUseCase` — 4-token constructor (`OFFER_REPOSITORY`, `OFFER_OPPORTUNITY_REPOSITORY`, `TRANSACTION_MANAGER`, `EVENT_PUBLISHER`), design.md D-D's exact shape: everything inside one `runInTransaction`, publish after commit; extensive doc comment cross-referencing D-D/D12/D-G.3/R4/D18-2/D6 |
+| `services/core-api/src/domains/ofertas/ports-in/obtener-bandeja.use-case.spec.ts` | Created (117 lines) | 5 tests across 4 `describe` blocks: D13 constructor-inspection (1), owner-scoping (2), items-inline (1), empty-tray (1) |
+| `services/core-api/src/domains/ofertas/ports-in/obtener-bandeja.use-case.ts` | Created (31 lines) | `ObtenerBandejaUseCase` — single-token constructor (`OFFER_REPOSITORY` only, never `TRANSACTION_MANAGER`), 1-line delegate to `findByUser(profileId)` |
+| `openspec/changes/backend-core-api-ofertas/tasks.md` | Modified | Tasks 7a.1–7a.9 marked `[x]` (9 lines changed, checkbox flips only) |
+
+## Commands Run and Results
+
+| Command | Result |
+|---|---|
+| `git log --oneline -5` / `git status --porcelain` (pre-flight) | `HEAD` at `5bdd7fe` (PR6b), clean tree — matches the orchestrator's stated starting point |
+| `pnpm exec jest src/domains/ofertas/ports-in/aceptar-oferta.use-case.spec.ts` (RED, before the use case file existed) | `Cannot find module './aceptar-oferta.use-case'` — genuine RED |
+| `pnpm exec jest src/domains/ofertas/ports-in/aceptar-oferta.use-case.spec.ts` (GREEN, after 7a.7) | **16/16 passed** |
+| `pnpm exec jest src/domains/ofertas/ports-in/obtener-bandeja.use-case.spec.ts` (RED, before the use case file existed) | `Cannot find module './obtener-bandeja.use-case'` — genuine RED |
+| `pnpm exec jest src/domains/ofertas/ports-in/obtener-bandeja.use-case.spec.ts` (GREEN, after 7a.9) | **5/5 passed** |
+| `pnpm typecheck` (workspace root) | Clean — both `packages/types` and `services/core-api` |
+| `pnpm lint` (workspace root) | Clean |
+| `pnpm run format:check` (workspace root, 1st pass) | **FAILED** — Prettier style issue in the new `aceptar-oferta.use-case.spec.ts` (whitespace-only) |
+| `pnpm exec prettier --write` on that file | Reformatted |
+| `pnpm run format:check` (workspace root, 2nd pass) | Clean |
+| `pnpm exec jest src/domains/ofertas/ports-in/aceptar-oferta.use-case.spec.ts src/domains/ofertas/ports-in/obtener-bandeja.use-case.spec.ts` (re-run after prettier) | **21/21 passed** — reformat was whitespace-only, confirmed |
+| `pnpm typecheck` / `pnpm lint` (workspace root, final pass after prettier) | Both clean |
+| `pnpm --filter core-api build` | Clean |
+| `pnpm test` — unit step (`pnpm --filter core-api exec jest`) | **71 suites / 649 tests** passed — up from PR6b's baseline (69/628) by exactly +2 suites/+21 tests, zero regressions anywhere |
+| `pnpm test` — e2e step (`jest --config ./test/jest-e2e.json`) | **18 passed / 2 failed** suites (124 tests: 119 passed / 5 failed) — IDENTICAL to PR6b's own baseline (same 2 pre-existing `refill-matching` failures, `refill-crear-solicitud.e2e-spec.ts`/`refill-completar-borrador.e2e-spec.ts`, same `Connection terminated due to connection timeout` root cause documented since PR3b). **One transient run flagged for transparency**: an earlier `pnpm test` invocation in this same batch showed 4 failed e2e suites/7 failed tests instead of the usual 2/5 — re-run immediately after showed the usual 2/5 again, and `docker ps` confirms Docker Desktop is consistently "manually paused" across both runs, so the extra transient failures were almost certainly connection-pool flakiness against the same paused-Docker root cause, not a new regression; not investigated further since a clean re-run matched the documented baseline exactly and `git status --porcelain` confirms zero files touched in `refill-matching`'s production code or either failing e2e spec |
+| `docker ps` (re-confirmed) | `Error response from daemon: Docker Desktop is manually paused` — unchanged from every prior batch since PR3b |
+| `git status --porcelain -- services/core-api/test/refill-crear-solicitud.e2e-spec.ts services/core-api/test/refill-completar-borrador.e2e-spec.ts services/core-api/src/domains/refill-matching/` | Empty — confirms this batch touches neither the 2 failing e2e files nor any `refill-matching` production code |
+| `pnpm exec jest src/domains/ofertas` (full `ofertas` domain regression) | **11 suites / 169 tests** passed — up from PR6b's baseline (9/148) by exactly +2 suites/+21 tests, zero regressions to any prior `ofertas` behavior |
+
+## Deviations from Design
+
+**No deviation in either use case's own logic.** `AceptarOfertaUseCase`'s
+flow matches design.md D-D verbatim: `findById` WITH `tx` (unlike
+`EnviarOfertaUseCase`'s tx-less `findElegible`), the byte-identical
+404/409-via-`aceptar()` checks, `marcarAceptada`, the reactiva-only
+`desplazarHermanas`+`cerrar` branch, and `publish` strictly after commit.
+`ObtenerBandejaUseCase` matches Diagrama 1 / `ListarSolicitudesElegiblesUseCase`'s
+own structural precedent exactly: 1-token constructor, no DTO, `profileId`
+the only input.
+
+**One implementation-level choice not itself dictated by design.md's
+pseudocode, documented above under "The transaction shape"**: `runInTransaction`'s
+callback `return`s `{ offer, desplazadas }` rather than assigning to an
+outer `let` variable captured by closure. Functionally identical to what
+design.md's pseudocode implies (`desplazadas` and the accepted `offer` need
+to survive past the transaction boundary to build the event payload); this
+is purely a code-shape choice, using `TransactionManager.runInTransaction<T>`'s
+existing generic return type rather than introducing a mutable outer
+variable. Flagged because it is the one place this batch's code is NOT a
+line-by-line transcription of design.md's own snippet.
+
+**2 non-tasks.md-numbered test groups added to the unit spec, for parity
+with PR5a/PR6b's own transaction-shape coverage — flagged, not silently
+absorbed.** tasks.md's 7a.2–7a.6 name exactly 5 RED groups (D18-2, D-G.3,
+D12 proactiva, D12 reactiva, R4). This batch's spec file also includes a 6th
+describe block asserting: (a) `runInTransaction` is called exactly once and
+`findById` receives the SAME `tx` the transaction handed out (the direct
+counterpart to PR5a's D-C ordering test, adapted to this use case's
+different shape — there is no "before the tx" phase to order against here,
+so the assertion is "everything shares one tx," not "resolves before
+opening"); (b) `publish(OfertaAceptada)` fires only strictly AFTER
+`marcarAceptada` resolves (mirrors 5a.8's publish-after-commit assertion).
+Neither contradicts nor duplicates a named tasks.md scenario — both follow
+the same reasoning PR5a's own tests already established for the sibling use
+case, adapted to `aceptarOferta`'s different transaction shape.
+
+**No deviation in `ObtenerBandejaUseCase`** — it is a near-exact structural
+mirror of `ListarSolicitudesElegiblesUseCase` (PR4b), including reusing the
+exact same `SELF_DECLARED_DEPS_METADATA` structural-inspection technique for
+the D13 test, per tasks.md 7a.8's own explicit instruction to complete that
+Scenario's second half.
+
+## Issues Found
+
+**One formatting fix, mechanical.** `prettier --write` reformatted a few
+multi-line call sites in the new `aceptar-oferta.use-case.spec.ts` —
+confirmed whitespace-only by re-running both affected spec files green
+immediately after (21/21, unchanged).
+
+**One transient `pnpm test` run with extra e2e failures, diagnosed as
+flakiness, not a regression** — see the "Commands Run and Results" table
+above for the full account. A re-run immediately after matched PR6b's
+documented baseline exactly (18 passed/2 failed suites, same 2 named
+`refill-matching` files, same root cause), and `git status --porcelain`
+confirms this batch touches neither those 2 files nor any `refill-matching`
+production code. Not investigated further — same category of pre-existing
+Docker-paused environmental noise every batch since PR3b has already
+documented, just with one extra flaky data point this time.
+
+**Pre-existing Docker-paused environmental blocker persists, confirmed
+unrelated to this batch (re-verified, not assumed).** Same 2
+`refill-matching` e2e failures every batch has documented since PR3b.
+
+## Orchestrator Review Notes (PR7a)
+
+**No agent-based code-review this round** (account spend limit, see PR6a/PR6b's own notes) — the orchestrator did a direct manual read of `aceptar-oferta.use-case.ts` and its adapter dependencies instead.
+
+**One finding investigated in depth, confirmed real, NOT fixed — a repo-wide pattern, not a defect specific to this PR:**
+
+`marcarAceptada`'s UPDATE (`kysely-offer.repository.ts`, PR3a) has no `WHERE status = 'pendiente'` guard — it is `UPDATE offers SET status = 'aceptada' WHERE id = offerId`, unconditional on the current status. `findById` (same file) is a plain `SELECT`, no `FOR UPDATE` row lock. Traced the consequence: if the SAME offer is accepted twice via two genuinely concurrent requests (a literal double-tap, or a client retry racing the original), BOTH transactions can read `status: 'pendiente'` before either commits (`READ COMMITTED`, the implicit default — no `SERIALIZABLE` anywhere in this codebase), both pass `aceptar()`'s pure-function validation (which only checks the STALE in-memory read), and both proceed to write. The second `marcarAceptada` call does not error — it just re-writes the same row to `'aceptada'` again, no conflict, because a partial unique index does not self-conflict against an UPDATE of the same logical row. Consequence: `desplazarHermanas`/`cerrar` run twice (idempotent, harmless), but **`OfertaAceptada` publishes twice** for one logical acceptance, and the second request returns success instead of the `409 TRANSICION_INVALIDA` R4/D-G.3 describe as the intended behavior for accepting a non-`'pendiente'` offer.
+
+This does **not** contradict R4's own intent for the scenario it was actually built for: the partial unique index `offers_refill_request_id_aceptada_uidx` correctly catches the case it was designed for — two DIFFERENT sibling offers on the same `refill_request_id` both becoming `'aceptada'` (a genuine multi-row conflict, real `23505`). The gap is narrower and different: the SAME offer, same row, double-accepted.
+
+**Why not fixed here**: verified this is an existing, repo-wide pattern, not something this PR introduced — `refill-matching`'s own state-transition UPDATE (`kysely-refill.repository.ts:313-316`, `updateTable('refill_requests').set({ estado }).where('id', '=', id)`) has the byte-identical shape, no status-guard either. Fixing it properly (a `WHERE status = 'pendiente'` compare-and-swap on the UPDATE, checking `numUpdatedRows` to detect a lost race and throw `TransicionInvalidaError` accordingly) is a real, defensible improvement, but it is a **cross-cutting concurrency-safety change** that would need to apply consistently across every state-transition write in the repo (at least `refill-matching`'s own equivalent), not a single-PR fix scoped to `ofertas`. Flagged prominently for `sdd-verify` and as a candidate follow-up change, not attempted unilaterally here.
+
+**Practical severity**: narrow race window (both requests' reads must land before either write commits), consistent with an existing repo-wide risk acceptance, not a new regression. Not escalated to the user as a blocking decision (unlike PR5a's Finding #3) since there is no approved-spec ambiguity here to resolve — it's an implementation-technique gap shared identically with already-shipped, already-archived `refill-matching` code.
+
+## What PR7b (next batch) should know
+
+- **`AceptarOfertaUseCase`/`ObtenerBandejaUseCase` are now live and fully
+  tested (16/16 + 5/5 unit)**, zero HTTP wiring — PR7b's job is exactly
+  `POST /ofertas/:offerId/aceptar` (`@Roles('user')`, `ParseUUIDPipe`, 204
+  no body per design.md D-E) and `GET /ofertas/bandeja` (`@Roles('user')`,
+  200 `OfferResponseDto[]`, reusing 5b's DTO — `ObtenerBandejaUseCase`
+  already returns `Offer[]` with items inline, no new mapper method should
+  be needed beyond the existing `toOfferResponseDto`).
+- **`AceptarOfertaUseCase.execute(profileId: string, offerId: string): Promise<void>`**
+  — the controller passes `actor.profileId` (never the whole `actor` object,
+  same discipline every prior use case in this domain follows) and the
+  route's `:offerId` param (`ParseUUIDPipe`-validated per design.md D-E's
+  own note on this route).
+- **`ObtenerBandejaUseCase.execute(profileId: string): Promise<Offer[]>`** —
+  same single-argument shape as `ListarSolicitudesElegiblesUseCase.execute(companyId)`.
+- **`ERROR_STATUS_MAP` is still 6/9 populated** (unchanged by this batch, by
+  design — PR7a is logic-only). PR7b adds the 3 remaining entries already
+  declared in `oferta.errors.ts` and already listed in `@Catch()` since
+  PR4b: `OfferNotFoundError`→404 `OFFER_NOT_FOUND`,
+  `TransicionInvalidaError`→409 `TRANSICION_INVALIDA`,
+  `OfertaYaAceptadaError`→409 `OFERTA_YA_ACEPTADA` — same "logic PR builds
+  it, HTTP PR maps the filter" split this domain has used throughout (5a/5b,
+  6a/6b).
+- **`OfertasController` still has 3 routes** (unchanged by this batch) — PR7b
+  adds the 4th/5th to this SAME class, never a second controller (same
+  discipline this file's own doc comment has stated since PR4b).
+- **The transaction-shape distinction documented above (everything inside
+  one `runInTransaction` vs. PR5a's catalog-outside pattern) is specific to
+  `aceptarOferta`'s own design** — nothing for PR7b's HTTP layer to reason
+  about beyond calling `execute()` and letting the existing exception filter
+  map whatever it throws; the 204-no-body response and the `ParseUUIDPipe`
+  are the only HTTP-specific concerns PR7b needs to add.
+- **The 2 `refill-matching` e2e failures remain environmental (Docker
+  paused), not a regression** — no action needed from PR7b on that front.
+  One `pnpm test` run in this batch showed extra transient e2e flakiness
+  (see "Issues Found" above); if PR7b sees a similar one-off spike, a
+  re-run should be tried before assuming a real regression.
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, same as every prior batch —
+  tasks.md's Review Workload Forecast names PR7a at "260-330, Medium")
+- Current work unit: Unit 7a "Aceptación (lógica) + bandeja" — PR7a, tasks
+  7a.1–7a.9, all complete
+- Boundary: starts from PR6b's committed state (`5bdd7fe`,
+  `OfferRepository.marcarAceptada`/`.desplazarHermanas` (PR3a) and
+  `OfferOpportunityRepository.cerrar` (PR3b) implemented and tested but with
+  zero `ports-in/` consumer); ends with `AceptarOfertaUseCase` (16/16 unit)
+  and `ObtenerBandejaUseCase` (5/5 unit) fully implemented and tested, ZERO
+  HTTP wiring (deliberate — PR7b's job) — `pnpm lint`/`pnpm typecheck`/
+  `pnpm build`/`pnpm run format:check` all clean workspace-wide, unit suite
+  100% green (71/71 suites, 649/649 tests, +2 suites/+21 tests over PR6b's
+  baseline, zero regressions), full `ofertas` domain regression green (11/11
+  suites, 169/169 tests) — the 2 `refill-matching` e2e failures are the same
+  pre-existing Docker-paused blocker every batch since PR3b has already
+  documented, independently re-confirmed unrelated to this batch's diff
+  (including after one transient extra-failure run, see "Issues Found")
+- Estimated review budget impact: **711 changed lines** (6 new files: 145 +
+  369 + 31 + 117 + 16 + 33 = 711, `wc -l`-verified; 0 modified production
+  files; plus `tasks.md`'s own 9-line checkbox-flip delta, process not
+  implementation) — over tasks.md's own 260-330 forecast for this PR
+  (roughly 2.2-2.7x the upper bound). Flagged honestly, same discipline
+  every prior batch in this chain has used for its own overrun (PR2 ran
+  ~80-130% over, PR5b ~3.2-4x, PR6b ~2.7-3x, all for the same class of
+  reason: this repo's heavy doc-comment convention cross-referencing
+  design.md line-by-line, applied here to the single most transactionally
+  complex use case in the domain plus its own comprehensive spec file, plus
+  a second smaller read use case + its own spec). No split proposed: every
+  file here is a single structural unit tasks.md itself names as one task
+  group (one use case + its spec for `aceptarOferta`, one use case + its
+  spec for `obtenerBandeja`, one event + one payload) — splitting
+  `AceptarOfertaUseCase` from its own 16-test spec file, or `ObtenerBandejaUseCase`
+  from its own 5-test spec file, would not reduce total review surface, only
+  make directly-coupled pairs harder to review together. A structural
+  split BETWEEN the two use cases (7a-i: `aceptarOferta` alone; 7a-ii:
+  `obtenerBandeja` alone) was considered but not applied: tasks.md's own
+  Review Workload Forecast table names no fallback split for PR7a (unlike
+  PR1's or PR8a's own named fallbacks), and `obtenerBandeja` is only 148
+  lines of this batch's 711 (31 + 117) — splitting it out would not bring
+  `aceptarOferta` alone (563 lines) under the 260-330 forecast either.
+  Flagged for the orchestrator's awareness rather than silently absorbed.
+
+## Status
+
+**Cumulative**: 96/97 tasks complete across PR1 (10/10) + PR2 (10/10) +
+PR3a (11/11) + PR3b (12/13 — 3b.13 deferred, environmental blocker, not a
+code gap) + PR4a (7/7) + PR4b (7/7) + PR5a (9/9, plus 2 orchestrator fixes)
++ PR5b (7/7) + PR6a (4/4) + PR6b (10/10) + PR7a (9/9). Ready for PR7b
+(Phase 7b "Aceptación (HTTP) + bandeja HTTP" — wiring `POST
+/ofertas/:offerId/aceptar` and `GET /ofertas/bandeja` onto the 2 use cases
+this batch built, plus the 3 remaining `ERROR_STATUS_MAP` entries), per
+tasks.md's dependency chain (`... → PR7a → PR7b → PR8a → ...`). Finding #3
+from PR5a's review (catalog-match correlation) remains open, unchanged by
+this batch, still pending a user decision, still not blocking. This batch's
+own discoveries (the `runInTransaction<T>` return-value shape, the
+transient e2e flakiness) are both fully resolved/explained within this
+batch's own notes, not carried forward as open items.

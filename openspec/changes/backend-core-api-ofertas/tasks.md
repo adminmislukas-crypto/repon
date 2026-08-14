@@ -203,15 +203,15 @@ Depends on Phase 6a's new method and Phase 5b's `CatalogoModule` import.
 
 Depends on Phase 3a's `marcarAceptada`/`desplazarHermanas`, Phase 3b's `cerrar`.
 
-- [ ] 7a.1 `events/oferta-aceptada.payload.ts` + `events/oferta-aceptada.event.ts` — `OfertaAceptadaPayload` (`offerId`, `companyId`, `userId`, `refillRequestId: string | null`, `total`, `desplazadas: readonly string[]`) verbatim D6; `type = 'ofertas.oferta_aceptada'`.
-- [ ] 7a.2 RED (**D18-2, written first**): `ports-in/aceptar-oferta.use-case.spec.ts` — user A on user B's offer → `OfferNotFoundError`; nonexistent `offerId` → the **same** error, byte-identical (`core-api-ofertas` Scenarios "User A cannot accept user B's offer" / "A nonexistent offerId is rejected with the same 404").
-- [ ] 7a.3 RED (extend, D-G.3): offer exists and is owned but `status !== 'pendiente'` → `TransicionInvalidaError`/409.
-- [ ] 7a.4 RED (extend, D12): a `'proactiva'` offer (`refillRequestId: null`) — accepting it calls **neither** `desplazarHermanas` **nor** `cerrar` (Scenario "Accepting a proactive offer displaces nothing and closes nothing" — a tested branch, not a dead one).
-- [ ] 7a.5 RED (extend, D12): a `'reactiva'` offer with 2 pending siblings — accepting displaces exactly those 2 to `'rechazada'` via `desplazarHermanas`'s own `RETURNING`, and `cerrar()` runs on the opportunity (Scenario "Accepting a reactive offer displaces its siblings and closes the opportunity"); `OfertaAceptada.desplazadas` equals exactly what `desplazarHermanas` returned (Scenario "OfertaAceptada's desplazadas lists exactly the displaced offerIds").
-- [ ] 7a.6 RED (extend, R4): `OfertaYaAceptadaError` (from 3a.7's translation) propagates out of the transaction as a domain error, never a raw driver exception (Scenario "A double-tap race maps to 409, never 500" — the HTTP mapping is 7b's job).
-- [ ] 7a.7 GREEN: `ports-in/aceptar-oferta.use-case.ts` — `runInTransaction{findById → 404/409 checks → marcarAceptada → if reactiva: desplazarHermanas+cerrar else []}`, `publish(OfertaAceptada)` after commit.
-- [ ] 7a.8 RED: `ports-in/obtener-bandeja.use-case.spec.ts` — returns only the actor's own offers with items inline (Scenarios "obtenerBandeja never returns another user's offers" / "The bandeja includes items without a second request"); constructor-injection inspection: `TRANSACTION_MANAGER` absent (completes D13's Scenario, second half of 4b.1).
-- [ ] 7a.9 GREEN: `ports-in/obtener-bandeja.use-case.ts` — constructor takes only `OFFER_REPOSITORY`.
+- [x] 7a.1 `events/oferta-aceptada.payload.ts` + `events/oferta-aceptada.event.ts` — `OfertaAceptadaPayload` (`offerId`, `companyId`, `userId`, `refillRequestId: string | null`, `total`, `desplazadas: readonly string[]`) verbatim D6; `type = 'ofertas.oferta_aceptada'`.
+- [x] 7a.2 RED (**D18-2, written first**): `ports-in/aceptar-oferta.use-case.spec.ts` — user A on user B's offer → `OfferNotFoundError`; nonexistent `offerId` → the **same** error, byte-identical (`core-api-ofertas` Scenarios "User A cannot accept user B's offer" / "A nonexistent offerId is rejected with the same 404").
+- [x] 7a.3 RED (extend, D-G.3): offer exists and is owned but `status !== 'pendiente'` → `TransicionInvalidaError`/409.
+- [x] 7a.4 RED (extend, D12): a `'proactiva'` offer (`refillRequestId: null`) — accepting it calls **neither** `desplazarHermanas` **nor** `cerrar` (Scenario "Accepting a proactive offer displaces nothing and closes nothing" — a tested branch, not a dead one).
+- [x] 7a.5 RED (extend, D12): a `'reactiva'` offer with 2 pending siblings — accepting displaces exactly those 2 to `'rechazada'` via `desplazarHermanas`'s own `RETURNING`, and `cerrar()` runs on the opportunity (Scenario "Accepting a reactive offer displaces its siblings and closes the opportunity"); `OfertaAceptada.desplazadas` equals exactly what `desplazarHermanas` returned (Scenario "OfertaAceptada's desplazadas lists exactly the displaced offerIds").
+- [x] 7a.6 RED (extend, R4): `OfertaYaAceptadaError` (from 3a.7's translation) propagates out of the transaction as a domain error, never a raw driver exception (Scenario "A double-tap race maps to 409, never 500" — the HTTP mapping is 7b's job).
+- [x] 7a.7 GREEN: `ports-in/aceptar-oferta.use-case.ts` — `runInTransaction{findById → 404/409 checks → marcarAceptada → if reactiva: desplazarHermanas+cerrar else []}`, `publish(OfertaAceptada)` after commit.
+- [x] 7a.8 RED: `ports-in/obtener-bandeja.use-case.spec.ts` — returns only the actor's own offers with items inline (Scenarios "obtenerBandeja never returns another user's offers" / "The bandeja includes items without a second request"); constructor-injection inspection: `TRANSACTION_MANAGER` absent (completes D13's Scenario, second half of 4b.1).
+- [x] 7a.9 GREEN: `ports-in/obtener-bandeja.use-case.ts` — constructor takes only `OFFER_REPOSITORY`.
 
 ## Phase 7b: Aceptación (HTTP) + bandeja HTTP — Spec: `core-api-ofertas`
 
