@@ -136,7 +136,12 @@ describe('Refill — POST /refill/mis-solicitudes/:refillRequestId/matching (e2e
       findBorradorByConsumption: jest.fn(),
       actualizarEstado: jest.fn(),
     };
-    catalogQueryPort = { buscarCoincidencias: jest.fn() };
+    catalogQueryPort = {
+      buscarCoincidencias: jest.fn(),
+      // PR6a additive delta (D-B) — unused by this route, present only to
+      // satisfy the interface's strict `jest.Mocked<CatalogQueryPort>` shape.
+      obtenerItemsDeProveedor: jest.fn(),
+    };
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(ACTOR_PORT)

@@ -91,4 +91,50 @@ export class KyselyCatalogQueryAdapter implements CatalogQueryPort {
       throw new CatalogQueryUnavailableError(undefined, { cause: error });
     }
   }
+
+  /**
+   * design.md D-B: the second, additive, company-scoped by-id read. The
+   * silent discard (C9) lives nowhere as code — it IS the absence of rows
+   * satisfying the WHERE predicate below. There is no post-hoc `filter()`
+   * to "fix", and no list of missing ids to report; that discipline is
+   * documented on the contract (C9/C10), not enforced here.
+   */
+  async obtenerItemsDeProveedor(
+    companyId: string,
+    ids: readonly string[],
+  ): Promise<ProviderCatalogItem[]> {
+    // C6/C10: zero ids requested -> zero round trips.
+    if (ids.length === 0) return [];
+
+    try {
+      const rows = await this.db
+        .selectFrom('provider_catalog as pc')
+        .selectAll('pc')
+        // C9: the mandatory scope IS the discard mechanism for a
+        // foreign-company id — never a separate check, never a throw.
+        .where('pc.company_id', '=', companyId)
+        .where('pc.id', 'in', [...ids])
+        // C5: disponible = false is discarded the same way.
+        .where('pc.disponible', '=', true)
+        // C4: same anti-join predicate as `buscarCoincidencias`/
+        // `KyselyCatalogRepository.findMatching` — a hidden company's ids
+        // are discarded the same way, with zero `ofertas` code involved.
+        .where((eb) =>
+          eb.not(
+            eb.exists(
+              eb
+                .selectFrom('catalog_hidden_companies as h')
+                .select('h.company_id')
+                .whereRef('h.company_id', '=', 'pc.company_id')
+                .where('h.oculto', '=', true),
+            ),
+          ),
+        )
+        .execute();
+      return rows.map(mapProviderCatalogRow);
+    } catch (error) {
+      // C8: never a degraded `[]` — always throw, `cause` preserved.
+      throw new CatalogQueryUnavailableError(undefined, { cause: error });
+    }
+  }
 }

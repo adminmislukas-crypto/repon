@@ -56,7 +56,12 @@ function buildOfferRepository(): jest.Mocked<OfferRepository> {
 }
 
 function buildCatalogQueryPort(): jest.Mocked<CatalogQueryPort> {
-  return { buscarCoincidencias: jest.fn().mockResolvedValue([]) };
+  return {
+    buscarCoincidencias: jest.fn().mockResolvedValue([]),
+    // PR6a additive delta (D-B) — unused by this use case, present only to
+    // satisfy the interface's strict `jest.Mocked<CatalogQueryPort>` shape.
+    obtenerItemsDeProveedor: jest.fn().mockResolvedValue([]),
+  };
 }
 
 function buildTransactionManager(): jest.Mocked<TransactionManager> {

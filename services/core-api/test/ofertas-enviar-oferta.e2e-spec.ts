@@ -181,7 +181,12 @@ describe('Ofertas — POST /ofertas (e2e)', () => {
       marcarAceptada: jest.fn(),
       desplazarHermanas: jest.fn(),
     };
-    catalogQueryPort = { buscarCoincidencias: jest.fn().mockResolvedValue([]) };
+    catalogQueryPort = {
+      buscarCoincidencias: jest.fn().mockResolvedValue([]),
+      // PR6a additive delta (D-B) — unused by this route, present only to
+      // satisfy the interface's strict `jest.Mocked<CatalogQueryPort>` shape.
+      obtenerItemsDeProveedor: jest.fn().mockResolvedValue([]),
+    };
     const fakeTx = {} as TransactionContext;
     transactionManager = {
       runInTransaction: jest.fn().mockImplementation((work) => work(fakeTx)),

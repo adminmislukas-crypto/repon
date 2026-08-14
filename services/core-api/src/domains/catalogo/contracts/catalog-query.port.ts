@@ -62,6 +62,26 @@ export interface CatalogQueryPort {
     itemsSolicitados: RefillItem[],
     companyId?: string,
   ): Promise<ProviderCatalogItem[]>;
+
+  /**
+   * design.md D-B (Q2) — segundo método, aditivo, needed only by `ofertas`'
+   * `enviarOfertaProactiva`. `companyId` va **primero** porque es el alcance
+   * obligatorio de toda la consulta (a diferencia del `companyId?` de
+   * `buscarCoincidencias`, que va último por ser un estrechamiento
+   * opcional). Hereda C1-C6 y C8 término a término; C7 no aplica (no hay
+   * matching difuso, es igualdad por PK).
+   *
+   * C9 — DESCARTE SILENCIOSO: un id que no existe, que pertenece a otra
+   * empresa, que está `disponible = false` o cuya empresa está oculta, NO
+   * aparece en el resultado y NO lanza. El caller compara cardinalidades.
+   * C10 — sin tope propio: el resultado está acotado por `ids.length` (la
+   * consulta es por PK). `MAX_COINCIDENCIAS_POR_ITEM` NO aplica acá: existe
+   * para acotar una expansión trigram difusa, y acá no hay ninguna.
+   */
+  obtenerItemsDeProveedor(
+    companyId: string,
+    ids: readonly string[],
+  ): Promise<ProviderCatalogItem[]>;
 }
 
 export const CATALOG_QUERY_PORT = Symbol('CATALOG_QUERY_PORT');

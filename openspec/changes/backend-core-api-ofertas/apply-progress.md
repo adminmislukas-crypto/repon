@@ -2296,3 +2296,198 @@ per tasks.md's dependency chain (`... → PR5b → {PR6a, independent} → PR6b
 → ...`). Finding #3 from PR5a's review (catalog-match correlation) remains
 open, unchanged by this batch, still pending a user decision, still not
 blocking.
+
+---
+
+# PR6a — Phase 6a: Delta de `CatalogQueryPort`
+
+Starts from PR5b's committed state (`f338977`, `HEAD` at batch start,
+working tree clean). Implements tasks.md's Phase 6a (6a.1–6a.4): the
+**only PR in the entire 14-PR chain that touches `catalogo`** — an
+additive, isolated delta adding `obtenerItemsDeProveedor(companyId, ids)`
+to `CatalogQueryPort`, needed by PR6b's future
+`EnviarOfertaProactivaUseCase`. No dependency on any `ofertas` PR; PR6a
+could in principle have landed any time after PR1 — kept at position 6 only
+to match design.md's own slice numbering (tasks.md "Dependency Notes").
+
+## TDD Note for This Batch
+
+Tasks 6a.1/6a.3 are a genuine RED/GREEN pair **extending an existing spec
+file**, exactly as scoped: `kysely-catalog-query.adapter.spec.ts` already
+existed from `catalogo`'s own earlier PRs (9 tests covering
+`buscarCoincidencias`) — this batch adds a new nested
+`describe('obtenerItemsDeProveedor — ...')` block with 8 new tests, leaving
+every one of the 9 pre-existing tests untouched (confirmed both by not
+editing a single line above the insertion point, and by the final run
+showing all 9 still green). The RED run (before touching the port/adapter)
+failed all 8 new tests with `TypeError: adapter.obtenerItemsDeProveedor is
+not a function` — a genuine missing-method RED, not a wrong-assertion
+tautology, since the interface didn't declare the method yet. The GREEN run
+(after 6a.2's port addition + 6a.3's adapter implementation) passed 17/17
+on the first attempt.
+
+Task 6a.2 (interface + JSDoc addition) has no branch logic of its own to
+RED/GREEN — verified instead by a byte-level `git diff` confirming
+`buscarCoincidencias`'s existing signature and C1–C8 JSDoc block are
+**unchanged** (the diff is a pure insertion after its closing `);`, nothing
+before it touched). Task 6a.4 is a confirmation-only task (git diff
+inspection), not code.
+
+**One discovery surfaced explicitly, not silently absorbed**: adding a
+**required** method to `CatalogQueryPort` broke `pnpm typecheck` in 4 files
+elsewhere in the repo that build a strict `jest.Mocked<CatalogQueryPort>`
+object listing only `buscarCoincidencias` — 2 unit specs
+(`domains/ofertas/ports-in/enviar-oferta.use-case.spec.ts`,
+`domains/refill-matching/ports-in/buscar-proveedores-compatibles.use-case.spec.ts`)
+and 2 e2e specs (`test/ofertas-enviar-oferta.e2e-spec.ts`,
+`test/refill-buscar-proveedores.e2e-spec.ts`). This is TypeScript
+structural typing meeting Jest's strict `Mocked<T>` utility type: a
+required interface method must appear on every object literal typed as
+`jest.Mocked<T>`, even though the interface change itself is source-level
+additive (an untyped or duck-typed consumer would not have broken — only
+the strictly-typed test-double literals did). Design.md's "aditivo" framing
+for D-B describes the *interface's* nature, not a guarantee that every
+downstream strict mock stays green for free; this is a real, if narrow,
+nuance worth carrying forward. Fixed with a 1-line mechanical addition
+(`obtenerItemsDeProveedor: jest.fn()`, `.mockResolvedValue([])` where the
+sibling `buscarCoincidencias` mock in the same file already used that
+pattern, plain `jest.fn()` where it didn't) to each of the 4 mock builders
+— none of these 4 call sites exercise the new method, so an unconfigured
+mock is sufficient and correct. This means the total diff touches 4 files
+outside `domains/catalogo/` beyond the 2 production files + 1 extended spec
+file inside it. **This does not violate task 6a.4's own success
+criterion**, which is explicitly scoped to "exactly 2 files under
+`domains/catalogo/`" (design.md's own words: "`catalogo` se toca en
+exactamente 2 archivos") — that count is still exactly 2, verified below.
+
+## TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 6a.1 RED | `kysely-catalog-query.adapter.spec.ts` (extended, not created) | Unit | ✅ 9 pre-existing `buscarCoincidencias` tests kept passing throughout, never touched | ✅ 8/8 new tests failed with `TypeError: adapter.obtenerItemsDeProveedor is not a function`, run and confirmed before touching the port/adapter — a genuine missing-method RED | ✅ (see 6a.3 row) | ✅ 8 cases: `ids.length === 0` zero-round-trip; `company_id` scope where clause; `id IN ids` where clause; `disponible = true` where clause; hidden-companies anti-join shape (same `ebCalls` assertions as `buscarCoincidencias`'s own C4 test); silent-discard-on-short-return behavior (fewer rows come back than ids requested, no throw, no cardinality check); infra-failure-throws `CatalogQueryUnavailableError` with `cause` preserved; happy-path all-ids-returned in exactly one round trip | ➖ |
+| 6a.2 port + JSDoc | N/A — pure interface + doc-comment addition, no branch logic | N/A | ✅ `git diff` on `catalog-query.port.ts` confirms `buscarCoincidencias`'s existing signature + C1–C8 JSDoc block is byte-unchanged (pure insertion after its closing `);`) | ➖ | ✅ `pnpm typecheck` — an interface has no runtime behavior of its own to RED/GREEN directly; its contract is exercised transitively by 6a.1/6a.3's adapter tests | ➖ | ➖ |
+| 6a.3 GREEN | same spec file as 6a.1 | Unit | ✅ 8/8 new + 9/9 existing = 17/17 | N/A — this is the GREEN step | ✅ 17/17 passed on the first run after implementing `obtenerItemsDeProveedor` per design.md D-B's exact query shape (`company_id` scope + `id IN` + `disponible = true` + hidden-companies anti-join, `mapProviderCatalogRow` reused, not duplicated) | N/A | ➖ None needed — implementation matched the spec on the first pass |
+| 6a.4 file-count confirmation | N/A — verification task, not code | N/A | N/A | ➖ | ✅ `git diff --stat -- 'services/core-api/src/domains/catalogo/'` confirms exactly 2 production files (`kysely-catalog-query.adapter.ts`, `catalog-query.port.ts`) + 1 spec file extended (not a 3rd production file) | ➖ | ➖ |
+
+## Test Summary
+
+- **Total tests written**: 8 (all in the extended `kysely-catalog-query.adapter.spec.ts`)
+- **Total tests passing**: 17/17 in that file (8 new + 9 pre-existing `buscarCoincidencias` tests, zero regressions)
+- **Layers used**: Unit only (8) — this PR has no HTTP/e2e surface of its own, per task 6a.4's own "minimal, isolated diff" framing; no DTOs, no controller route, no module wiring
+- **Approval tests** (refactoring): None — no refactoring tasks
+- **New production code**: 1 new interface method + JSDoc carrying C9/C10 verbatim (`catalog-query.port.ts`, +20 lines), 1 new adapter method (`kysely-catalog-query.adapter.ts`, +46 lines), reusing the existing `mapProviderCatalogRow` helper (not duplicated)
+- **Downstream ripple** (mechanical, zero new behavior): 4 files patched — 2 unit spec mock builders + 2 e2e spec mock builders — each gained one `obtenerItemsDeProveedor: jest.fn()` entry on their `jest.Mocked<CatalogQueryPort>` object literal, required for `pnpm typecheck` to pass workspace-wide after the interface gained a required method (see "TDD Note" above and "Deviations" below)
+
+## Completed Tasks (4/4 in this batch)
+
+- [x] 6a.1 RED: `adapters/persistence/kysely-catalog-query.adapter.spec.ts` (extended) — 8 new tests covering `ids.length === 0` zero-round-trip (C6/C10), company-scope/id-IN/disponible where-clause shape, the hidden-companies anti-join (C4 inherited), the silent-discard-on-short-return behavior (C9, core-api-catalogo Scenario "An id belonging to another company is silently discarded"), infra failure throwing `CatalogQueryUnavailableError` (Scenario "An infrastructure failure still throws, never a degraded empty array"), and the all-match happy path in one round trip (Scenario "All requested ids belonging to the caller's company are returned").
+- [x] 6a.2 `catalogo/contracts/catalog-query.port.ts`: added `obtenerItemsDeProveedor(companyId: string, ids: readonly string[]): Promise<ProviderCatalogItem[]>`, `companyId` first (mandatory scope, opposite order from `buscarCoincidencias`'s trailing optional `companyId?`, documented inline why). JSDoc carries C9 (silent discard) and C10 (no cap of its own — bounded by `ids.length`, `MAX_COINCIDENCIAS_POR_ITEM` does not apply) verbatim from design.md D-B. `buscarCoincidencias`'s signature and C1–C8 JSDoc confirmed byte-unchanged via `git diff` (Scenario "buscarCoincidencias is untouched").
+- [x] 6a.3 GREEN: `kysely-catalog-query.adapter.ts` — implemented `obtenerItemsDeProveedor` per design.md D-B's exact query shape (`WHERE pc.company_id = companyId AND pc.id IN (ids) AND pc.disponible = true` plus the hidden-companies anti-join, identical predicate shape to `buscarCoincidencias`'s own C4 anti-join), reusing `mapProviderCatalogRow` (not duplicated), wrapping infra failures in `CatalogQueryUnavailableError` with `cause` preserved (C8).
+- [x] 6a.4 Confirmed via `git diff --stat -- 'services/core-api/src/domains/catalogo/'`: exactly 2 production files touched (`kysely-catalog-query.adapter.ts`, `catalog-query.port.ts`), both purely additive, plus 1 spec file extended (not a 3rd production file) — task's own success criterion ("`catalogo` se toca en exactamente 2 archivos") met exactly.
+
+## Files Changed
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `services/core-api/src/domains/catalogo/contracts/catalog-query.port.ts` | Modified (+20/-0) | Added `obtenerItemsDeProveedor(companyId, ids)` to `CatalogQueryPort`, with C9/C10 JSDoc verbatim from design.md D-B; `buscarCoincidencias` untouched above the insertion point |
+| `services/core-api/src/domains/catalogo/adapters/persistence/kysely-catalog-query.adapter.ts` | Modified (+46/-0) | Implemented `obtenerItemsDeProveedor` — `ids.length === 0` short-circuit, `company_id`/`id IN`/`disponible` WHERE clauses, hidden-companies anti-join (same shape as `buscarCoincidencias`'s own), `mapProviderCatalogRow` reused, `CatalogQueryUnavailableError` on any driver failure |
+| `services/core-api/src/domains/catalogo/adapters/persistence/kysely-catalog-query.adapter.spec.ts` | Modified (+132/-0) | Extended with a new nested `describe('obtenerItemsDeProveedor — ...')` block, 8 tests; every pre-existing `buscarCoincidencias` test (9) left untouched |
+| `services/core-api/src/domains/ofertas/ports-in/enviar-oferta.use-case.spec.ts` | Modified (+6/-1) | `buildCatalogQueryPort()`'s `jest.Mocked<CatalogQueryPort>` literal gained `obtenerItemsDeProveedor: jest.fn().mockResolvedValue([])` — required by the interface change, unused by this use case's own tests |
+| `services/core-api/src/domains/refill-matching/ports-in/buscar-proveedores-compatibles.use-case.spec.ts` | Modified (+6/-1) | Same fix, same reason — `buildCatalogQueryPort()`'s mock literal |
+| `services/core-api/test/ofertas-enviar-oferta.e2e-spec.ts` | Modified (+6/-1) | Same fix — the e2e spec's `catalogQueryPort` mock override literal |
+| `services/core-api/test/refill-buscar-proveedores.e2e-spec.ts` | Modified (+6/-1) | Same fix — the e2e spec's `catalogQueryPort` mock override literal |
+| `openspec/changes/backend-core-api-ofertas/tasks.md` | Modified (+4/-4) | Tasks 6a.1–6a.4 marked `[x]` (4 lines changed, checkbox flips only) |
+
+## Commands Run and Results
+
+| Command | Result |
+|---|---|
+| `git status --porcelain` / `git log --oneline -5` (pre-flight) | Clean working tree, `HEAD` at `f338977` (PR5b), matching the orchestrator's stated starting point |
+| `pnpm --filter core-api exec jest src/domains/catalogo/adapters/persistence/kysely-catalog-query.adapter.spec.ts` (RED, before touching port/adapter) | **8 failed / 9 passed**, 17 total — every new test failed with `TypeError: adapter.obtenerItemsDeProveedor is not a function`; all 9 pre-existing tests unaffected. Genuine RED |
+| `pnpm --filter core-api exec jest src/domains/catalogo/adapters/persistence/kysely-catalog-query.adapter.spec.ts` (GREEN, after 6a.2+6a.3) | **17/17 passed** |
+| `git diff services/core-api/.../contracts/catalog-query.port.ts` | Confirmed pure insertion after `buscarCoincidencias`'s closing `);` — its own signature/JSDoc byte-unchanged |
+| `git diff --stat` / `git diff --stat -- 'services/core-api/src/domains/catalogo/'` | Confirmed exactly 2 production files + 1 spec file under `domains/catalogo/` (task 6a.4) |
+| `pnpm lint` (workspace root) | Clean |
+| `pnpm typecheck` (workspace root, 1st pass, before the 4-file mock fix) | **FAILED** — 4 errors, `Property 'obtenerItemsDeProveedor' is missing` in 4 `jest.Mocked<CatalogQueryPort>` literals (see "Deviations") |
+| 4-file mock fix applied | `obtenerItemsDeProveedor: jest.fn()` added to each of the 4 files' `CatalogQueryPort` mock builders |
+| `pnpm typecheck` (workspace root, 2nd pass) | Clean — `packages/types` + `services/core-api` both `Done` |
+| `pnpm lint` (workspace root, 2nd pass, after the 4-file fix) | Clean |
+| `pnpm test` (unit, workspace root — `jest` step of `core-api`'s combined script) | **68 suites / 615 tests** passed — up from PR5b's post-review baseline (68 suites/607 tests) by exactly +0 suites/+8 tests (the new tests extend an existing suite, not a new one), zero regressions anywhere |
+| `pnpm test` (e2e, workspace root — `jest --config ./test/jest-e2e.json` step) | **17 passed / 2 failed** suites (118 tests: 113 passed / 5 failed) — same 2 pre-existing `refill-matching` failures (`refill-crear-solicitud.e2e-spec.ts`, `refill-completar-borrador.e2e-spec.ts`) documented by every batch since PR3b, `Connection terminated due to connection timeout` |
+| `git status --porcelain -- services/core-api/test/refill-crear-solicitud.e2e-spec.ts services/core-api/test/refill-completar-borrador.e2e-spec.ts services/core-api/src/domains/refill-matching/` | Confirmed empty except the 1 unrelated mock-fix line in `buscar-proveedores-compatibles.use-case.spec.ts` — the 2 failing e2e files and all `refill-matching` production code are untouched by this batch |
+| `docker ps` (re-confirmed) | `Error response from daemon: Docker Desktop is manually paused` — unchanged from every prior batch since PR3b |
+| `pnpm --filter core-api exec jest src/domains/catalogo` (full `catalogo` domain regression, as explicitly requested) | **15 suites / 123 tests** passed — zero regressions to `buscarCoincidencias` or any other `catalogo` behavior |
+| `cd services/core-api && pnpm exec jest --config ./test/jest-e2e.json ofertas refill-buscar-proveedores` (runtime check of the 4 mock fixes, not just typecheck) | **3 suites / 18 tests** passed — confirms the 4 patched mock builders work correctly at runtime, not merely type-check |
+| `pnpm --filter core-api build` | Clean |
+| `pnpm run format:check` (1st pass) | **FAILED** — Prettier style issue in the new `kysely-catalog-query.adapter.spec.ts` content |
+| `pnpm exec prettier --write` on that file | Reformatted (whitespace-only) |
+| `pnpm run format:check` (2nd pass) | Clean |
+| `pnpm --filter core-api exec jest src/domains/catalogo/adapters/persistence/kysely-catalog-query.adapter.spec.ts` (final re-run, after prettier) | **17/17 passed** — reformat was whitespace-only, confirmed |
+
+## Deviations from Design
+
+**No deviation in the `catalogo` implementation itself.** `obtenerItemsDeProveedor`'s signature (`companyId` first), query shape (`company_id` scope + `id IN` + `disponible = true` + hidden-companies anti-join), JSDoc (C9/C10 verbatim), and reuse of `mapProviderCatalogRow` all match design.md D-B exactly — including the closing claim "`catalogo` se toca en exactamente 2 archivos, los dos de forma aditiva", verified true for the `domains/catalogo/` scope.
+
+**One discovery outside `catalogo`'s own scope, already detailed in "TDD Note" above**: the interface addition required a 4-file, 1-line-each mechanical fix to `jest.Mocked<CatalogQueryPort>` literals elsewhere in the repo, to keep `pnpm typecheck` green workspace-wide. This is a consequence of Jest's `Mocked<T>` utility type requiring every property (TypeScript structural typing does not exempt required methods just because the source-level change is "additive" in prose) — not a bug in this batch's implementation, and not a violation of task 6a.4's own file-count criterion (which is explicitly scoped to `domains/catalogo/`). Flagged for `sdd-verify`'s awareness rather than silently absorbed into the "2 files" framing.
+
+## Issues Found
+
+**One typecheck ripple, diagnosed and fixed within this batch (not a pre-existing defect)** — see "TDD Note" and "Deviations" above. Root cause: `CatalogQueryPort` gained a required method; 4 files elsewhere already had strictly-typed `jest.Mocked<CatalogQueryPort>` mock literals declaring only `buscarCoincidencias`. Fixed by adding the missing `obtenerItemsDeProveedor: jest.fn()` entry to each, verified both by `pnpm typecheck` (2nd pass, clean) and by actually running the affected e2e suites (`ofertas`, `refill-buscar-proveedores`) to confirm the fix works at runtime too, not merely at the type level.
+
+**One formatting fix, mechanical.** `prettier --write` reformatted the new test content in `kysely-catalog-query.adapter.spec.ts` — confirmed whitespace-only by re-running the suite green immediately after (17/17, unchanged).
+
+**Pre-existing Docker-paused environmental blocker persists, confirmed unrelated to this batch (re-verified, not assumed).** `docker ps` still reports Docker Desktop manually paused. The 2 failing e2e suites (`refill-crear-solicitud.e2e-spec.ts`, `refill-completar-borrador.e2e-spec.ts`) are the same ones documented by every batch since PR3b, both requiring a live Postgres connection; `git status --porcelain` on both files plus all of `domains/refill-matching/` (production code) confirms zero files touched by this batch in either location — the only `refill-matching` file this batch touches is the 1 unit-spec mock-shape fix, unrelated to those 2 e2e suites' own failure mode.
+
+## What PR6b (next batch) should know
+
+- **`obtenerItemsDeProveedor(companyId, ids)` is now live on `CatalogQueryPort`, implemented, and tested (17/17 in `kysely-catalog-query.adapter.spec.ts`)** — PR6b's `EnviarOfertaProactivaUseCase` can call it directly: `companyId` first (the offering company, mandatory scope), `ids: readonly string[]` (the requested `providerCatalogItemId`s), returns `ProviderCatalogItem[]` with any non-matching/foreign/unavailable/hidden-company id silently absent (C9) — PR6b's own job (task 6b.2, D-B cardinality) is to compare `result.length` against `ids.length` and reject with `ItemsNoDisponiblesError`/400 on any mismatch, exactly one bad id already rejects the whole request.
+- **`CatalogoModule` is already imported by `ofertas.module.ts`** (since PR5b) — PR6b needs zero further module wiring to reach `CATALOG_QUERY_PORT`.
+- **If any future PR extends `CatalogQueryPort` again, expect the same category of 4-file mock ripple** documented in this batch's "TDD Note"/"Deviations" — every existing `jest.Mocked<CatalogQueryPort>` literal in the repo now already includes `obtenerItemsDeProveedor`, so PR6b itself should not need to repeat this fix unless it adds yet another method to the port (it does not, per design.md/tasks.md).
+- **Finding #3 from PR5a's orchestrator review (the categoria-based catalog-match correlation's cross-item mismatch risk) is UNCHANGED by this batch** — 6a's own new code (`obtenerItemsDeProveedor`) matches by exact PK (`pc.id IN ids`), not by `catalogProductId`/`categoria` correlation, so it is not affected by that finding at all; still pending a user decision on the original `buscarCoincidencias` question, still not blocking.
+- **The 2 `refill-matching` e2e failures remain environmental (Docker paused), not a regression** — no action needed from PR6b on that front.
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, same as every prior batch —
+  tasks.md's Review Workload Forecast names PR6a at "140-190, Low")
+- Current work unit: Unit 6a "Delta de `CatalogQueryPort` en `catalogo`" —
+  PR6a, tasks 6a.1–6a.4, all complete
+- Boundary: starts from PR5b's committed state (`f338977`,
+  `CatalogQueryPort` has only `buscarCoincidencias`); ends with
+  `obtenerItemsDeProveedor` fully implemented and tested (17/17), zero HTTP
+  wiring (none planned for this PR — task 6a.4's whole point is a minimal,
+  isolated diff), `pnpm lint`/`pnpm typecheck`/`pnpm build`/
+  `pnpm run format:check` all clean workspace-wide, unit suite 100% green
+  (68/68 suites, 615/615 tests, +0 suites/+8 tests over PR5b's baseline,
+  zero regressions), full `catalogo` domain regression green (15/15 suites,
+  123/123 tests) — the 2 `refill-matching` e2e failures are the same
+  pre-existing Docker-paused blocker every batch since PR3b has already
+  documented, independently re-confirmed unrelated to this batch's diff
+- Estimated review budget impact: **234 changed lines** (226 additions + 8
+  deletions, `git diff --numstat`-verified) — the 3 `domains/catalogo/`
+  files alone total 198 lines (132+46+20), essentially in line with
+  tasks.md's own 140-190 forecast for this PR; the remaining 36 lines
+  (4 mock-fix files × ~7 lines each + `tasks.md`'s own 8-line checkbox-flip
+  delta) are the unanticipated-but-necessary typecheck ripple documented
+  above, not scope creep on the 4 named tasks. Total is modestly over the
+  forecast's upper bound (234 vs 190) but by the smallest relative margin
+  of any batch in this change so far (~23%, vs. PR2's ~80-130% or PR5b's
+  ~3.2-4x) — and this remains, by a wide margin, the smallest PR in the
+  entire 14-PR chain. No split proposed — every file here is either one of
+  the 2 named production files, the 1 named spec file, or a single-line
+  mechanical fix forced by the type system, not an independent unit of
+  work.
+
+## Status
+
+**Cumulative**: 77/78 tasks complete across PR1 (10/10) + PR2 (10/10) +
+PR3a (11/11) + PR3b (12/13 — 3b.13 deferred, environmental blocker, not a
+code gap) + PR4a (7/7) + PR4b (7/7) + PR5a (9/9, plus 2 orchestrator fixes)
++ PR5b (7/7) + PR6a (4/4). Ready for PR6b (Phase 6b, "Proactiva" —
+`EnviarOfertaProactivaUseCase` + HTTP, depends on 6a's new method and 5b's
+`CatalogoModule` import, both now satisfied), per tasks.md's dependency
+chain (`... → {PR6a, independent} → PR6b → PR7a → ...`). Finding #3 from
+PR5a's review (catalog-match correlation) remains open, unchanged by this
+batch, still pending a user decision, still not blocking. This batch's own
+discovery (the 4-file `jest.Mocked<CatalogQueryPort>` ripple) is fully
+resolved within this batch, not carried forward as an open item.

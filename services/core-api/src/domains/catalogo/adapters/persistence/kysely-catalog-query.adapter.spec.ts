@@ -212,4 +212,136 @@ describe('KyselyCatalogQueryAdapter', () => {
       cause: dbError,
     });
   });
+
+  // design.md D-B (Q2) — CatalogQueryPort's second, additive, company-scoped
+  // by-id read. tasks.md 6a.1: extends this existing spec file, does not
+  // create a new one. buscarCoincidencias's own tests above are untouched.
+  describe('obtenerItemsDeProveedor — company-scoped by-id read, silent discard (tasks.md 6a.1, D-B)', () => {
+    function buildRow(overrides: Partial<Record<string, unknown>> = {}) {
+      return {
+        id: 'provider-item-1',
+        company_id: 'company-a',
+        catalog_product_id: null,
+        nombre: 'Agua',
+        categoria: 'Bebidas',
+        precio_base: '1000.00',
+        precio_maximo: '1500.00',
+        stock: 10,
+        disponible: true,
+        imagen_url: null,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+        ...overrides,
+      };
+    }
+
+    // core-api-catalogo Scenario is implied by C6/C10 — the literal mirror
+    // of buscarCoincidencias's own itemsSolicitados.length === 0 short
+    // circuit (design.md D-B "ids vacío").
+    it('resolves to [] without querying when ids is empty (C6/C10: zero round trips)', async () => {
+      const { db, selectFrom } = buildDb(async () => []);
+      const adapter = new KyselyCatalogQueryAdapter(db);
+
+      await expect(adapter.obtenerItemsDeProveedor('company-a', [])).resolves.toEqual([]);
+      expect(selectFrom).not.toHaveBeenCalled();
+    });
+
+    it('scopes the query to companyId — the mandatory scope IS the discard mechanism (C9)', async () => {
+      const { db, whereCalls } = buildDb(async () => []);
+      const adapter = new KyselyCatalogQueryAdapter(db);
+
+      await adapter.obtenerItemsDeProveedor('company-a', ['id-1']);
+
+      expect(whereCalls).toContainEqual(['pc.company_id', '=', 'company-a']);
+    });
+
+    it('filters pc.id IN the requested ids', async () => {
+      const { db, whereCalls } = buildDb(async () => []);
+      const adapter = new KyselyCatalogQueryAdapter(db);
+
+      await adapter.obtenerItemsDeProveedor('company-a', ['id-1', 'id-2']);
+
+      expect(whereCalls).toContainEqual(['pc.id', 'in', ['id-1', 'id-2']]);
+    });
+
+    it('filters disponible = true (C5 inherited) — a disponible=false row is discarded by the WHERE, not by application code', async () => {
+      const { db, whereCalls } = buildDb(async () => []);
+      const adapter = new KyselyCatalogQueryAdapter(db);
+
+      await adapter.obtenerItemsDeProveedor('company-a', ['id-1']);
+
+      expect(whereCalls).toContainEqual(['pc.disponible', '=', true]);
+    });
+
+    it("applies the visibility anti-join against catalog_hidden_companies (C4 inherited) — a hidden company's ids are discarded the same way", async () => {
+      const { db, ebCalls } = buildDb(async () => []);
+      const adapter = new KyselyCatalogQueryAdapter(db);
+
+      await adapter.obtenerItemsDeProveedor('company-a', ['id-1']);
+
+      expect(ebCalls['selectFrom']).toEqual([['catalog_hidden_companies as h']]);
+      expect(ebCalls['sub.whereRef']).toEqual([['h.company_id', '=', 'pc.company_id']]);
+      expect(ebCalls['sub.where']).toEqual([['h.oculto', '=', true]]);
+    });
+
+    // core-api-catalogo Scenario "An id belonging to another company is
+    // silently discarded" — the adapter never compares what it asked for
+    // against what came back; it just maps whatever the WHERE let through.
+    // The same mechanism covers a disponible=false row and a hidden
+    // company's row: fewer rows come back, nothing throws.
+    it('silently discards ids the query does not return — no cardinality check, never throws (C9)', async () => {
+      const { db } = buildDb(async () => [buildRow({ id: 'id-1' })]);
+      const adapter = new KyselyCatalogQueryAdapter(db);
+
+      const result = await adapter.obtenerItemsDeProveedor('company-a', ['id-1', 'id-2']);
+
+      expect(result).toEqual([
+        {
+          id: 'id-1',
+          companyId: 'company-a',
+          catalogProductId: undefined,
+          nombre: 'Agua',
+          categoria: 'Bebidas',
+          precioBase: 1000,
+          precioMaximo: 1500,
+          stock: 10,
+          disponible: true,
+          imagenUrl: undefined,
+        },
+      ]);
+    });
+
+    // core-api-catalogo Scenario "An infrastructure failure still throws,
+    // never a degraded empty array".
+    it('wraps any Kysely/pg failure as CatalogQueryUnavailableError, never a degraded [] (C8)', async () => {
+      const dbError = new Error('connection terminated unexpectedly');
+      const { db } = buildDb(async () => {
+        throw dbError;
+      });
+      const adapter = new KyselyCatalogQueryAdapter(db);
+
+      await expect(adapter.obtenerItemsDeProveedor('company-a', ['id-1'])).rejects.toThrow(
+        CatalogQueryUnavailableError,
+      );
+      await expect(adapter.obtenerItemsDeProveedor('company-a', ['id-1'])).rejects.toMatchObject({
+        cause: dbError,
+      });
+    });
+
+    // core-api-catalogo Scenario "All requested ids belonging to the
+    // caller's company are returned".
+    it('returns all requested ids belonging to the caller company, one round trip', async () => {
+      const { db, selectFrom } = buildDb(async () => [
+        buildRow({ id: 'id-1' }),
+        buildRow({ id: 'id-2' }),
+      ]);
+      const adapter = new KyselyCatalogQueryAdapter(db);
+
+      const result = await adapter.obtenerItemsDeProveedor('company-a', ['id-1', 'id-2']);
+
+      expect(result).toHaveLength(2);
+      expect(result.map((item) => item.id)).toEqual(['id-1', 'id-2']);
+      expect(selectFrom).toHaveBeenCalledTimes(1);
+    });
+  });
 });
