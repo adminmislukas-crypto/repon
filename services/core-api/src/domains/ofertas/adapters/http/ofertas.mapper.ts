@@ -1,4 +1,9 @@
-import type { NuevoOfferItemReactiva, Offer, SolicitudElegible } from '@repon/types';
+import type {
+  NuevoOfferItemProactiva,
+  NuevoOfferItemReactiva,
+  Offer,
+  SolicitudElegible,
+} from '@repon/types';
 import type { NuevoOfferItemDto } from './dto/nuevo-offer-item.dto';
 import type { OfferResponseDto } from './dto/offer-response.dto';
 import type { SolicitudElegibleDto } from './dto/solicitud-elegible-response.dto';
@@ -106,5 +111,36 @@ export function toNuevoOfertaItemsReactiva(
         // typed data. `assertItemValido` (Phase 2) re-validates `isAlt ⇒
         // altNote` regardless — this cast never substitutes for that check.
       }) as NuevoOfferItemReactiva,
+  );
+}
+
+/**
+ * PR6b (task 6b's proactiva mirror of `toNuevoOfertaItemsReactiva` above,
+ * same reasoning): `EnviarOfertaProactivaDto.items` (`NuevoOfferItemDto[]`)
+ * -> `EnviarOfertaProactivaUseCase.execute`'s `readonly
+ * NuevoOfferItemProactiva[]` parameter. A genuinely absent
+ * `providerCatalogItemId` falls back to `''` — never a valid catalog item
+ * id, so `EnviarOfertaProactivaUseCase`'s own D-B cardinality gate
+ * (`obtenerItemsDeProveedor`'s result silently excludes it, C9) rejects it
+ * with `ItemsNoDisponiblesError` (400) exactly as it would any other
+ * foreign/absent id — same "no separate presence check needed here, no
+ * silent 500 either" discipline as the reactiva mapper.
+ */
+export function toNuevoOfertaItemsProactiva(
+  items: readonly NuevoOfferItemDto[],
+): readonly NuevoOfferItemProactiva[] {
+  return items.map(
+    (item) =>
+      ({
+        providerCatalogItemId: item.providerCatalogItemId ?? '',
+        precio: item.precio,
+        isAlt: item.isAlt,
+        altNote: item.altNote,
+        altSize: item.altSize,
+        altQty: item.altQty,
+        // Mismo bypass documentado en `toNuevoOfertaItemsReactiva` arriba —
+        // `assertItemValido` (Phase 2) re-valida `isAlt ⇒ altNote`
+        // igualmente, este cast nunca sustituye esa validación.
+      }) as NuevoOfferItemProactiva,
   );
 }

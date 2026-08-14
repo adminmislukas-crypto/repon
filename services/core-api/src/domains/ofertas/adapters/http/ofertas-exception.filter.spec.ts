@@ -1,6 +1,8 @@
 import type { ArgumentsHost } from '@nestjs/common';
 import { CatalogQueryUnavailableError } from '../../../catalogo/contracts/catalog-query.port';
 import {
+  DestinatarioNoElegibleError,
+  ItemsNoDisponiblesError,
   OfertaInvalidaError,
   OportunidadCerradaError,
   SolicitudNoElegibleError,
@@ -25,8 +27,10 @@ function fakeHost(): { host: ArgumentsHost; json: jest.Mock; status: jest.Mock }
 // (constructor-keyed map, one test per mapped class, independent of any
 // particular controller route — `test/ofertas-enviar-oferta.e2e-spec.ts`
 // proves at least the 404/409/400/503 set through the real HTTP pipeline).
-// Later PRs (6b/7b) EXTEND this same `describe.each` table, never replace
-// it.
+// This PR (6b, tasks.md 6b.7/6b.8) EXTENDS this same table with the 2 new
+// `enviarOfertaProactiva` rows — `DestinatarioNoElegibleError`/
+// `ItemsNoDisponiblesError` — never replacing the 4 rows above. 7b will do
+// the same for `aceptarOferta`'s 3 remaining classes.
 describe.each([
   [
     new SolicitudNoElegibleError('11111111-1111-4111-8111-111111111111'),
@@ -40,6 +44,16 @@ describe.each([
   ],
   [new OfertaInvalidaError('El item x no pertenece a la solicitud y.'), 400, 'OFERTA_INVALIDA'],
   [new CatalogQueryUnavailableError(), 503, 'CATALOG_UNAVAILABLE'],
+  [
+    new DestinatarioNoElegibleError('11111111-1111-4111-8111-111111111111'),
+    404,
+    'DESTINATARIO_NO_ELEGIBLE',
+  ],
+  [
+    new ItemsNoDisponiblesError('1 de 2 item(s) no estan disponibles en el catalogo.'),
+    400,
+    'OFERTA_ITEMS_NO_DISPONIBLES',
+  ],
 ] as const)('OfertasExceptionFilter — %#', (exception, statusCode, code) => {
   it(`maps ${exception.constructor.name} to ${statusCode} ${code}`, () => {
     const filter = new OfertasExceptionFilter();

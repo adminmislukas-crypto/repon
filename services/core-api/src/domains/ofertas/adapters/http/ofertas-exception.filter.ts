@@ -100,6 +100,15 @@ const ERROR_STATUS_MAP = new Map<ErrorConstructor, StatusAndCode>([
     CatalogQueryUnavailableError,
     { statusCode: HttpStatus.SERVICE_UNAVAILABLE, code: 'CATALOG_UNAVAILABLE' },
   ],
+  // PR6b (tasks.md 6b.7/6b.8) — enviarOfertaProactiva's own 2 errors (D10/D-B).
+  [
+    DestinatarioNoElegibleError,
+    { statusCode: HttpStatus.NOT_FOUND, code: 'DESTINATARIO_NO_ELEGIBLE' },
+  ],
+  [
+    ItemsNoDisponiblesError,
+    { statusCode: HttpStatus.BAD_REQUEST, code: 'OFERTA_ITEMS_NO_DISPONIBLES' },
+  ],
 ]);
 
 @Catch(
@@ -119,9 +128,9 @@ export class OfertasExceptionFilter implements ExceptionFilter {
   catch(exception: Error, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<ResponseLike>();
     // Every class named in @Catch() above WILL eventually get a map entry
-    // (added incrementally, PR by PR — 4 of 9 now have one, this PR) —
-    // until a remaining class does, an instance reaching this filter (6b's
-    // `DestinatarioNoElegibleError`/`ItemsNoDisponiblesError`, 7b's
+    // (added incrementally, PR by PR — 6 of 9 now have one, after this PR:
+    // 5b's 4 + 6b's `DestinatarioNoElegibleError`/`ItemsNoDisponiblesError`)
+    // — until a remaining class does, an instance reaching this filter (7b's
     // `OfferNotFoundError`/`TransicionInvalidaError`/`OfertaYaAceptadaError`
     // — none reachable from any route wired as of this PR) falls into the
     // same defensive 500 fallback every sibling filter already uses for a

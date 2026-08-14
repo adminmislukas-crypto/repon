@@ -5,6 +5,7 @@ import { MatchEncontradoListener } from './adapters/events/match-encontrado.list
 import { OfertasController } from './adapters/http/ofertas.controller';
 import { KyselyOfferOpportunityRepository } from './adapters/persistence/kysely-offer-opportunity.repository';
 import { KyselyOfferRepository } from './adapters/persistence/kysely-offer.repository';
+import { EnviarOfertaProactivaUseCase } from './ports-in/enviar-oferta-proactiva.use-case';
 import { EnviarOfertaUseCase } from './ports-in/enviar-oferta.use-case';
 import { ListarSolicitudesElegiblesUseCase } from './ports-in/listar-solicitudes-elegibles.use-case';
 import { RegistrarOportunidadUseCase } from './ports-in/registrar-oportunidad.use-case';
@@ -56,6 +57,11 @@ import { OFFER_REPOSITORY } from './ports-out/offer-repository.port';
  * `EnviarOfertaUseCase` + `OfertasController`'s new `POST /ofertas` route
  * are registered below.
  *
+ * PR6b (tasks.md 6b.9) adds `EnviarOfertaProactivaUseCase` — needs zero new
+ * `imports`: `CatalogoModule` was already added by 5b, and this use case
+ * consumes the same `CATALOG_QUERY_PORT` token via its own new method
+ * (`obtenerItemsDeProveedor`, PR6a), not a second module edge.
+ *
  * `exports: []`, deliberately (D15): this domain has no `contracts/` yet and
  * nothing else imports from it.
  *
@@ -73,6 +79,7 @@ import { OFFER_REPOSITORY } from './ports-out/offer-repository.port';
     MatchEncontradoListener,
     ListarSolicitudesElegiblesUseCase,
     EnviarOfertaUseCase,
+    EnviarOfertaProactivaUseCase,
   ],
   exports: [],
 })

@@ -188,16 +188,16 @@ Sin dependencia de `ofertas`. El único PR que toca `catalogo` (R8) — aislado.
 
 Depends on Phase 6a's new method and Phase 5b's `CatalogoModule` import.
 
-- [ ] 6b.1 RED (D10, written first): `ports-in/enviar-oferta-proactiva.use-case.spec.ts` — no qualifying relationship (`existeRelacion` → `false`) → `DestinatarioNoElegibleError`/404 (`core-api-ofertas` Scenario "A userId with no matching relationship is rejected with 404"); a prior match (even without acceptance) qualifies (Scenario "A userId with a prior match qualifies as a recipient").
-- [ ] 6b.2 RED (extend, D-B cardinality): `obtenerItemsDeProveedor` returns fewer items than requested (a competitor's id silently discarded) → `ItemsNoDisponiblesError`/400, rejected before any write (Scenario "An id belonging to a competitor is rejected, not silently dropped"); all-match happy path → `'pendiente'` offer (Scenario "All items belong to the offering company").
-- [ ] 6b.3 RED (extend): this use case's own instance of the D13 order guarantee — `obtenerItemsDeProveedor` resolves before `runInTransaction` is invoked (same shape as 5a.5; a separate use case class needs its own test — the repo has no shared cross-class enforcement of C2).
-- [ ] 6b.4 GREEN: `ports-in/enviar-oferta-proactiva.use-case.ts`.
-- [ ] 6b.5 `adapters/http/dto/enviar-oferta-proactiva.dto.ts` (`{ userId, items: NuevoOfferItemDto[], entrega, mensaje? }` — `userId` **is** present here, the sole D11 exception, bounded by D10).
-- [ ] 6b.6 `ofertas.controller.ts`: `POST /ofertas/proactivas`, `@Roles('provider')`, 201 `OfferResponseDto`.
-- [ ] 6b.7 RED (extend the filter spec): `DestinatarioNoElegibleError`→404 `DESTINATARIO_NO_ELEGIBLE`, `ItemsNoDisponiblesError`→400 `OFERTA_ITEMS_NO_DISPONIBLES`.
-- [ ] 6b.8 GREEN (extend the filter): the 2 mappings.
-- [ ] 6b.9 `ofertas.module.ts`: register `EnviarOfertaProactivaUseCase`.
-- [ ] 6b.10 E2e: `test/ofertas-enviar-oferta-proactiva.e2e-spec.ts` — 201 happy path; 404 no relationship; 400 competitor id; 503 catalog outage; 401; 403.
+- [x] 6b.1 RED (D10, written first): `ports-in/enviar-oferta-proactiva.use-case.spec.ts` — no qualifying relationship (`existeRelacion` → `false`) → `DestinatarioNoElegibleError`/404 (`core-api-ofertas` Scenario "A userId with no matching relationship is rejected with 404"); a prior match (even without acceptance) qualifies (Scenario "A userId with a prior match qualifies as a recipient").
+- [x] 6b.2 RED (extend, D-B cardinality): `obtenerItemsDeProveedor` returns fewer items than requested (a competitor's id silently discarded) → `ItemsNoDisponiblesError`/400, rejected before any write (Scenario "An id belonging to a competitor is rejected, not silently dropped"); all-match happy path → `'pendiente'` offer (Scenario "All items belong to the offering company").
+- [x] 6b.3 RED (extend): this use case's own instance of the D13 order guarantee — `obtenerItemsDeProveedor` resolves before `runInTransaction` is invoked (same shape as 5a.5; a separate use case class needs its own test — the repo has no shared cross-class enforcement of C2).
+- [x] 6b.4 GREEN: `ports-in/enviar-oferta-proactiva.use-case.ts`.
+- [x] 6b.5 `adapters/http/dto/enviar-oferta-proactiva.dto.ts` (`{ userId, items: NuevoOfferItemDto[], entrega, mensaje? }` — `userId` **is** present here, the sole D11 exception, bounded by D10).
+- [x] 6b.6 `ofertas.controller.ts`: `POST /ofertas/proactivas`, `@Roles('provider')`, 201 `OfferResponseDto`.
+- [x] 6b.7 RED (extend the filter spec): `DestinatarioNoElegibleError`→404 `DESTINATARIO_NO_ELEGIBLE`, `ItemsNoDisponiblesError`→400 `OFERTA_ITEMS_NO_DISPONIBLES`.
+- [x] 6b.8 GREEN (extend the filter): the 2 mappings.
+- [x] 6b.9 `ofertas.module.ts`: register `EnviarOfertaProactivaUseCase`.
+- [x] 6b.10 E2e: `test/ofertas-enviar-oferta-proactiva.e2e-spec.ts` — 201 happy path; 404 no relationship; 400 competitor id; 503 catalog outage; 401; 403.
 
 ## Phase 7a: Aceptación (lógica) + bandeja — Spec: `core-api-ofertas`
 
