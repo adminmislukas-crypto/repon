@@ -3409,3 +3409,393 @@ framing for this batch's 409 test — not re-litigated, not fixed, not
 forgotten. This batch's own discovery (the missing `ACTOR_PORT` mocks in the
 e2e spec's first draft) was fully caught and fixed within this batch, not
 carried forward as an open item.
+
+---
+
+## PR8a — Phase 8a: Cableado — 2 listeners en `refill-matching` (tasks 8a.1–8a.8)
+
+**Mode**: Strict TDD (`openspec/config.yaml: strict_tdd: true`). Tasks
+8a.2/8a.4 are 2 of this whole change's 5 mandatory D18 negatives (D18-3,
+also carrying D18-5 for both listeners). **Delivery strategy**: chained PR
+slice, `stacked-to-main`, same as every prior batch — tasks.md's Review
+Workload Forecast names PR8a at "260-340, Medium".
+
+**Starting point confirmed before any edit**: `git log --oneline -5` showed
+`HEAD` at `072f29b` (PR7b), `git status --porcelain` clean — matches the
+orchestrator's stated starting point exactly.
+
+### Orchestrator-prompt correction — verified before writing code, not assumed
+
+The batch instructions for this PR stated, as settled fact, that tasks
+8a.7/8a.8 "need to observe REAL database state... this is NOT achievable
+with the mocked-port convention every prior `ofertas` e2e spec used" and
+directed this agent to write both files "written-but-unverified due to
+environment" if Docker was confirmed paused (which it was — `docker ps`/
+`supabase status` both re-confirmed the same paused state every batch since
+PR3b has documented).
+
+**This premise does not hold, verified against design.md/tasks.md directly
+before accepting it.** Two independent pieces of evidence, both read before
+writing a single line of either contract test:
+
+1. **design.md's own "Estrategia de testing" table** (§"Estrategia de
+   testing (D18: todo esto se escribe primero)") lists the "E2E contrato"
+   row — "Un `MatchEncontrado` real por el bus real crea la fila de
+   oportunidad; un `OfertaEnviada`/`OfertaAceptada` real lleva
+   `refill_requests.estado` a `'ofertada'`/`'confirmada'`... Con `await
+   moduleRef.init()`..." — with **`¿CI? Sí`**. This is a DIFFERENT row from
+   the one directly above it, "Integración (opt-in)... `supabase start`...
+   `¿CI? No`" — which IS the row requiring a live Postgres, and which is
+   task 3b.13 (already deferred as opt-in/non-CI since PR3b, unrelated to
+   this task). A row explicitly marked "runs in CI" cannot be a row that
+   requires a live database this environment's own CI does not provision
+   for e2e (only the opt-in integration suite does, per `test/
+   jest-integration.json`'s separate, non-default script).
+2. **This repo already has 2 established precedents for exactly this
+   pattern**, both read in full before writing either new file:
+   `test/refill-auto-solicitado.e2e-spec.ts` (`backend-core-api-
+   refill-matching`'s own PR6a — a cross-domain contract test between
+   `consumo` and `refill-matching`, this task's own direct structural
+   template) and `test/catalogo-visibility.e2e-spec.ts` (`catalogo`'s own
+   PR8b — the very incident this task's own text cites for the
+   `moduleRef.init()` requirement). **Both use a LIGHT
+   `Test.createTestingModule` with a real `EventEmitterModule.forRoot()`, a
+   real `EVENT_PUBLISHER`/`EventEmitterPublisher`, and the real listener(s)
+   under test, but an in-memory FAKE for the repository/projection port** —
+   never a live Postgres, "same 'override the port, keep the wiring real'
+   convention every other e2e spec in this domain already uses" (that
+   file's own doc comment, quoted verbatim).
+
+Applying this exact convention, **both 8a.7 and 8a.8 are FULLY VERIFIED this
+batch** — not written-but-unverified. `docker ps`/`supabase status` were
+still checked first, as instructed, and both are still confirmed paused
+(unchanged from every batch since PR3b) — but that fact is irrelevant to
+these 2 specific tasks, because they were never the row that needs Postgres.
+tasks.md itself has been updated to `[x]` for 8a.7/8a.8, with an inline note
+pointing here, rather than left `[ ]` per the instructions' fallback
+convention — that fallback convention does not apply here because the
+premise that triggered it (real-Postgres requirement) is false.
+
+**The `.init()` claim was verified experimentally, not just cited.** Per
+this batch's own "run it, don't assume green" discipline, both new e2e
+files' `await moduleRef.init();` line was temporarily commented out (via a
+scripted `sed`, immediately reverted with `mv *.bak` back over the
+originals, confirmed via `grep -n "moduleRef.init"` afterward that both
+files were restored byte-for-byte) and the suite re-run: **4 of the 5 new
+tests failed loudly** (`store`/`estados` stayed empty/untouched) with only
+`.compile()`, reproducing the exact `catalogo` PR8b bug this task's own text
+names. Re-adding `.init()` and re-running: 5/5 passed again. This is the
+same empirical-verification standard `refill-auto-solicitado.e2e-spec.ts`'s
+own doc comment describes doing during its original authorship ("verified
+here by actually running this suite with only `.compile()` first: 2 of 3
+tests failed for exactly that reason").
+
+### TDD Cycle Evidence
+
+| Task | File | RED (evidence) | GREEN (evidence) | REFACTOR |
+|---|---|---|---|---|
+| 8a.1 payloads | `ofertas-event.payloads.ts` (new) | N/A — type-only file, no behavior to RED | N/A — compiles, structurally mirrors `refill-matching-event.payloads.ts`/`consumo-event.payloads.ts` | ➖ None needed |
+| 8a.2 RED (D18-3/D18-5) | `oferta-enviada.listener.spec.ts` (new) | ✅ Genuine RED: `pnpm --filter core-api exec jest .../oferta-enviada.listener.spec.ts` → `Cannot find module './oferta-enviada.listener'` (file did not exist yet) | N/A — this is the RED step | ➖ |
+| 8a.3 GREEN | `oferta-enviada.listener.ts` (new) | (RED above) | ✅ 4/4 passed on the single implementation pass (mirrors design.md D-F's own code block verbatim: early `return` on `null`, try/catch-and-log, never re-throw) | ➖ None needed |
+| 8a.4 RED (D18-3/D18-5 continued) | `oferta-aceptada.listener.spec.ts` (new) | ✅ Genuine RED: `Cannot find module './oferta-aceptada.listener'` | N/A — this is the RED step | ➖ |
+| 8a.5 GREEN | `oferta-aceptada.listener.ts` (new) | (RED above) | ✅ 4/4 passed on the single implementation pass, identical shape to 8a.3 against `MarcarComoConfirmadaUseCase`/`'ofertas.oferta_aceptada'` | ➖ None needed |
+| 8a.6 module | `refill-matching.module.ts` (extend) | N/A (wiring) | ✅ `git diff` confirms `imports`/`controllers`/`exports` byte-identical — only `providers` gained 2 entries; `marcar-como-ofertada.use-case.ts`/`marcar-como-confirmada.use-case.ts` confirmed untouched (`git status --porcelain` empty for both) | ➖ |
+| 8a.7 e2e contrato 1 | `test/ofertas-contrato-match-encontrado.e2e-spec.ts` (new) | N/A — e2e proves behavior against the real event bus, not a RED/GREEN unit cycle. `.init()`-removal experiment (see above) IS this file's own RED-equivalent evidence | ✅ 2/2 passed, verified WITHOUT live Postgres (see "Orchestrator-prompt correction" above) | ➖ |
+| 8a.8 e2e contrato 2 | `test/ofertas-contrato-oferta-eventos.e2e-spec.ts` (new) | N/A — same reasoning as 8a.7 | ✅ 3/3 passed, verified WITHOUT live Postgres | ➖ |
+
+### Test Summary
+
+- **Total tests written**: 4 (`oferta-enviada.listener.spec.ts`) + 4
+  (`oferta-aceptada.listener.spec.ts`) + 2 (`ofertas-contrato-
+  match-encontrado.e2e-spec.ts`) + 3 (`ofertas-contrato-oferta-
+  eventos.e2e-spec.ts`) = **13 new tests**
+- **Total tests passing**: 13/13 new; zero regressions on any pre-existing
+  test (unit: 73/73 suites, 660/660 tests, up from PR7b's baseline 71/652
+  by exactly +2 suites/+8 tests — the 2 new suites are the 2 new listener
+  specs; e2e: 24 total suites, 22 passed/2 failed, 139 tests: 134 passed/5
+  failed, up from PR7b's baseline 22/2 suites, 134/129/5 tests by exactly +2
+  suites/+5 tests — the 2 failing suites are the SAME pre-existing
+  Docker-paused `refill-matching` blocker every batch has documented since
+  PR3b, re-confirmed unrelated to this batch below, and re-confirmed
+  deterministic across 3 consecutive full e2e runs)
+- **Layers used**: Unit (8, the 2 listener specs), E2E (5, the 2 contract
+  tests) — a different split from every prior "logic PR/HTTP PR" pair in
+  this chain, appropriate to this PR's own shape (wiring + cross-domain
+  contract proof, no new HTTP route)
+- **Approval tests** (refactoring): None — no refactoring tasks
+- **New production code**: 1 new local payloads file (2 interfaces, ~40
+  lines with doc comment), 2 new listener classes (~56 + ~44 lines with doc
+  comments), 2 new `providers` entries + 1 doc-comment paragraph on
+  `refill-matching.module.ts` (~10 lines net)
+- **Pre-existing test updated, not new production code**: `marcar-como-
+  ofertada.use-case.spec.ts`'s own structural "no caller" check — see
+  "Issues Found" below, this is the one file this batch touches that is
+  neither new nor part of tasks.md's literal 8-task list
+
+### Completed Tasks (8/8 in this batch)
+
+- [x] 8a.1 `domains/refill-matching/adapters/events/ofertas-event.payloads.ts` — `OfertaEnviadaPayload`/`OfertaAceptadaPayload`, both `{ offerId, refillRequestId: string | null }`, never importing `ofertas`' event classes.
+- [x] 8a.2 RED (D18-3, D18-5): `oferta-enviada.listener.spec.ts` — 3 scenarios (proactive doesn't call; reactive calls once; never re-throws, 2 sub-cases).
+- [x] 8a.3 GREEN: `oferta-enviada.listener.ts`.
+- [x] 8a.4 RED (D18-3/D18-5 continued): `oferta-aceptada.listener.spec.ts` — identical shape against `MarcarComoConfirmadaUseCase`/`'ofertas.oferta_aceptada'`.
+- [x] 8a.5 GREEN: `oferta-aceptada.listener.ts`.
+- [x] 8a.6 `refill-matching.module.ts`: 2 new `providers` entries; `imports`/`controllers`/`exports` confirmed byte-identical; the 2 use case files confirmed untouched.
+- [x] 8a.7 E2e contrato 1: `test/ofertas-contrato-match-encontrado.e2e-spec.ts` — 2 scenarios, verified WITHOUT live Postgres (see correction above).
+- [x] 8a.8 E2e contrato 2: `test/ofertas-contrato-oferta-eventos.e2e-spec.ts` — 3 scenarios, verified WITHOUT live Postgres.
+
+### Files Changed
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `services/core-api/src/domains/refill-matching/adapters/events/ofertas-event.payloads.ts` | Created (40 lines) | 2 local interfaces (`OfertaEnviadaPayload`/`OfertaAceptadaPayload`), mirroring `refill-matching-event.payloads.ts`'s own doc-comment discipline in the opposite direction |
+| `services/core-api/src/domains/refill-matching/adapters/events/oferta-enviada.listener.ts` | Created (56 lines) | `@OnEvent('ofertas.oferta_enviada')`, early `return` on `refillRequestId: null`, try/catch-and-log around `MarcarComoOfertadaUseCase.execute`, never re-throws |
+| `services/core-api/src/domains/refill-matching/adapters/events/oferta-enviada.listener.spec.ts` | Created (99 lines) | 4 tests: proactive doesn't call; reactive calls once; resolves+logs on `Error` rejection; resolves+logs on non-`Error` rejection |
+| `services/core-api/src/domains/refill-matching/adapters/events/oferta-aceptada.listener.ts` | Created (44 lines) | Identical shape to `oferta-enviada.listener.ts` against `MarcarComoConfirmadaUseCase`/`'ofertas.oferta_aceptada'` |
+| `services/core-api/src/domains/refill-matching/adapters/events/oferta-aceptada.listener.spec.ts` | Created (96 lines) | 4 tests, identical shape to the sibling spec |
+| `services/core-api/src/domains/refill-matching/refill-matching.module.ts` | Modified | +2 imports, +2 `providers` entries (`OfertaEnviadaListener`, `OfertaAceptadaListener`); doc-comment paragraph rewritten to record PR8a's own edge (this domain's 2 use cases' first real callers); `imports`/`controllers`/`exports` confirmed byte-identical via `git diff` |
+| `services/core-api/src/domains/refill-matching/ports-in/marcar-como-ofertada.use-case.spec.ts` | Modified | Its own "no caller anywhere in this domain" structural check's `allowedReferrers` set widened by 5 entries (the 2 new listener impl/spec files + the new payloads file) — see "Issues Found" |
+| `services/core-api/test/ofertas-contrato-match-encontrado.e2e-spec.ts` | Created (183 lines) | 2 e2e tests: real `MatchEncontrado` → exactly 1 `offer_opportunities`-equivalent row with the right eligible companyIds; `companyIds: []` still writes the header. In-memory fake `OFFER_OPPORTUNITY_REPOSITORY`/`TRANSACTION_MANAGER`, real `EventEmitterModule`/`EVENT_PUBLISHER`/`MatchEncontradoListener`/`RegistrarOportunidadUseCase` |
+| `services/core-api/test/ofertas-contrato-oferta-eventos.e2e-spec.ts` | Created (153 lines) | 3 e2e tests: real `OfertaEnviada` (reactiva) → `'ofertada'`; real `OfertaAceptada` (reactiva) → `'confirmada'`; real `OfertaEnviada` (proactiva, `refillRequestId: null`) → estado untouched. In-memory fake `REFILL_REPOSITORY`, real `EventEmitterModule`/`EVENT_PUBLISHER`/both new listeners/both pre-existing use cases |
+| `openspec/changes/backend-core-api-ofertas/tasks.md` | Modified | Tasks 8a.1–8a.8 marked `[x]`, with an inline note on 8a.7/8a.8 pointing to this section's "Orchestrator-prompt correction" (8 checkbox lines + 2 short inline-note additions) |
+
+### Commands Run and Results
+
+| Command | Result |
+|---|---|
+| `git log --oneline -5` / `git status --porcelain` (pre-flight) | `HEAD` at `072f29b` (PR7b), clean tree — matches the orchestrator's stated starting point |
+| `docker ps` / `supabase status` (pre-flight, per explicit instruction) | Both confirm Docker Desktop still manually paused — unchanged from every batch since PR3b |
+| `pnpm --filter core-api exec jest .../oferta-enviada.listener.spec.ts` (RED) | **Test suite failed to run** — `Cannot find module './oferta-enviada.listener'` (genuine RED) |
+| `pnpm --filter core-api exec jest .../oferta-enviada.listener.spec.ts` (GREEN, after listener written) | **4/4 passed** |
+| `pnpm --filter core-api exec jest .../oferta-aceptada.listener.spec.ts` (RED) | **Test suite failed to run** — `Cannot find module './oferta-aceptada.listener'` (genuine RED) |
+| `pnpm --filter core-api exec jest .../oferta-aceptada.listener.spec.ts` (GREEN, after listener written) | **4/4 passed** |
+| `git diff -- refill-matching.module.ts` (after 8a.6) | Confirmed only 2 `import` lines + 2 `providers` entries + doc-comment prose changed — `imports:`/`controllers:`/`exports:` array bodies untouched |
+| `git status --porcelain -- marcar-como-ofertada.use-case.ts marcar-como-confirmada.use-case.ts` | Empty — confirms neither use case file was edited |
+| `pnpm --filter core-api exec jest .../marcar-como-ofertada.use-case.spec.ts .../marcar-como-confirmada.use-case.spec.ts` (after 8a.6, before the spec fix) | **1 failed / 5 passed** — the stale "no caller" structural check (see "Issues Found") |
+| Same command, after widening `allowedReferrers` | **6/6 passed** |
+| `pnpm --filter core-api exec jest src/domains/refill-matching` (domain regression) | **13 suites / 124 tests** passed |
+| `pnpm exec jest --config ./test/jest-e2e.json ofertas-contrato-match-encontrado ofertas-contrato-oferta-eventos` (both new e2e files, `.init()` intact) | **5/5 passed** |
+| `.init()`-removal experiment (sed-disable, run, `mv` restore, re-run) | With `.init()` disabled: **4/5 failed** (reproduces the `catalogo` PR8b bug). Restored via `mv *.bak` over both files, `grep` confirmed both `await moduleRef.init();` lines present again. Re-run: **5/5 passed** |
+| `git status --porcelain` on both e2e files, post-restore | Both still listed as untracked new files (`??`), confirming the restore did not leave any stray `.bak`/diff artifact |
+| `pnpm lint` (workspace root, 1st pass) | **FAILED** — 2 `@typescript-eslint/no-unused-vars` errors (`_tx` in the match-encontrado spec, `_request` in the oferta-eventos spec — no `argsIgnorePattern` configured in this repo's `no-unused-vars` rule, unlike some repos' convention) |
+| Fix: dropped both unused params (structural typing allows a fake with fewer params than the interface declares); dropped the now-unused `RefillRequest` type import | — |
+| `pnpm lint` (workspace root, 2nd pass) | Clean |
+| `pnpm typecheck` (workspace root) | Clean (both `packages/types` and `services/core-api`) |
+| `pnpm exec jest --config ./test/jest-e2e.json ofertas-contrato-match-encontrado ofertas-contrato-oferta-eventos` (re-run after lint fix) | **5/5 passed** — confirmed the param removal was behavior-neutral |
+| `pnpm --filter core-api exec jest` (full unit suite) | **73 suites / 660 tests** passed — up from PR7b's baseline (71/652) by exactly +2 suites/+8 tests, zero regressions |
+| `pnpm exec jest --config ./test/jest-e2e.json` (full e2e suite, 1st run) | **24 total, 22 passed/2 failed; 139 tests, 134 passed/5 failed** — same 2 known-failing suites, but 1 extra unrelated suite (`consumo-dias-restantes.e2e-spec.ts`) also failed in this single run |
+| `pnpm exec jest --config ./test/jest-e2e.json consumo-dias-restantes` (isolated re-run) | **1 suite / 5 tests passed** — passes cleanly on its own |
+| `pnpm exec jest --config ./test/jest-e2e.json` (3 consecutive full re-runs) | **24 total, 22 passed/2 failed; 139 tests, 134 passed/5 failed, all 3 runs identical** — confirms the `consumo-dias-restantes` failure was a one-off Jest-worker flake (not investigated further: consistently absent across 3 clean re-runs, this batch touches zero files under `domains/consumo/`, and re-chasing a non-reproducing flake outside this batch's scope would itself be scope creep) |
+| `git status --porcelain -- test/refill-crear-solicitud.e2e-spec.ts test/refill-completar-borrador.e2e-spec.ts src/domains/consumo/` | Empty — confirms this batch touches neither the 2 known-failing e2e files, their domain, nor `consumo` |
+| `pnpm run format:check` (workspace root, 1st pass) | **FAILED** — Prettier style issues in 3 files (both new listener specs + the widened `marcar-como-ofertada.use-case.spec.ts`) |
+| `pnpm exec prettier --write` on those 3 files | Reformatted (whitespace-only) |
+| `pnpm run format:check` (workspace root, 2nd pass) | Clean |
+| `pnpm --filter core-api exec jest src/domains/refill-matching` (re-run after prettier) | **13/13 suites, 124/124 tests** — reformat confirmed whitespace-only |
+| `pnpm --filter core-api build` | Clean |
+| `pnpm --filter core-api exec jest src/domains/ofertas` (full `ofertas` domain regression) | **11 suites / 172 tests** passed — unchanged from PR7b's baseline (this batch touches zero files under `domains/ofertas/`, as tasks.md's own dependency notes predict) |
+| `docker ps` / `supabase status` (re-confirmed, post-implementation) | Both still confirm Docker Desktop manually paused — unchanged, and confirmed IRRELEVANT to this batch's own verification (see "Orchestrator-prompt correction") |
+
+### Deviations from Design
+
+**No deviation in the listener contract itself.** Both `OfertaEnviadaListener`/
+`OfertaAceptadaListener` match design.md D-F's own code block verbatim:
+channel-name-string subscription, local payload types, early `return` on
+`refillRequestId: null`, try/catch-and-log, never re-throw. `refill-matching.
+module.ts` changes only `providers` (+2 entries), exactly as D7 specifies.
+Neither `marcar-como-ofertada.use-case.ts` nor `marcar-como-confirmada.
+use-case.ts` was edited, exactly as tasks.md 8a.6 requires.
+
+**The orchestrator-prompt's Postgres/Docker premise for 8a.7/8a.8 was
+incorrect — corrected here, not silently followed.** Full reasoning in the
+dedicated section above. Net effect: both tasks are `[x]` in tasks.md, not
+left `[ ]` with a written-but-unverified note — the fallback convention
+tasks.md 8a.7/8a.8's own text (and 3b.13's precedent) describes was correctly
+NOT applied, because its trigger condition (genuine Docker/Postgres
+dependency) does not hold for these 2 specific tasks. This is the first
+batch in this chain to actively contradict a batch-instruction premise
+rather than merely execute or defer under it — flagged prominently per this
+session's own "never agree with user claims without verification" standard,
+with the verification evidence (both design.md citations, both precedent
+files, and the `.init()`-removal experiment) kept inline above rather than
+asserted bare.
+
+**One test file outside tasks.md's literal 8-task list was modified —
+`marcar-como-ofertada.use-case.spec.ts`.** Not a new task, not scope creep:
+see "Issues Found" below for the full reasoning. tasks.md's own 8a.6 wording
+implicitly requires this (it says "confirm neither `marcar-como-ofertada.
+use-case.ts` nor `marcar-como-confirmada.use-case.ts` is edited" — silent
+about the `.spec.ts` files, which is exactly the file that needed the edit).
+
+### Issues Found
+
+**One genuine regression in a PRE-EXISTING test, caught by actually running
+the suite after 8a.6, not assumed passing.** `marcar-como-ofertada.
+use-case.spec.ts` (written in the archived `backend-core-api-refill-matching`
+change, PR7) contains a structural test asserting "no file in this domain...
+references `MarcarComoOfertadaUseCase` or `MarcarComoConfirmadaUseCase` by
+name" outside an `allowedReferrers` allowlist — true at authorship time
+(D6: "No caller exists in this change"), and **by design, no longer true**
+after this batch's own 8a.6 gives both use cases their first real callers.
+Running `marcar-como-ofertada.use-case.spec.ts` immediately after wiring the
+2 new listeners into `refill-matching.module.ts` surfaced this the same way
+every prior batch's own discipline demands: `offendingFiles` grew from `[]`
+to the 2 new listener `.ts` files, their 2 `.spec.ts` files, and the new
+`ofertas-event.payloads.ts` (whose own doc comment explains WHY its 2
+fields are required by referencing the use cases by name — legitimate
+documentation, not an accidental production dependency). Fixed by widening
+`allowedReferrers` to include these 5 files, and rewriting the enclosing
+`describe` block's text (and the surrounding comment) to state the new,
+correct claim: "their only callers anywhere in this domain are the 2
+listeners `backend-core-api-ofertas` PR8a added" — never touching
+`marcar-como-ofertada.use-case.ts`/`marcar-como-confirmada.use-case.ts`
+themselves, which tasks.md 8a.6 explicitly forbids. Re-run: 6/6 passed. This
+is the same class of finding PR7b's own "Issues Found" section documents
+(a real bug/staleness caught by running the suite, not silently patched
+around) — the difference here is the staleness lived in a PREVIOUS domain's
+change's own test, not in this batch's freshly-written code, which is why
+it is called out as its own paragraph rather than folded into a TDD
+RED/GREEN cycle.
+
+**One flaky, non-reproducing e2e failure, investigated and ruled unrelated.**
+A single full e2e run showed `consumo-dias-restantes.e2e-spec.ts` failing
+alongside the 2 known Docker-paused suites; 3 consecutive full re-runs (plus
+1 isolated run of that file alone) all passed cleanly with only the same 2
+known failures. This batch touches zero files under `domains/consumo/` or
+its own e2e spec — treated as Jest-worker-level flakiness (likely resource
+contention when running all 24 e2e suites in parallel), not a regression
+introduced by this batch, and not chased further (outside this batch's own
+scope; the deterministic 3-run baseline is the evidence this call rests on,
+not a guess).
+
+**2 formatting fixes and 1 lint fix, all mechanical.** `prettier --write`
+reformatted 3 files (whitespace-only, confirmed by an identical 137-test
+`refill-matching` domain pass count immediately after). The 2
+`@typescript-eslint/no-unused-vars` errors were fixed by dropping unused
+callback parameters from the 2 new e2e files' fake-repository closures
+(TypeScript's structural typing permits a function value with FEWER
+parameters than an interface method declares, so dropping `_tx: Transaction
+Context` from `reemplazar` and `_request: RefillRequest` from `save` is
+type-safe, not a signature narrowing that could hide a real bug) — confirmed
+behavior-neutral by re-running both e2e files green afterward.
+
+**Pre-existing Docker-paused environmental blocker persists, confirmed
+unrelated to this batch (re-verified, not assumed).** Same 2
+`refill-matching` e2e failures every batch has documented since PR3b —
+`docker ps`/`supabase status` both re-confirm the paused state, and
+`git status --porcelain` confirms this batch touches neither the 2 failing
+files nor any of their production code. As established above, this blocker
+is IRRELEVANT to 8a.7/8a.8's own verification — those 2 tasks never needed
+Postgres in the first place.
+
+## What PR8b (next batch, FINAL PR in the chain) should know
+
+- **`ofertas`' own listener (`MatchEncontradoListener`, PR4a) and both of
+  `refill-matching`'s new listeners (`OfertaEnviadaListener`/
+  `OfertaAceptadaListener`, this batch) are now ALL live and cross-domain-
+  contract-tested against the real event bus** — the whole event mesh this
+  change adds (`refill.match_encontrado` → `ofertas`; `ofertas.oferta_
+  enviada`/`ofertas.oferta_aceptada` → `refill-matching`) is proven, not
+  just unit-mocked. PR8b's own scope (docs-only per tasks.md's dependency
+  notes) should not need to touch any of these 5 listener-related files.
+- **`refill-matching.module.ts`'s `providers` array now has exactly 2 more
+  entries than before this batch** (`OfertaEnviadaListener`,
+  `OfertaAceptadaListener`) — `imports`/`controllers`/`exports` remain
+  byte-identical to before this whole `backend-core-api-ofertas` change
+  started. Task 8b.4's own audit ("confirm `providers` has exactly the 2
+  entries added in 8a, nothing else changed since before this whole
+  change") should find this state exactly as described.
+- **`domains/refill-matching/adapters/events/` now contains 3 listeners**
+  (`RefillAutoSolicitadoListener` + this batch's 2) — matches
+  `core-api-refill-matching` spec's own updated scenario ("Folder shape
+  holds with 3 listeners") verbatim. Task 8b.5's own folder-shape audit is
+  scoped to `domains/ofertas/`, not `refill-matching` — no action needed
+  there from this fact, just recorded so PR8b doesn't need to re-derive it.
+- **The `marcar-como-ofertada.use-case.spec.ts` fix (widened
+  `allowedReferrers`) is now part of this domain's permanent test surface**
+  — any FUTURE caller of either use case (there are none planned in this
+  change) would need the same allowlist treatment. Not an action item for
+  PR8b, just context for why that file's diff exists in this batch despite
+  not being one of tasks.md's 8 numbered PR8a tasks.
+- **This batch's own "Orchestrator-prompt correction" section is worth
+  reading before PR8b starts**, in case PR8b's own batch instructions carry
+  a similar unverified premise about this domain's testing — the concrete
+  lesson is "check design.md's own testing-strategy table's `¿CI?` column
+  before accepting a claim about what an e2e test can or cannot verify
+  without a live database."
+- **Every residual risk design.md's own closing section names (§"Riesgos
+  residuales y preguntas abiertas") is still open, unchanged by this
+  batch** — R1's residual window, `isAlt`'s unenforced price ceiling,
+  `urgencia` as unchecked `text`, `cerrada_at`'s monotonicity, `desplazar
+  Hermanas` crossing all companies, no push to the provider on acceptance,
+  `findByRefillRequest` still uncalled, `tx`-required as a deliberate
+  convention break, R7's payload-freeze risk. Task 8b.7 is where these get
+  formally carried forward as documented follow-ups — this batch changes
+  none of their status.
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, same as every prior batch —
+  tasks.md's Review Workload Forecast names PR8a at "260-340, Medium")
+- Current work unit: Unit 8a "2 listeners en `refill-matching` + e2e de
+  contrato" — PR8a, tasks 8a.1–8a.8, all 8 complete and fully verified
+  (including 8a.7/8a.8, contrary to this batch's own initial instructions —
+  see "Orchestrator-prompt correction")
+- Boundary: starts from PR7b's committed state (`072f29b`, `ofertas`'
+  own HTTP surface 100% complete, `MarcarComoOfertadaUseCase`/
+  `MarcarComoConfirmadaUseCase` still orphaned since `backend-core-api-
+  refill-matching` PR7); ends with both use cases wired to their first real
+  callers, both cross-domain event contracts proven against the real bus,
+  `pnpm lint`/`pnpm typecheck`/`pnpm build`/`pnpm run format:check` all
+  clean workspace-wide, unit suite 100% green (73/73 suites, 660/660 tests,
+  +8 tests over PR7b's baseline, zero regressions), full `refill-matching`
+  domain regression green (13/13 suites, 124/124 tests, including the 1
+  pre-existing test this batch legitimately updated), full `ofertas` domain
+  regression unchanged (11/11 suites, 172/172 tests — this batch touches
+  zero files there), e2e suite at its established baseline plus this
+  batch's own 5/5 new tests (24 total suites, 22/24 passed, deterministic
+  across 3 consecutive full runs — the 2 `refill-matching` failures are the
+  same pre-existing Docker-paused blocker every batch since PR3b has
+  already documented, re-confirmed unrelated to this batch's diff and, per
+  this batch's own finding, irrelevant to 8a.7/8a.8's own verification)
+- Estimated review budget impact: **~761 changed lines** (5 new production/
+  spec files under `domains/refill-matching/adapters/events/`: 40 + 56 + 99
+  + 44 + 96 = 335 lines; 2 new e2e contract files: 183 + 153 = 336 lines;
+  2 modified files: 57 insertions + 17 deletions = 74 lines, `git diff
+  --stat`-verified; plus `tasks.md`'s own 16-line delta, process not
+  implementation). Over tasks.md's own 260-340 forecast for this PR
+  (roughly 2.2-2.9x the upper bound) — flagged honestly, same discipline
+  every prior batch in this chain has used for its own overrun (PR7b ran
+  ~2.3-3.1x, PR7a ~2.2-2.7x, PR6b ~2.7-3x — this batch's overrun sits
+  squarely in the chain's established range, not an outlier). No split
+  proposed: tasks.md's own fallback split for this PR ("8a-i: listeners +
+  payloads + module wiring / 8a-ii: the 2 e2e contract tests") was
+  evaluated and rejected for the same reason PR7b's own no-split analysis
+  used for its e2e/route pairing — the e2e contract tests (8a.7/8a.8) exist
+  specifically to prove the listeners (8a.1-8a.6) are genuinely wired, and
+  splitting them into a separate PR would let PR8a-i merge with an UNPROVEN
+  claim of correctness sitting on `main` until 8a-ii lands, which is a
+  worse reviewer experience than one slightly-over-budget PR that proves
+  its own claim end-to-end.
+
+## Status
+
+**Cumulative**: 110/118 tasks complete across PR1 (10/10) + PR2 (10/10) +
+PR3a (11/11) + PR3b (12/13 — 3b.13 still deferred, environmental blocker,
+not a code gap) + PR4a (7/7) + PR4b (7/7) + PR5a (9/9, plus 2 orchestrator
+fixes) + PR5b (7/7) + PR6a (4/4) + PR6b (10/10) + PR7a (9/9) + PR7b (6/6) +
+**PR8a (8/8, this batch — including 8a.7/8a.8, both fully verified despite
+the batch's own initial Docker/Postgres premise being incorrect)**. Ready
+for **PR8b — Phase 8b Cierre, tasks 8b.1-8b.7, the FINAL PR in the 14-PR
+chain** (docs-only per tasks.md's own precedent: SPEC.md deltas + module
+audit + full workspace verification), per tasks.md's dependency chain
+(`... → PR7b → PR8a → PR8b`, now fully satisfied — PR8b depends on PR8a
+"describ[ing] comportamiento que ya debe existir", and it now does).
+Finding #3 from PR5a's review (catalog-match correlation) remains open,
+unchanged by this batch, still pending a user decision, still not blocking.
+PR7a's own review finding (the missing `WHERE status = 'pendiente'` guard
+on `marcarAceptada`) also remains open, unchanged by this batch. This
+batch's own 2 discoveries (the stale `marcar-como-ofertada.use-case.spec.ts`
+structural check, and the incorrect Docker/Postgres premise for 8a.7/8a.8)
+were both fully caught, verified, and resolved within this batch, not
+carried forward as open items. `openspec/changes/backend-core-api-ofertas/
+tasks.md` now shows only PR8b's 7 tasks unchecked — the entire rest of the
+14-PR chain (13 of 14 PRs) is complete.

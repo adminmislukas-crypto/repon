@@ -3,6 +3,8 @@ import { DatabaseModule } from '../../shared/database/database.module';
 import { CatalogoModule } from '../catalogo/catalogo.module';
 import { KyselyRefillRepository } from './adapters/persistence/kysely-refill.repository';
 import { RefillController } from './adapters/http/refill.controller';
+import { OfertaAceptadaListener } from './adapters/events/oferta-aceptada.listener';
+import { OfertaEnviadaListener } from './adapters/events/oferta-enviada.listener';
 import { RefillAutoSolicitadoListener } from './adapters/events/refill-auto-solicitado.listener';
 import { BuscarProveedoresCompatiblesUseCase } from './ports-in/buscar-proveedores-compatibles.use-case';
 import { CompletarBorradorUseCase } from './ports-in/completar-borrador.use-case';
@@ -39,12 +41,18 @@ import { REFILL_REPOSITORY } from './ports-out/refill-repository.port';
  * PR6b (this batch, tasks.md 6b.8) adds `CompletarBorradorUseCase` —
  * `providers` only, purely additive, `imports`/`controllers`/`exports`
  * untouched (its route lives on the already-registered `RefillController`).
- * Phase 7 (this batch, tasks.md 7.2) adds `MarcarComoOfertadaUseCase`/
- * `MarcarComoConfirmadaUseCase` — `providers` only, no controller wiring, no
- * new `imports`/`exports` edge (D6: neither has a route, neither has a
- * caller in this change — `RefillController`'s constructor is confirmed
- * unchanged by tasks.md 7.1's own structural test). Each phase EXTENDS this
- * same `providers` array, never replaces this file.
+ * Phase 7 (`backend-core-api-refill-matching`, tasks.md 7.2) added
+ * `MarcarComoOfertadaUseCase`/`MarcarComoConfirmadaUseCase` — `providers`
+ * only, no controller wiring, no new `imports`/`exports` edge (D6: neither
+ * has a route, neither had a caller in that change). `backend-core-api-
+ * ofertas` PR8a (this batch, tasks.md 8a.6, design.md D7) adds
+ * `OfertaEnviadaListener`/`OfertaAceptadaListener` — the FIRST callers of
+ * those 2 use cases, also `providers`-only, `imports`/`controllers`/`exports`
+ * confirmed byte-identical to before this batch (`core-api-refill-matching`
+ * scenario "The module's public surface is untouched"). Neither
+ * `marcar-como-ofertada.use-case.ts` nor `marcar-como-confirmada.use-case.ts`
+ * is edited by this batch. Each phase EXTENDS this same `providers` array,
+ * never replaces this file.
  *
  * `exports: []`, deliberately (D7): this domain has no `contracts/` and
  * nothing else imports from it — still true after this PR.
@@ -61,6 +69,8 @@ import { REFILL_REPOSITORY } from './ports-out/refill-repository.port';
     CompletarBorradorUseCase,
     MarcarComoOfertadaUseCase,
     MarcarComoConfirmadaUseCase,
+    OfertaEnviadaListener,
+    OfertaAceptadaListener,
   ],
   exports: [],
 })

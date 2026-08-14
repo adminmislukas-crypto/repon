@@ -78,17 +78,38 @@ describe('MarcarComoOfertadaUseCase', () => {
     expect(injectedTokens[0]?.param).toBe(REFILL_REPOSITORY);
   });
 
-  // tasks.md 7.1 — the 2 structural checks below are properties of the
-  // WHOLE domain ("neither marcarComoOfertada NOR marcarComoConfirmada is
-  // HTTP-reachable or has a caller"), not of `MarcarComoOfertadaUseCase`
-  // alone. They live HERE, once, rather than being duplicated verbatim in
-  // `marcar-como-confirmada.use-case.spec.ts` — that file cross-references
-  // this describe block by name instead of re-asserting the same 2 facts a
-  // second time.
+  // tasks.md 7.1 (originally) / tasks.md 8a.6 (updated) — the 2 structural
+  // checks below are properties of the WHOLE domain, not of
+  // `MarcarComoOfertadaUseCase` alone. They live HERE, once, rather than
+  // being duplicated verbatim in `marcar-como-confirmada.use-case.spec.ts`
+  // — that file cross-references this describe block by name instead of
+  // re-asserting the same 2 facts a second time.
+  //
+  // **The 2nd check's own claim changed under `backend-core-api-ofertas`
+  // PR8a, on purpose — not a regression, the whole POINT of that PR
+  // (design.md D7, tasks.md 8a.6, `core-api-refill-matching` spec "Neither
+  // method is HTTP-reachable"/"A reactive OfertaEnviada calls
+  // marcarComoOfertada exactly once").** `backend-core-api-refill-matching`
+  // (the change that introduced this file) asserted "no caller anywhere in
+  // this domain" — true AT THAT TIME (D6: "No caller exists in this
+  // change"). `backend-core-api-ofertas` PR8a gives both use cases their
+  // FIRST real callers — `OfertaEnviadaListener`/`OfertaAceptadaListener`
+  // (`adapters/events/oferta-enviada.listener.ts`/
+  // `oferta-aceptada.listener.ts`) — by design, not by drift. Re-running
+  // this suite unmodified after PR8a landed the listeners is exactly what
+  // caught the stale assertion (`offendingFiles` grew from `[]` to the 5
+  // new/touched files below) — the same "run it, don't assume green"
+  // discipline every prior batch in this chain has documented. The fix is
+  // widening `allowedReferrers`, never touching
+  // `marcar-como-ofertada.use-case.ts`/`marcar-como-confirmada.use-case.ts`
+  // themselves (tasks.md 8a.6 forbids exactly that) — this spec file is the
+  // one place in `refill-matching`, besides `refill-matching.module.ts`,
+  // that PR8a is allowed to touch.
   describe(
-    'Neither marcarComoOfertada nor marcarComoConfirmada is HTTP-reachable, and neither has ' +
-      'a caller anywhere in this domain (D6, core-api-refill-matching "Neither method is ' +
-      'HTTP-reachable" / "No caller exists in this change")',
+    'Neither marcarComoOfertada nor marcarComoConfirmada is HTTP-reachable directly, and ' +
+      'their only callers anywhere in this domain are the 2 listeners backend-core-api-ofertas ' +
+      'PR8a added (D6/D7, core-api-refill-matching "Neither method is HTTP-reachable" / ' +
+      'tasks.md 8a.6)',
     () => {
       it("RefillController's own routes are unchanged: exactly 3 handlers, none of them named/pathed after ofertada or confirmada", () => {
         const controllerParamTypes: unknown[] =
@@ -114,7 +135,7 @@ describe('MarcarComoOfertadaUseCase', () => {
         expect(routePaths.join('|')).not.toMatch(/ofertada|confirmada/i);
       });
 
-      it('no file in this domain (besides their own impl/spec files and refill-matching.module.ts) references MarcarComoOfertadaUseCase or MarcarComoConfirmadaUseCase by name', () => {
+      it("no file in this domain references MarcarComoOfertadaUseCase or MarcarComoConfirmadaUseCase by name, except their own impl/spec files, refill-matching.module.ts, and PR8a's 2 listeners + local payloads", () => {
         const domainRoot = resolve(__dirname, '..');
         const allowedReferrers = new Set([
           'marcar-como-ofertada.use-case.ts',
@@ -122,6 +143,15 @@ describe('MarcarComoOfertadaUseCase', () => {
           'marcar-como-confirmada.use-case.ts',
           'marcar-como-confirmada.use-case.spec.ts',
           'refill-matching.module.ts',
+          // backend-core-api-ofertas PR8a (tasks.md 8a.6, design.md D7) —
+          // the 2 use cases' first legitimate callers, plus the local
+          // payload file whose own doc comment names both use cases by way
+          // of explaining why their 2 fields are required.
+          'oferta-enviada.listener.ts',
+          'oferta-enviada.listener.spec.ts',
+          'oferta-aceptada.listener.ts',
+          'oferta-aceptada.listener.spec.ts',
+          'ofertas-event.payloads.ts',
         ]);
 
         const offendingFiles = listTsFiles(domainRoot)
