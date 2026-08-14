@@ -167,13 +167,13 @@ Depends on Phase 3a's `save`, 3b's `findElegible`, Phase 2's `total`. Design.md'
 
 Depends on Phase 5a.
 
-- [ ] 5b.1 `adapters/http/dto/nuevo-offer-item.dto.ts` (discriminated reactiva/proactiva, mirrors `NuevoOfferItem`), `dto/datos-entrega.dto.ts`, `dto/enviar-oferta.dto.ts` (`{ refillRequestId, items: NuevoOfferItemDto[], entrega }` — no `companyId`, D11), `dto/offer-response.dto.ts` (`OfferResponseDto`, items inline — reused by 6b/7b).
-- [ ] 5b.2 `ofertas.mapper.ts`: `toOfferResponseDto()`.
-- [ ] 5b.3 `ofertas.controller.ts`: `POST /ofertas`, `@Roles('provider')`, `actor.companyId` passed to the use case, 201 `OfferResponseDto`.
-- [ ] 5b.4 RED (extend `ofertas-exception.filter.spec.ts`): `SolicitudNoElegibleError`→404 `SOLICITUD_NO_ELEGIBLE`, `OportunidadCerradaError`→409 `OFERTA_OPORTUNIDAD_CERRADA`, `OfertaInvalidaError`→400 `OFERTA_INVALIDA`, `CatalogQueryUnavailableError` (**imported from `catalogo/contracts/`**, the one legitimate cross-domain import here)→503 `CATALOG_UNAVAILABLE`.
-- [ ] 5b.5 GREEN (extend the filter): the 4 mappings.
-- [ ] 5b.6 `ofertas.module.ts`: register `EnviarOfertaUseCase`; add `CatalogoModule` to `imports` — this domain's first inter-domain module edge, second in the whole repo after `refill-matching`'s own.
-- [ ] 5b.7 E2e: `test/ofertas-enviar-oferta.e2e-spec.ts` — 201 happy path; 404 non-eligible; 404 nonexistent (byte-identical body assertion); 409 closed opportunity; 400 foreign `refillItemId`; 503 with `CATALOG_QUERY_PORT` mocked to throw (offer **not** persisted); 401; 403 role `provider` missing.
+- [x] 5b.1 `adapters/http/dto/nuevo-offer-item.dto.ts` (discriminated reactiva/proactiva, mirrors `NuevoOfferItem`), `dto/datos-entrega.dto.ts`, `dto/enviar-oferta.dto.ts` (`{ refillRequestId, items: NuevoOfferItemDto[], entrega }` — no `companyId`, D11), `dto/offer-response.dto.ts` (`OfferResponseDto`, items inline — reused by 6b/7b).
+- [x] 5b.2 `ofertas.mapper.ts`: `toOfferResponseDto()`.
+- [x] 5b.3 `ofertas.controller.ts`: `POST /ofertas`, `@Roles('provider')`, `actor.companyId` passed to the use case, 201 `OfferResponseDto`.
+- [x] 5b.4 RED (extend `ofertas-exception.filter.spec.ts`): `SolicitudNoElegibleError`→404 `SOLICITUD_NO_ELEGIBLE`, `OportunidadCerradaError`→409 `OFERTA_OPORTUNIDAD_CERRADA`, `OfertaInvalidaError`→400 `OFERTA_INVALIDA`, `CatalogQueryUnavailableError` (**imported from `catalogo/contracts/`**, the one legitimate cross-domain import here)→503 `CATALOG_UNAVAILABLE`.
+- [x] 5b.5 GREEN (extend the filter): the 4 mappings.
+- [x] 5b.6 `ofertas.module.ts`: register `EnviarOfertaUseCase`; add `CatalogoModule` to `imports` — this domain's first inter-domain module edge, second in the whole repo after `refill-matching`'s own.
+- [x] 5b.7 E2e: `test/ofertas-enviar-oferta.e2e-spec.ts` — 201 happy path; 404 non-eligible; 404 nonexistent (byte-identical body assertion); 409 closed opportunity; 400 foreign `refillItemId`; 503 with `CATALOG_QUERY_PORT` mocked to throw (offer **not** persisted); 401; 403 role `provider` missing.
 
 ## Phase 6a: Delta de `CatalogQueryPort` — Spec: `core-api-catalogo`
 

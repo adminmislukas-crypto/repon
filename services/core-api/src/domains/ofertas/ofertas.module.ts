@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
+import { CatalogoModule } from '../catalogo/catalogo.module';
 import { DatabaseModule } from '../../shared/database/database.module';
 import { MatchEncontradoListener } from './adapters/events/match-encontrado.listener';
 import { OfertasController } from './adapters/http/ofertas.controller';
 import { KyselyOfferOpportunityRepository } from './adapters/persistence/kysely-offer-opportunity.repository';
 import { KyselyOfferRepository } from './adapters/persistence/kysely-offer.repository';
+import { EnviarOfertaUseCase } from './ports-in/enviar-oferta.use-case';
 import { ListarSolicitudesElegiblesUseCase } from './ports-in/listar-solicitudes-elegibles.use-case';
 import { RegistrarOportunidadUseCase } from './ports-in/registrar-oportunidad.use-case';
 import { OFFER_OPPORTUNITY_REPOSITORY } from './ports-out/offer-opportunity-repository.port';
@@ -16,13 +18,17 @@ import { OFFER_REPOSITORY } from './ports-out/offer-repository.port';
  * tasks.md task 4a.7) is the FIRST one to bind real providers: before this,
  * the module was a 2-line `@Module({})` placeholder (exploration.md D2).
  *
- * `imports: [DatabaseModule]` ONLY — `CatalogoModule` does NOT land here.
- * It arrives in PR5b (`EnviarOfertaUseCase`'s `CatalogQueryPort` need),
- * this domain's first inter-domain module edge (design.md's own PR table).
- * `DatabaseModule` is `@Global()` and already exports both `DATABASE` and
- * `TRANSACTION_MANAGER` — listed explicitly anyway, same style as every
- * other domain module in this repo (Identidad/Catalogo/Consumo/
- * RefillMatching).
+ * `imports: [DatabaseModule, CatalogoModule]` (PR5b, this batch) — this
+ * domain's FIRST inter-domain module edge (the second in the whole repo,
+ * after `refill-matching`'s own `CatalogoModule` import). `CatalogoModule`
+ * already `exports: [CATALOG_QUERY_PORT]` (its own doc comment) — nothing
+ * else exported by that module is imported here, matching
+ * `core-api-hexagonal-layout`'s "Only contracts/ is importable across a
+ * domain boundary". `EnviarOfertaUseCase` (this PR) is the sole consumer of
+ * `CATALOG_QUERY_PORT` in this domain today. `DatabaseModule` is
+ * `@Global()` and already exports both `DATABASE` and `TRANSACTION_MANAGER`
+ * — listed explicitly anyway, same style as every other domain module in
+ * this repo (Identidad/Catalogo/Consumo/RefillMatching).
  *
  * `OFFER_OPPORTUNITY_REPOSITORY` -> `KyselyOfferOpportunityRepository`
  * (PR3b's writer of D5) and `OFFER_REPOSITORY` -> `KyselyOfferRepository`
@@ -45,9 +51,10 @@ import { OFFER_REPOSITORY } from './ports-out/offer-repository.port';
  * `RefillExceptionFilter`/`ConsumoExceptionFilter`/`CatalogoExceptionFilter`
  * already established for their own domains.
  *
- * `imports` stays `[DatabaseModule]` — `CatalogoModule` is PR5b's edge
- * (`EnviarOfertaUseCase`'s `CatalogQueryPort` need), not this PR's:
- * `listarPorCompany` needs no catalog access.
+ * PR4b's `imports` stayed `[DatabaseModule]` alone — `listarPorCompany`
+ * needs no catalog access. THIS PR (5b) adds `CatalogoModule`:
+ * `EnviarOfertaUseCase` + `OfertasController`'s new `POST /ofertas` route
+ * are registered below.
  *
  * `exports: []`, deliberately (D15): this domain has no `contracts/` yet and
  * nothing else imports from it.
@@ -57,7 +64,7 @@ import { OFFER_REPOSITORY } from './ports-out/offer-repository.port';
  * `refill-matching.module.ts`'s own doc comment documents phase-by-phase).
  */
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, CatalogoModule],
   controllers: [OfertasController],
   providers: [
     { provide: OFFER_REPOSITORY, useClass: KyselyOfferRepository },
@@ -65,6 +72,7 @@ import { OFFER_REPOSITORY } from './ports-out/offer-repository.port';
     RegistrarOportunidadUseCase,
     MatchEncontradoListener,
     ListarSolicitudesElegiblesUseCase,
+    EnviarOfertaUseCase,
   ],
   exports: [],
 })

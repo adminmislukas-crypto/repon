@@ -2085,3 +2085,214 @@ above (catalog-match correlation) is pending a decision from the user
 before being considered closed — not blocking PR5b/PR6a mechanically, but
 material to PR6b's own review since it uses a related but distinct,
 unaffected code path.**
+
+---
+
+# PR5b "Creación (HTTP)" (Phase 5b, tasks 5b.1–5b.7)
+
+**Mode**: Strict TDD (project-wide `strict_tdd: true`, `openspec/config.yaml`)
+**Batch**: PR5b (Phase 5b, tasks 5b.1–5b.7) — EIGHTH apply batch. PR1
+through PR5a's groundwork/domain/persistence/discovery/`enviarOferta`
+logic are all complete and available as-is (re-confirmed by reading
+`apply-progress.md` and `tasks.md` fresh immediately before this batch
+started, including PR5a's own "Orchestrator Review Notes" — the 2 fixes to
+`offer.entity.ts` made after PR5a's own apply run, and the still-open,
+explicitly-not-blocking Finding #3 on the categoria-based catalog-match
+correlation, noted here for continuity but not re-litigated). This batch
+extends the existing `OfertasController`/`OfertasExceptionFilter` (PR4b)
+with the domain's second route (`POST /ofertas`), and adds `CatalogoModule`
+to `ofertas.module.ts`'s `imports` — this domain's first inter-domain
+module edge, the second in the whole repo after `refill-matching`'s own.
+
+**Note on a prior interrupted run**: an earlier attempt at this exact
+batch was cut off by a connection error right at the start of task 5b.4
+(writing the exception-filter RED test), before any progress-doc write.
+Tasks 5b.1–5b.3 (the 4 new DTO files + the mapper/controller edits) were
+already written to disk by that attempt and were re-read fresh from disk
+(not assumed from in-memory state) before this continuation proceeded —
+confirmed via `git status`/`git diff` to match exactly what this section
+describes below. `tasks.md` and this file were both re-confirmed to have
+NO partial PR5b content before this section was written (the crash
+happened before either doc was touched).
+
+## TDD Note for This Batch
+
+Task 5b.4/5b.5 is the genuine RED/GREEN pair, per this batch's own launch
+scope — `ofertas-exception.filter.spec.ts` did NOT exist before this PR
+(PR4b's own note: `listarSolicitudesElegibles` throws none of
+`oferta.errors.ts`'s 8 classes, so there was nothing to test yet), so this
+is a **create-then-RED-then-GREEN** cycle rather than a literal "extend an
+existing spec file" as tasks.md's own shorthand wording says — surfaced
+here explicitly, not silently glossed over. The RED run (4/4 tests) failed
+against the current, unmodified filter with its still-empty
+`ERROR_STATUS_MAP`, every case landing on the defensive 500 fallback
+instead of its intended status — a genuine RED, not a tautology. The GREEN
+run (adding the 4 map entries + the 4th `@Catch()` class) then passed 4/4
+on the first attempt.
+
+Tasks 5b.1–5b.3 and 5b.6 are wiring/scaffolding (DTOs, controller route,
+module edge) per this batch's own launch scope, verified by
+`typecheck`/`lint`/`test` rather than a forced RED/GREEN pair — same
+discipline every prior batch's own pure-scaffolding tasks used (PR1,
+PR4b's DTO/mapper/module tasks). Task 5b.7 is a real e2e spec, and — per
+this batch's own launch instruction — the assumption "Docker paused
+doesn't block this repo's e2e convention" was independently re-verified
+by actually running it, not taken on faith: `docker ps` was re-confirmed
+paused in this environment, and `test/ofertas-enviar-oferta.e2e-spec.ts`
+was run directly against that paused Docker and passed 7/7 on the first
+clean run (after one real fixture bug was found and fixed mid-development,
+documented below) — proving the convention held, not merely repeating the
+prior batches' claim.
+
+## TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 5b.1 DTOs | N/A — no dedicated spec (scaffolding, same precedent PR4b's `solicitud-elegible-response.dto.ts` used: response DTOs carry no `class-validator` decorators; the 2 request DTOs' new conditional validation was manually exercised end-to-end via 5b.7's e2e run instead of a standalone `ofertas-dto.spec.ts`, see "Deviations" below for why one was considered and not added) | N/A | N/A | ➖ | ✅ `pnpm typecheck`/`pnpm lint` clean; shape exercised transitively by 5b.7's e2e (400 on a foreign `refillItemId`, 201 on a valid nested body) | ➖ | ➖ |
+| 5b.2 mapper | N/A — thin field-for-field conversion, same precedent `toSolicitudElegibleResponseDto` (PR4b) used | N/A | N/A | ➖ | ✅ `pnpm typecheck` clean; exercised transitively by 5b.7's e2e response-body assertions | ➖ | ➖ |
+| 5b.3 controller route | N/A — route wiring, no branch logic of its own (all branching lives in `EnviarOfertaUseCase`, already unit-tested in PR5a) | N/A | N/A | ➖ | ✅ `pnpm typecheck`/`pnpm lint` clean; exercised by 5b.7's e2e (all 7 cases go through this handler) | ➖ | ➖ |
+| 5b.4 RED | `ofertas-exception.filter.spec.ts` (NEW file — did not exist before this PR) | Unit | N/A (new file) | ✅ Written and run against the unmodified filter — 4/4 failed, every case landing on the 500 `INTERNAL_SERVER_ERROR` fallback instead of its target status (genuine RED: `ERROR_STATUS_MAP` was empty, not a wrong assertion) | ✅ (see 5b.5 row) | ✅ 4 cases (one per new mapped class: `SolicitudNoElegibleError`, `OportunidadCerradaError`, `OfertaInvalidaError`, `CatalogQueryUnavailableError`) | ➖ |
+| 5b.5 GREEN | same file | Unit | ✅ 0/4 (RED baseline) | N/A — this is the GREEN step | ✅ 4/4 passed on the first run after adding the 4 map entries + the 4th `@Catch()` class | N/A | ➖ None needed — implementation matched the spec on the first pass |
+| 5b.6 module wiring | N/A — DI wiring, no branch logic | N/A | N/A | ➖ | ✅ `pnpm typecheck` clean (Nest's DI graph resolves `CATALOG_QUERY_PORT`/`EnviarOfertaUseCase` with zero missing-provider errors); exercised end-to-end by 5b.7's e2e, which boots the REAL `AppModule` (only leaf ports overridden, never the module graph itself) | ➖ | ➖ |
+| 5b.7 e2e | `test/ofertas-enviar-oferta.e2e-spec.ts` (NEW) | E2E | N/A (new file) | ➖ N/A — not a strict-TDD pair per this batch's own launch scope; written once, then run and iterated against real failures (see below) | ✅ 7/7 passed after 1 real fixture bug fixed (see "Issues Found") | ✅ 7 cases (201 happy path; 404 non-eligible/nonexistent byte-identical; 409 closed opportunity; 400 foreign `refillItemId`; 503 catalog outage with zero persistence; 401; 403) | ➖ None — first run's failure was a test-fixture defect, not an implementation defect requiring rework |
+
+## Test Summary
+
+- **Total tests written**: 11 (4 in `ofertas-exception.filter.spec.ts`, 7 in `test/ofertas-enviar-oferta.e2e-spec.ts`)
+- **Total tests passing**: 11/11
+- **Layers used**: Unit (4, the filter spec), E2E (7, the new e2e spec — mocked actor + all 6 leaf ports/tokens `EnviarOfertaUseCase` needs, REAL `AppModule`/`AuthGuard`/`RolesGuard`/`ValidationPipe`/`OfertasExceptionFilter`/module graph, per this batch's own re-verified convention), Integration (0)
+- **Approval tests** (refactoring): None — no refactoring tasks
+- **New production code**: 4 new DTO classes (`NuevoOfferItemDto`, `DatosEntregaDto`, `EnviarOfertaDto`, `OfferResponseDto` + its nested `OfferItemResponseDto`), 2 new mapper functions (`toOfferResponseDto`, `toNuevoOfertaItemsReactiva`), 1 new controller route (`POST /ofertas`), 4 new exception-filter map entries + 1 new `@Catch()` class, 1 new module import edge (`CatalogoModule`) + 1 new provider registration (`EnviarOfertaUseCase`)
+
+## Completed Tasks (7/7 in this batch)
+
+- [x] 5b.1 `adapters/http/dto/nuevo-offer-item.dto.ts` (`NuevoOfferItemDto` — both discriminant fields (`refillItemId`/`providerCatalogItemId`) optional + format-validated independently via `@IsOptional() @IsUUID()`; `isAlt ⇒ altNote` enforced via `@ValidateIf`), `dto/datos-entrega.dto.ts` (`DatosEntregaDto`), `dto/enviar-oferta.dto.ts` (`EnviarOfertaDto` — `{ refillRequestId, items, entrega }`, no `companyId` field, D11), `dto/offer-response.dto.ts` (`OfferResponseDto` + `OfferItemResponseDto`, items inline, both discriminant response fields optional — deliberately generic enough for 6b/7b's unmodified reuse).
+- [x] 5b.2 `ofertas.mapper.ts`: `toOfferResponseDto()` (appended after `toSolicitudElegibleResponseDto`, per the file's own "appended to, not one-mapper-per-file" convention) + `toNuevoOfertaItemsReactiva()` (a necessary companion beyond the literal task text — see "Deviations" below).
+- [x] 5b.3 `ofertas.controller.ts`: `POST /ofertas`, `@Roles('provider')`, `actor.companyId!` passed to `enviarOfertaUseCase.execute(...)` (mirrors the existing `GET /ofertas/oportunidades` route's own non-null-assertion pattern), 201 `OfferResponseDto`.
+- [x] 5b.4 RED: `ofertas-exception.filter.spec.ts` (NEW) — 4 `describe.each` cases, confirmed genuinely RED (4/4 failing on the 500 fallback) before any filter change.
+- [x] 5b.5 GREEN: `ofertas-exception.filter.ts` — 4 `ERROR_STATUS_MAP` entries (`SolicitudNoElegibleError`→404, `OportunidadCerradaError`→409, `OfertaInvalidaError`→400, `CatalogQueryUnavailableError`→503) + `CatalogQueryUnavailableError` added to `@Catch()`; 4/4 green on the first run.
+- [x] 5b.6 `ofertas.module.ts`: `EnviarOfertaUseCase` registered in `providers`; `CatalogoModule` added to `imports` (this domain's first inter-domain module edge).
+- [x] 5b.7 E2e: `test/ofertas-enviar-oferta.e2e-spec.ts` (NEW, 7 tests) — 201 happy path; 404 non-eligible/nonexistent byte-identical (same `refillRequestId`, 2 requests, full `toEqual` body comparison); 409 closed opportunity; 400 foreign `refillItemId`; 503 with `CATALOG_QUERY_PORT` mocked to reject (asserts `OFFER_REPOSITORY.save` never called); 401 no token; 403 role `provider` missing.
+
+## Files Changed
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `services/core-api/src/domains/ofertas/adapters/http/dto/nuevo-offer-item.dto.ts` | Created (85 lines) | `NuevoOfferItemDto` — mirrors `NuevoOfferItem` (`NuevoOfferItemReactiva \| NuevoOfferItemProactiva`), both discriminant fields optional (shared by 5b's reactiva route and 6b's future proactiva route), `isAlt ⇒ altNote` via `@ValidateIf` |
+| `services/core-api/src/domains/ofertas/adapters/http/dto/datos-entrega.dto.ts` | Created (23 lines) | `DatosEntregaDto` — mirrors `DatosEntrega` field-for-field |
+| `services/core-api/src/domains/ofertas/adapters/http/dto/enviar-oferta.dto.ts` | Created (45 lines) | `EnviarOfertaDto` — `POST /ofertas` body, no `companyId` field (D11), first nested-OBJECT (`entrega`) `@ValidateNested()` in this repo (prior precedent was nested-ARRAY only) |
+| `services/core-api/src/domains/ofertas/adapters/http/dto/offer-response.dto.ts` | Created (93 lines) | `OfferResponseDto` + `OfferItemResponseDto` — mirrors `Offer`/`OfferItem`, deliberately generic (both discriminant fields optional) for unmodified reuse by 6b/7b |
+| `services/core-api/src/domains/ofertas/adapters/http/ofertas.mapper.ts` | Modified (+75/-1) | Appended `toOfferResponseDto()` + `toNuevoOfertaItemsReactiva()` (the latter uses the same `as NuevoOfferItemReactiva` cast-from-untrusted-input pattern `offer.entity.spec.ts`'s own `itemReactiva()` test helper established, applied here in production code for the first time) |
+| `services/core-api/src/domains/ofertas/adapters/http/ofertas.controller.ts` | Modified (+61/-4) | Added `POST /ofertas` (`enviarOferta`), full Swagger annotations (`201`/`400`/`401`/`403`/`404`/`409`/`503`), `EnviarOfertaUseCase` added to the constructor |
+| `services/core-api/src/domains/ofertas/adapters/http/ofertas-exception.filter.ts` | Modified (+48/-34) | 4 new `ERROR_STATUS_MAP` entries, `CatalogQueryUnavailableError` added to `@Catch()` and imported from `catalogo/contracts/`, header doc comment updated to describe the now-partially-populated map (PR4b left it fully prose-explained but empty) |
+| `services/core-api/src/domains/ofertas/adapters/http/ofertas-exception.filter.spec.ts` | Created (53 lines) | This filter's FIRST dedicated spec file — `describe.each`, mirrors `catalogo-exception.filter.spec.ts`'s own shape |
+| `services/core-api/src/domains/ofertas/ofertas.module.ts` | Modified (+19/-11) | `CatalogoModule` added to `imports`; `EnviarOfertaUseCase` added to `providers`; doc comment rewritten to describe the new inter-domain edge and confirm `CatalogoModule` exports only `CATALOG_QUERY_PORT` |
+| `services/core-api/test/ofertas-enviar-oferta.e2e-spec.ts` | Created (407 lines) | 7 e2e tests, mocks `ACTOR_PORT` + all 6 leaf ports/tokens `EnviarOfertaUseCase` needs (`OFFER_OPPORTUNITY_REPOSITORY`/`OFFER_REPOSITORY`/`CATALOG_QUERY_PORT`/`TRANSACTION_MANAGER`/`EVENT_PUBLISHER`/`NOTIFICATION_PORT`), real `AppModule`/guards/pipe/filter |
+| `openspec/changes/backend-core-api-ofertas/tasks.md` | Modified | Tasks 5b.1–5b.7 marked `[x]` (7 lines changed, checkbox flips only) |
+
+## Commands Run and Results
+
+| Command | Result |
+|---|---|
+| `git status --porcelain services/core-api/src/domains/ofertas/ openspec/changes/backend-core-api-ofertas/` (fresh re-check after the interrupted-run resume) | Confirmed 5b.1–5b.3's files already on disk from the crashed attempt, matched what this section describes; zero partial PR5b content in either `tasks.md` or `apply-progress.md` |
+| `pnpm exec jest src/domains/ofertas/adapters/http/ofertas-exception.filter.spec.ts` (RED, before the filter change) | 4/4 failed — every case received 500 `INTERNAL_SERVER_ERROR` instead of its target status, genuine RED |
+| `pnpm exec jest src/domains/ofertas/adapters/http/ofertas-exception.filter.spec.ts` (GREEN, after the 4 map entries + `@Catch()` addition) | 4/4 passed |
+| `pnpm --filter core-api typecheck` | Clean |
+| `pnpm lint` (workspace root) | Clean |
+| `pnpm exec jest` (services/core-api, unit-only) | **68 unit suites / 607 tests** passed — up from PR5a's post-review baseline (67 suites / 603 tests) by exactly +1 suite/+4 tests, zero regressions anywhere |
+| `pnpm exec jest --config ./test/jest-e2e.json ofertas-enviar-oferta` (1st run, full e2e spec as originally written) | **1 failed / 6 passed** — the happy-path test got 400 `OFERTA_INVALIDA` ("no tiene coincidencia vigente en el catalogo") instead of 201 |
+| Diagnosed via a temporary `console.log(res.status, res.body)` (removed before finalizing) | Root cause: `refillItemFixture()` and `providerCatalogItemFixture()` each generated an INDEPENDENT `randomUUID()` for `catalogProductId` by default — `EnviarOfertaUseCase`'s step-8 hard rule correlates by `catalogProductId` when present, so the two never matched by construction. Fixed by sharing one `DEFAULT_CATALOG_PRODUCT_ID` constant between both fixtures' defaults (mirrors `enviar-oferta.use-case.spec.ts`'s own fixtures, which hardcode the identical `'catalog-product-a'` literal for the same reason) |
+| `pnpm exec jest --config ./test/jest-e2e.json ofertas-enviar-oferta` (2nd run, after the fixture fix) | **7/7 passed** |
+| `docker ps` (re-confirmed before AND after the e2e run) | `Error response from daemon: Docker Desktop is manually paused` — unchanged from every prior batch since PR3b; this batch's e2e spec passed 7/7 regardless, independently re-verifying (not just repeating) PR4b/PR5a's own finding that this repo's `*.e2e-spec.ts` convention never touches a real database |
+| `pnpm exec jest --config ./test/jest-e2e.json` (full e2e suite, workspace-wide) | **17 passed / 2 failed** suites (118 tests: 113 passed / 5 failed) — both failures in `refill-matching`'s own `test/refill-crear-solicitud.e2e-spec.ts`/`test/refill-completar-borrador.e2e-spec.ts`, both `Connection terminated due to connection timeout` (real-Postgres-dependent, unlike this domain's own convention) |
+| `git status --porcelain services/core-api/src/domains/refill-matching/ ...refill-crear-solicitud.e2e-spec.ts ...refill-completar-borrador.e2e-spec.ts` (to rule out this batch's diff) | Empty — zero files touched by this batch in either location, confirming the 2 e2e failures are 100% pre-existing/environmental, not caused by this PR |
+| `pnpm --filter core-api build` | Clean |
+| `pnpm run format:check` (1st pass) | **FAILED** — 2 new files (`ofertas-exception.filter.spec.ts`, `test/ofertas-enviar-oferta.e2e-spec.ts`) had Prettier style issues |
+| `pnpm exec prettier --write` on both flagged files | Reformatted (import wrapping, array line-breaks) — whitespace-only |
+| `pnpm run format:check` (2nd pass) | Clean |
+| `pnpm --filter core-api typecheck` / `pnpm lint` (final pass, after prettier) | Both clean |
+| `pnpm exec jest` (unit, final pass) | 68/68 suites, 607/607 tests |
+| `pnpm exec jest --config ./test/jest-e2e.json ofertas` (final pass, both `ofertas` e2e specs together) | **2/2 suites, 12/12 tests** (5 from `ofertas-listar-oportunidades`, 7 from `ofertas-enviar-oferta`) |
+
+## Deviations from Design
+
+**`toNuevoOfertaItemsReactiva()` added to `ofertas.mapper.ts` beyond task 5b.2's literal text** (which names only `toOfferResponseDto()`). Necessary plumbing, not scope creep: `NuevoOfferItemDto` (5b.1) declares both `refillItemId`/`providerCatalogItemId` as optional (shared with 6b's future proactiva route), but `EnviarOfertaUseCase.execute` requires `readonly NuevoOfferItemReactiva[]` — a discriminated-union type where `providerCatalogItemId?: never`. Assigning the DTO array directly does not typecheck. Resolved with an explicit mapper function using the SAME `as NuevoOfferItemReactiva` cast-from-untrusted-input pattern `offer.entity.spec.ts`'s own `itemReactiva()` test helper already established for this exact class of problem (a `boolean`-typed `isAlt` cannot structurally satisfy the `OfferItemAlt` discriminated union without a cast) — applied here in production code for the first time, not invented ad hoc. A genuinely absent `refillItemId` on this route falls back to `''` (never an unsafe `as string`) — deliberately never a valid `oportunidad.items` id, so `EnviarOfertaUseCase`'s own existing step-6 membership check rejects it with `OfertaInvalidaError` (400) exactly as it would any other foreign id, with no separate presence check needed and no silent 500. No test scenario in tasks.md 5b.7 exercises this exact edge case (a reactiva-route caller omitting `refillItemId` while supplying only `providerCatalogItemId`) — flagged here for visibility, not because it is broken: it is a 400, not a 500, either way.
+
+**`ofertas-dto.spec.ts` was considered and deliberately NOT added**, despite 3 of 4 domains with non-trivial input-DTO validation in this repo (`refill-matching`'s `refill-dto.spec.ts`, `identidad`'s `identidad-dto.spec.ts`, `catalogo`'s `catalogo-dto.spec.ts`) having one, and this PR introducing the domain's first non-trivial input DTO (`EnviarOfertaDto` — nested array + nested object + conditional `isAlt ⇒ altNote` validation). This batch's own launch scope explicitly framed 5b.1 as standard-mode scaffolding ("verified by typecheck/lint/test, same discipline as prior scaffolding tasks"), not a TDD pair, and 5b.7's e2e spec already exercises the DTO's real validation behavior end-to-end (the 400 foreign-`refillItemId` case implicitly proves the nested-array/nested-object validation wires correctly; a malformed `isAlt: true` without `altNote` would 400 at the DTO layer before ever reaching the use case, though no dedicated e2e case names this specific 400 reason). **Flagged for `sdd-verify` or a future batch**: a dedicated `ofertas-dto.spec.ts` (mirroring the 3-domain precedent) would be a reasonable, low-cost addition to pin down `NuevoOfferItemDto`'s conditional validation directly, rather than only transitively through 5b.7's e2e.
+
+**No other deviations.** `POST /ofertas`'s status/body shapes match design.md Diagrama 2 exactly (201 `OfferResponseDto`, `actor.companyId` derived server-side never client-supplied per D11, `entrega`/`items` field names verbatim). The 4 filter mappings match design.md D-E's "Errores de dominio" table byte-for-byte (`SOLICITUD_NO_ELEGIBLE`/`OFERTA_OPORTUNIDAD_CERRADA`/`OFERTA_INVALIDA`/`CATALOG_UNAVAILABLE`, same status codes). `ofertas.module.ts`'s `imports: [DatabaseModule, CatalogoModule]` matches design.md's own "Wiring de módulos" code block verbatim.
+
+## Issues Found
+
+**One real e2e fixture bug, found and fixed during this batch's own development — not a pre-existing defect, and not a defect in production code.** `test/ofertas-enviar-oferta.e2e-spec.ts`'s first draft had `refillItemFixture()` and `providerCatalogItemFixture()` each independently calling `randomUUID()` for their own `catalogProductId` default, so the two default fixtures could never satisfy `EnviarOfertaUseCase`'s own (correct, PR5a-implemented) catalog-match correlation rule. Caught immediately by actually running the e2e spec (the happy-path test failed with a genuine 400, not a false-positive pass) — exactly the value of writing and running a real e2e test rather than trusting the implementation by inspection alone. Fixed by sharing one `DEFAULT_CATALOG_PRODUCT_ID` constant between both fixtures, mirroring `enviar-oferta.use-case.spec.ts`'s own already-correct fixture pattern (hardcoded identical `'catalog-product-a'` literal). Zero production-code change.
+
+**One formatting fix, mechanical.** `prettier --write` reformatted import wrapping and array line-breaks in the 2 new test files — confirmed whitespace-only by re-running both suites green immediately after.
+
+**Pre-existing Docker-paused environmental blocker persists, confirmed unrelated to this batch (re-verified, not assumed).** `docker ps` still reports Docker Desktop manually paused in this environment. This batch's OWN e2e spec (7/7) is unaffected, independently re-confirming PR4b/PR5a's finding that this repo's e2e convention never touches a real database. The workspace-wide e2e run does show 2 failing suites (`refill-matching`'s own `refill-crear-solicitud.e2e-spec.ts`/`refill-completar-borrador.e2e-spec.ts`) — both genuinely require a live Postgres connection (neither overrides `TRANSACTION_MANAGER`, unlike every e2e spec that does mutate state through a `runInTransaction`-wrapped use case while keeping the DB mocked, e.g. this batch's own spec or `consumo-marcar-dosis.e2e-spec.ts`) — `git status --porcelain` confirms zero files under `refill-matching/` or either of those 2 test files were touched by this batch's diff.
+
+## What PR6a (next batch) should know
+
+- **`CatalogoModule` is now imported by `ofertas.module.ts`** — PR6a (the delta to `CatalogQueryPort` inside `catalogo` itself, adding `obtenerItemsDeProveedor`) touches only `catalogo/contracts/catalog-query.port.ts` and `catalogo/adapters/persistence/kysely-catalog-query.adapter.ts` per tasks.md's own scope; it does NOT need to touch `ofertas` at all — the inter-domain edge this batch (5b) established already gives `ofertas` access to whatever `CatalogoModule` exports, with zero further wiring needed once PR6a lands.
+- **`EnviarOfertaUseCase` is now fully wired end-to-end** — `POST /ofertas` is live, `OfertasController` has 2 routes, `OfertasExceptionFilter`'s `ERROR_STATUS_MAP` has 4 of its eventual 9 entries (the remaining 5 land incrementally in 6b/7b, per the filter's own header comment).
+- **`NuevoOfferItemDto`/`OfferResponseDto` are ready for 6b's reuse, unmodified** — 6b.5's `EnviarOfertaProactivaDto` can import `NuevoOfferItemDto` directly (its `providerCatalogItemId` field is already there, just unused by 5b's own reactiva-only mapper); 6b.6's controller route can return `OfferResponseDto` directly, no new response DTO needed. 6b will need its OWN item-mapper (`toNuevoOfertaItemsProactiva` or similarly named) for the same reason 5b needed `toNuevoOfertaItemsReactiva` — the discriminated-union narrowing problem repeats symmetrically for the proactiva branch.
+- **Finding #3 from PR5a's orchestrator review (the categoria-based catalog-match correlation's cross-item mismatch risk) is UNCHANGED by this batch** — 5b's own new code (the DTO/controller/filter/module layer) does not touch `EnviarOfertaUseCase`'s step-8 correlation logic at all; still pending a user decision, still not blocking.
+- **The 2 refill-matching e2e failures are environmental (Docker paused), not a regression** — no action needed from PR6a on that front; they are outside `ofertas`'/`catalogo`'s own diff surface entirely.
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, same as every prior batch —
+  tasks.md's Review Workload Forecast names PR5b at "240-300, Medium")
+- Current work unit: Unit 5b "HTTP de creación" — PR5b, tasks 5b.1–5b.7,
+  all complete
+- Boundary: starts from PR5a's committed state (`EnviarOfertaUseCase` fully
+  implemented/tested, zero HTTP wiring, `ofertas.module.ts`'s `imports`
+  still `[DatabaseModule]` alone); ends with `POST /ofertas` fully live
+  end-to-end (DTO validation → controller → use case → 4 new exception
+  mappings → `CatalogoModule` wired), `pnpm lint`/`pnpm typecheck`/
+  `pnpm build`/`pnpm run format:check` all clean, unit suite 100% green
+  workspace-wide (68/68 suites, 607/607 tests, +1 suite/+4 tests over
+  PR5a's post-review baseline, zero regressions), both `ofertas` e2e specs
+  green (12/12 tests) — the 2 `refill-matching` e2e failures are the same
+  pre-existing Docker-paused blocker every batch since PR3b has already
+  documented, independently re-confirmed unrelated to this batch's diff
+- Estimated review budget impact: **959 changed lines** (git-diff-verified:
+  203 additions + 50 deletions across the 4 modified files = 253, plus 706
+  lines across the 6 new files — `wc -l`/`git diff --numstat`-verified) +
+  `tasks.md`'s own 7-line checkbox-flip delta (process, not
+  implementation). This is **meaningfully over** tasks.md's own 240-300
+  forecast for this PR (roughly 3.2-4x the upper bound) — the largest
+  relative overrun of any batch in this change so far. Breakdown: 4 new DTO
+  files (85+23+45+93 = 246 lines, heavier than a typical DTO set because
+  `NuevoOfferItemDto`'s discriminated-union doc comment alone runs ~30
+  lines explaining a genuinely novel design decision for this repo), the
+  new filter spec (53 lines) and the new e2e spec (407 lines — the single
+  largest contributor, matching this repo's own established pattern that
+  e2e specs covering 7-8 distinct HTTP scenarios with full request/response
+  body assertions run long, e.g. PR4b's own `ofertas-listar-oportunidades.e2e-spec.ts`
+  at 274 lines for only 4 scenarios), plus the mapper/controller/filter/module
+  edits (203/50 lines, each individually modest but summing up). Same
+  forecast-miscalibration pattern flagged honestly by every prior batch in
+  this change (PR1 ~20% over, PR2 ~80-130% over, PR5a's e2e-less batch
+  landed within range) — this batch's overrun is real and larger than most,
+  driven primarily by the e2e spec's own line count and the discriminated-
+  union DTO's necessarily-long doc comments, not scope creep beyond the 7
+  named tasks. **No split proposed**: every file here is a single
+  structural unit tasks.md itself names as one task (one DTO group, one
+  mapper addition, one controller route, one filter RED/GREEN pair, one
+  module edge, one e2e spec) — splitting the e2e spec from the
+  route/filter/DTOs it exercises would not reduce total review surface,
+  only make them harder to review together. Flagged for the orchestrator's
+  awareness rather than silently absorbed, same discipline as every prior
+  batch's own overrun disclosure.
+
+## Status
+
+**Cumulative**: 73/74 tasks complete across PR1 (10/10) + PR2 (10/10) +
+PR3a (11/11) + PR3b (12/13 — 3b.13 deferred, environmental blocker, not a
+code gap) + PR4a (7/7) + PR4b (7/7) + PR5a (9/9, plus 2 orchestrator fixes)
++ PR5b (7/7). Ready for PR6a (Phase 6a, "Delta de `CatalogQueryPort`" —
+the only PR that touches `catalogo`, isolated, no dependency on `ofertas`),
+per tasks.md's dependency chain (`... → PR5b → {PR6a, independent} → PR6b
+→ ...`). Finding #3 from PR5a's review (catalog-match correlation) remains
+open, unchanged by this batch, still pending a user decision, still not
+blocking.
