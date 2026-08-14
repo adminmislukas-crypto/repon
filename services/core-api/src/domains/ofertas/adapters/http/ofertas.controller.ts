@@ -1,13 +1,25 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, UseFilters } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  UseFilters,
+} from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
   ApiConflictResponse,
   ApiCreatedResponse,
   ApiForbiddenResponse,
+  ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiParam,
   ApiServiceUnavailableResponse,
   ApiTags,
   ApiUnauthorizedResponse,
@@ -15,9 +27,11 @@ import {
 import { Actor } from '../../../../shared/auth/decorators/actor.decorator';
 import { Roles } from '../../../../shared/auth/decorators/roles.decorator';
 import type { AuthenticatedActor } from '../../../../shared/auth/ports/actor.port';
+import { AceptarOfertaUseCase } from '../../ports-in/aceptar-oferta.use-case';
 import { EnviarOfertaProactivaUseCase } from '../../ports-in/enviar-oferta-proactiva.use-case';
 import { EnviarOfertaUseCase } from '../../ports-in/enviar-oferta.use-case';
 import { ListarSolicitudesElegiblesUseCase } from '../../ports-in/listar-solicitudes-elegibles.use-case';
+import { ObtenerBandejaUseCase } from '../../ports-in/obtener-bandeja.use-case';
 import { EnviarOfertaProactivaDto } from './dto/enviar-oferta-proactiva.dto';
 import { EnviarOfertaDto } from './dto/enviar-oferta.dto';
 import { OfferResponseDto } from './dto/offer-response.dto';
@@ -44,12 +58,21 @@ import {
  * `CatalogoController` already established for their own first-controller
  * PRs).
  *
- * `@Roles('provider')`: both routes derive `companyId` exclusively from
- * `actor.companyId` — never a query/path param, never a DTO field (D11).
- * `actor.companyId` is non-null iff `role === 'provider'`
+ * `@Roles('provider')`: the first 3 routes derive `companyId` exclusively
+ * from `actor.companyId` — never a query/path param, never a DTO field
+ * (D11). `actor.companyId` is non-null iff `role === 'provider'`
  * (`AuthenticatedActor`'s own doc comment) — the guard-enforced invariant
  * behind the non-null assertion below, same reasoning
  * `CatalogoController`'s own provider-scoped routes already use.
+ *
+ * `@Roles('user')` (Phase 7b, `aceptarOferta`/`obtenerBandeja`): this
+ * domain's FIRST `@Roles('user')` routes — design.md D-E's "Decisión
+ * confirmada" section. `actor.profileId` needs no non-null assertion, unlike
+ * `actor.companyId!` above — `AuthenticatedActor.profileId` is declared
+ * `readonly string` (always present for any authenticated actor), the same
+ * reasoning `ConsumoController`'s `actor.profileId` call sites already rely
+ * on (that controller has no `@Roles()` at all; this pair is the first place
+ * in the repo combining `@Roles('user')` WITH `actor.profileId`).
  */
 @ApiTags('ofertas')
 @ApiBearerAuth()
@@ -60,6 +83,8 @@ export class OfertasController {
     private readonly listarSolicitudesElegiblesUseCase: ListarSolicitudesElegiblesUseCase,
     private readonly enviarOfertaUseCase: EnviarOfertaUseCase,
     private readonly enviarOfertaProactivaUseCase: EnviarOfertaProactivaUseCase,
+    private readonly aceptarOfertaUseCase: AceptarOfertaUseCase,
+    private readonly obtenerBandejaUseCase: ObtenerBandejaUseCase,
   ) {}
 
   @Roles('provider')
@@ -163,5 +188,60 @@ export class OfertasController {
       dto.mensaje,
     );
     return toOfferResponseDto(offer);
+  }
+
+  /**
+   * Task 7b.1 / design.md D-D + D-E. `ParseUUIDPipe` on `:offerId` — same
+   * convention `ConsumoController.calcularDiasRestantes`'s `:consumptionId`
+   * already uses. `204` sin cuerpo: `ofertas/SPEC.md` declara
+   * `aceptarOferta(...): Promise<void>` (design.md D-E), precedente
+   * `PUT /catalogo/mi-catalogo/:itemId/precio` → `@HttpCode(HttpStatus.NO_CONTENT)`.
+   * `actor.profileId` — nunca `actor.companyId` (esta ruta la invoca el
+   * DESTINATARIO de la oferta, no el proveedor).
+   */
+  @Roles('user')
+  @Post(':offerId/aceptar')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary:
+      'El usuario autenticado acepta una de sus propias ofertas pendientes (design.md D-D) — ' +
+      'desplaza a sus hermanas pendientes a rechazada y cierra la oportunidad cuando es reactiva.',
+  })
+  @ApiParam({ name: 'offerId', format: 'uuid' })
+  @ApiNoContentResponse()
+  @ApiUnauthorizedResponse({ description: 'Token ausente o inválido.' })
+  @ApiForbiddenResponse({ description: 'Actor no es user.' })
+  @ApiNotFoundResponse({
+    description: 'La oferta no existe, o es de otro usuario — mismo 404, byte a byte (D11).',
+  })
+  @ApiConflictResponse({
+    description:
+      'La oferta ya no está pendiente (ya fue aceptada/rechazada/expirada, D-G.3), o una ' +
+      'carrera de doble-tap sobre 2 ofertas hermanas de la misma solicitud ya la resolvió (R4).',
+  })
+  async aceptarOferta(
+    @Param('offerId', ParseUUIDPipe) offerId: string,
+    @Actor() actor: AuthenticatedActor,
+  ): Promise<void> {
+    await this.aceptarOfertaUseCase.execute(actor.profileId, offerId);
+  }
+
+  /**
+   * Task 7b.1 / design.md Diagrama 1 + D-E. `toOfferResponseDto` (5b) ya es
+   * genérico para cualquier `Offer` — reactiva o proactiva — sin necesitar
+   * un mapper nuevo (`ofertas.mapper.ts`'s own doc comment).
+   */
+  @Roles('user')
+  @Get('bandeja')
+  @ApiOperation({
+    summary:
+      'Lista las propias ofertas del usuario autenticado (design.md Diagrama 1), ítems inline.',
+  })
+  @ApiOkResponse({ type: OfferResponseDto, isArray: true })
+  @ApiUnauthorizedResponse({ description: 'Token ausente o inválido.' })
+  @ApiForbiddenResponse({ description: 'Actor no es user.' })
+  async obtenerBandeja(@Actor() actor: AuthenticatedActor): Promise<OfferResponseDto[]> {
+    const offers = await this.obtenerBandejaUseCase.execute(actor.profileId);
+    return offers.map(toOfferResponseDto);
   }
 }

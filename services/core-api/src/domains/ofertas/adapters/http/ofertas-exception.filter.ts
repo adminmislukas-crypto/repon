@@ -109,6 +109,12 @@ const ERROR_STATUS_MAP = new Map<ErrorConstructor, StatusAndCode>([
     ItemsNoDisponiblesError,
     { statusCode: HttpStatus.BAD_REQUEST, code: 'OFERTA_ITEMS_NO_DISPONIBLES' },
   ],
+  // PR7b (tasks.md 7b.2/7b.3) — aceptarOferta's own 3 errors (D-D/D-G.3/R4).
+  // Closes out ERROR_STATUS_MAP: every class named in @Catch() above now has
+  // an entry, no class listed there still falls into the 500 fallback.
+  [OfferNotFoundError, { statusCode: HttpStatus.NOT_FOUND, code: 'OFFER_NOT_FOUND' }],
+  [TransicionInvalidaError, { statusCode: HttpStatus.CONFLICT, code: 'TRANSICION_INVALIDA' }],
+  [OfertaYaAceptadaError, { statusCode: HttpStatus.CONFLICT, code: 'OFERTA_YA_ACEPTADA' }],
 ]);
 
 @Catch(
@@ -127,14 +133,12 @@ export class OfertasExceptionFilter implements ExceptionFilter {
 
   catch(exception: Error, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<ResponseLike>();
-    // Every class named in @Catch() above WILL eventually get a map entry
-    // (added incrementally, PR by PR — 6 of 9 now have one, after this PR:
-    // 5b's 4 + 6b's `DestinatarioNoElegibleError`/`ItemsNoDisponiblesError`)
-    // — until a remaining class does, an instance reaching this filter (7b's
-    // `OfferNotFoundError`/`TransicionInvalidaError`/`OfertaYaAceptadaError`
-    // — none reachable from any route wired as of this PR) falls into the
-    // same defensive 500 fallback every sibling filter already uses for a
-    // genuinely unexpected error.
+    // ERROR_STATUS_MAP is now COMPLETE as of PR7b (tasks.md 7b.2/7b.3): every
+    // class named in @Catch() above (all 8 of `oferta.errors.ts`'s own
+    // classes + `CatalogQueryUnavailableError`) has a map entry — no class
+    // listed there still falls into the 500 fallback below. That fallback
+    // remains for the one case it was always meant for: a genuinely
+    // unexpected error this filter was never told to map.
     const { statusCode, code } = ERROR_STATUS_MAP.get(
       exception.constructor as ErrorConstructor,
     ) ?? {

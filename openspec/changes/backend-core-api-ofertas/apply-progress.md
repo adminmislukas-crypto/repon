@@ -3096,3 +3096,316 @@ this batch, still pending a user decision, still not blocking. This batch's
 own discoveries (the `runInTransaction<T>` return-value shape, the
 transient e2e flakiness) are both fully resolved/explained within this
 batch's own notes, not carried forward as open items.
+
+---
+
+# PR7b "Aceptación (HTTP) + bandeja HTTP" (Phase 7b, tasks 7b.1–7b.6)
+
+**Mode**: Strict TDD (project-wide `strict_tdd: true`, `openspec/config.yaml`)
+**Batch**: PR7b (Phase 7b, tasks 7b.1–7b.6) — ELEVENTH apply batch. PR1–PR7a
+are complete and committed on `main` (latest: `2d597d4`, PR7a "add ofertas
+AceptarOfertaUseCase and ObtenerBandeja"). This PR wires `AceptarOfertaUseCase`
+and `ObtenerBandejaUseCase` (both built and unit-tested in PR7a with zero HTTP
+surface) onto the existing `OfertasController` — its 4th and 5th routes — and
+closes out `OfertasExceptionFilter`'s `ERROR_STATUS_MAP` (6/9 → 9/9).
+
+**No agent-based code-review this round** (account spend limit — same
+constraint every batch since PR6a has documented). This batch was
+implemented and verified directly, with deviations/judgment calls
+documented prominently below, same discipline every prior batch used.
+
+## TDD Note for This Batch
+
+Only ONE genuine RED/GREEN pair in this batch: tasks 7b.2 (RED)/7b.3 (GREEN),
+extending `ofertas-exception.filter.spec.ts` with the 3 remaining mappings
+(`OfferNotFoundError`→404, `TransicionInvalidaError`→409,
+`OfertaYaAceptadaError`→409). Confirmed genuinely RED before writing the
+GREEN: the 3 new `describe.each` rows were added to the spec FIRST, run
+against the unmodified filter — all 3 failed with `Received: 500` (the
+existing defensive fallback, since none of the 3 classes had a map entry
+yet), while the 6 pre-existing rows kept passing (6 passed / 3 failed, 9
+total). Only THEN were the 3 map entries added to `ofertas-exception.filter.ts`
+— re-run went 9/9 green. See "Commands Run and Results" below for the exact
+transcript.
+
+Tasks 7b.1/7b.4 are pure wiring/scaffolding (2 new controller route handlers
+delegating to already-tested use cases; 2 new `providers` entries in an
+already-established module) — no independently Jest-testable behavior of
+their own beyond what 7b.5/7b.6's e2e suites exercise end to end, same
+"wiring PRs are proven by their own e2e suite, not a unit spec" precedent
+every prior HTTP-surface PR in this domain (4b, 5b, 6b) already established.
+
+Tasks 7b.5/7b.6 are real e2e specs, written directly against the 2 new
+routes (no RED/GREEN cycle in the TDD sense for e2e — the routes had to
+exist first for `supertest` to hit them at all; correctness was proven by
+writing the assertions against design.md's own contract, then running them
+against the real implementation).
+
+## TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 7b.1 controller | `ofertas.controller.ts` (extend) | N/A | N/A (wiring) | ➖ Not independently Jest-testable — 2 new route handlers delegating to already-unit-tested use cases | ✅ Proven by 7b.5/7b.6's own e2e suites (10/10) + `pnpm typecheck`/`pnpm build` clean | ➖ | ➖ |
+| 7b.2 RED | `ofertas-exception.filter.spec.ts` (extend) | Unit | ✅ 6/6 pre-existing rows (unaffected) | ✅ Written first — 3 new `describe.each` rows added, run against the unmodified filter: **3/3 failed** (`Received: 500`, the pre-3-entries defensive fallback), 6/6 pre-existing rows still passed (9 total: 6 passed/3 failed) | N/A — this is the RED step | ✅ 3 cases: `OfferNotFoundError`→404 `OFFER_NOT_FOUND`, `TransicionInvalidaError`→409 `TRANSICION_INVALIDA`, `OfertaYaAceptadaError`→409 `OFERTA_YA_ACEPTADA` | ➖ |
+| 7b.3 GREEN | `ofertas-exception.filter.ts` (extend) | Unit | ✅ 6/6 pre-existing rows (unaffected) | N/A — this is the GREEN step | ✅ 9/9 passed on the single implementation pass (3 map entries appended, `@Catch()` left untouched — verified it already listed all 3 classes since PR4b, confirming the task's own "you should NOT need to touch `@Catch()` itself, only the map" instruction) | N/A | ➖ None needed |
+| 7b.4 module | `ofertas.module.ts` (extend) | N/A | N/A (wiring) | ➖ Not independently Jest-testable | ✅ Proven by 7b.5/7b.6's own e2e suites (both routes 500'd with `Nest can't resolve dependencies` until this task landed, confirmed during development, not kept as a formal RED artifact since this is pure DI wiring, same as every prior module-registration task in this domain) | ➖ | ➖ |
+| 7b.5 e2e | `test/ofertas-aceptar-oferta.e2e-spec.ts` (new file) | E2E | N/A (new file) | N/A — e2e proves behavior against the real route, not a RED/GREEN unit cycle | ✅ 7/7 passed (see "Issues Found" for one real bug caught and fixed mid-batch — a missing `ACTOR_PORT` mock, not a design defect) | ✅ 7 cases: 204 happy path (reactiva, siblings displaced, opportunity closed, event payload); 404 byte-identical cross-tenant/nonexistent; 409 non-pendiente; 409 simulated double-tap (`OfertaYaAceptadaError` via mocked `marcarAceptada`); 204 proactiva touches neither `desplazarHermanas` nor `cerrar`; 401; 403 role `provider` | ➖ |
+| 7b.6 e2e | `test/ofertas-obtener-bandeja.e2e-spec.ts` (new file) | E2E | N/A (new file) | N/A — same reasoning as 7b.5 | ✅ 3/3 passed | ✅ 3 cases: 200 own-offers-with-items-inline (tasks.md's named scenario); 200 empty array (non-tasks.md-numbered addition, flagged in "Deviations"); 401 | ➖ |
+
+## Test Summary
+
+- **Total tests written**: 3 (unit, `ofertas-exception.filter.spec.ts` extension) +
+  7 (e2e, `ofertas-aceptar-oferta.e2e-spec.ts`) + 3 (e2e,
+  `ofertas-obtener-bandeja.e2e-spec.ts`) = **13 new tests**
+- **Total tests passing**: 13/13 new; zero regressions on any pre-existing
+  test (unit: 71/71 suites, 652/652 tests, up from PR7a's baseline 71/649 by
+  exactly +3 tests, same suite count since no new unit test *file* was added
+  — only an existing one extended; e2e: 22 total suites, 20 passed/2 failed,
+  134 tests: 129 passed/5 failed, up from PR7a's baseline 20/2 suites,
+  124/119/5 tests by exactly +2 suites/+10 tests — the 2 failing suites are
+  the SAME pre-existing Docker-paused `refill-matching` blocker every batch
+  has documented since PR3b, re-confirmed unrelated to this batch below)
+- **Layers used**: Unit (3), E2E (13) — this batch is the mirror image of
+  PR7a's own split (PR7a: 21 unit/0 e2e; PR7b: 3 unit/13 e2e), consistent
+  with every prior "logic PR / HTTP PR" pair in this domain (5a/5b, 6a/6b)
+- **Approval tests** (refactoring): None — no refactoring tasks
+- **New production code**: 2 new controller route handlers (~55 lines), 3
+  new `ERROR_STATUS_MAP` entries (~9 lines) + 1 updated doc comment, 2 new
+  module `providers` entries (~2 lines) + 1 new doc-comment paragraph
+
+## Completed Tasks (6/6 in this batch)
+
+- [x] 7b.1 `ofertas.controller.ts`: `POST /ofertas/:offerId/aceptar` (`@Roles('user')`, `ParseUUIDPipe`, 204 sin cuerpo); `GET /ofertas/bandeja` (`@Roles('user')`, 200 `OfferResponseDto[]`, reusing 5b's DTO).
+- [x] 7b.2 RED (extend the filter spec): `OfferNotFoundError`→404 `OFFER_NOT_FOUND`, `TransicionInvalidaError`→409 `TRANSICION_INVALIDA`, `OfertaYaAceptadaError`→409 `OFERTA_YA_ACEPTADA`.
+- [x] 7b.3 GREEN (extend the filter): the 3 mappings.
+- [x] 7b.4 `ofertas.module.ts`: register `AceptarOfertaUseCase`, `ObtenerBandejaUseCase`.
+- [x] 7b.5 E2e: `test/ofertas-aceptar-oferta.e2e-spec.ts` — 7 scenarios, all passing.
+- [x] 7b.6 E2e: `test/ofertas-obtener-bandeja.e2e-spec.ts` — 3 scenarios (2 named by tasks.md + 1 flagged addition), all passing.
+
+## Files Changed
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `services/core-api/src/domains/ofertas/adapters/http/ofertas.controller.ts` | Modified | +2 imports (`Param`/`ParseUUIDPipe` from `@nestjs/common`; `ApiNoContentResponse`/`ApiParam` from `@nestjs/swagger`; `AceptarOfertaUseCase`/`ObtenerBandejaUseCase`), +2 constructor params, +2 route handlers (`aceptarOferta`: `POST :offerId/aceptar`, 204; `obtenerBandeja`: `GET bandeja`, 200), class doc-comment extended to name the domain's first `@Roles('user')` routes |
+| `services/core-api/src/domains/ofertas/adapters/http/ofertas-exception.filter.ts` | Modified | 3 new `ERROR_STATUS_MAP` entries (`OfferNotFoundError`→404, `TransicionInvalidaError`→409, `OfertaYaAceptadaError`→409); `@Catch()` left byte-unchanged (already listed all 3 since PR4b, verified not assumed); the `catch()` method's stale "6 of 9... none reachable from any route wired as of this PR" comment rewritten to reflect the map is now complete |
+| `services/core-api/src/domains/ofertas/adapters/http/ofertas-exception.filter.spec.ts` | Modified | 3 new `describe.each` rows (import `OfertaYaAceptadaError`/`OfferNotFoundError`/`TransicionInvalidaError` from `oferta.errors.ts`), file-level comment updated to note all 9 rows are now present |
+| `services/core-api/src/domains/ofertas/ofertas.module.ts` | Modified | +2 imports, +2 `providers` entries (`AceptarOfertaUseCase`, `ObtenerBandejaUseCase`), +1 doc-comment paragraph explaining zero new `imports` are needed |
+| `services/core-api/test/ofertas-aceptar-oferta.e2e-spec.ts` | Created (367 lines) | 7 e2e tests: 204 happy path (reactiva); 404 byte-identical cross-tenant/nonexistent; 409 non-`'pendiente'`; 409 simulated double-tap; 204 proactiva (touches nothing else); 401; 403 role `provider` |
+| `services/core-api/test/ofertas-obtener-bandeja.e2e-spec.ts` | Created (168 lines) | 3 e2e tests: 200 own-offers-with-items-inline; 200 empty array (flagged addition); 401 |
+| `openspec/changes/backend-core-api-ofertas/tasks.md` | Modified | Tasks 7b.1–7b.6 marked `[x]` (6 lines changed, checkbox flips only) |
+
+## Commands Run and Results
+
+| Command | Result |
+|---|---|
+| `git log --oneline -5` / `git status --porcelain` (pre-flight) | `HEAD` at `2d597d4` (PR7a), clean tree — matches the orchestrator's stated starting point |
+| `pnpm --filter core-api exec jest ofertas-exception.filter.spec.ts` (RED, 3 new rows added, filter unmodified) | **6 passed / 3 failed** (9 total) — genuine RED: `Expected: 404/409/409, Received: 500` for all 3 new rows |
+| `pnpm --filter core-api exec jest ofertas-exception.filter.spec.ts` (GREEN, after the 3 map entries) | **9/9 passed** |
+| `pnpm --filter core-api typecheck` | Clean (both `packages/types` and `services/core-api`, run after controller/module wiring) |
+| `pnpm exec jest --config ./test/jest-e2e.json ofertas-aceptar-oferta ofertas-obtener-bandeja` (1st run, before adding `ACTOR_PORT` mocks) | **5 failed / 5 passed** (10 total) — all 5 failures were `500 Internal Server Error` from `AuthGuard.canActivate`'s `Cannot read properties of undefined (reading 'status')`; root-caused to a real bug in the new `ofertas-aceptar-oferta.e2e-spec.ts` (see "Issues Found") |
+| `pnpm exec jest --config ./test/jest-e2e.json ofertas-aceptar-oferta ofertas-obtener-bandeja` (2nd run, after fix) | **10/10 passed** |
+| `pnpm lint` (workspace root) | Clean |
+| `pnpm typecheck` (workspace root) | Clean |
+| `pnpm run format:check` (workspace root, 1st pass) | **FAILED** — Prettier style issues in 3 files (`ofertas-exception.filter.ts`, `ofertas-exception.filter.spec.ts`, `ofertas-aceptar-oferta.e2e-spec.ts`) |
+| `pnpm exec prettier --write` on those 3 files | Reformatted (whitespace-only — multi-line map-entry objects collapsed to single-line where they fit under the print width) |
+| `pnpm run format:check` (workspace root, 2nd pass) | Clean |
+| `pnpm --filter core-api exec jest ofertas-exception.filter.spec.ts` + the 2 new e2e specs (re-run after prettier) | **9/9 + 10/10 = 19/19 passed** — reformat was whitespace-only, confirmed |
+| `pnpm --filter core-api exec jest` (full unit suite) | **71 suites / 652 tests** passed — up from PR7a's baseline (71/649) by exactly +3 tests, zero regressions, same suite count (no new unit test file this batch) |
+| `pnpm exec jest --config ./test/jest-e2e.json` (full e2e suite) | **22 total suites, 20 passed / 2 failed; 134 tests, 129 passed / 5 failed** — up from PR7a's baseline (20 total, 18/2, 124: 119/5) by exactly +2 suites/+10 tests. The 2 failing suites are `refill-crear-solicitud.e2e-spec.ts`/`refill-completar-borrador.e2e-spec.ts` — IDENTICAL to every prior batch's documented Docker-paused blocker |
+| `pnpm --filter core-api build` | Clean |
+| `docker ps` (re-confirmed) | `Error response from daemon: Docker Desktop is manually paused` — unchanged from every prior batch since PR3b |
+| `supabase status` (re-confirmed) | `LegacyStatusDbInspectError` — same paused-Docker root cause |
+| `git status --porcelain -- services/core-api/test/refill-crear-solicitud.e2e-spec.ts services/core-api/test/refill-completar-borrador.e2e-spec.ts services/core-api/src/domains/refill-matching/` | Empty — confirms this batch touches neither the 2 failing e2e files nor any `refill-matching` production code |
+| `pnpm --filter core-api exec jest src/domains/ofertas` (full `ofertas` domain regression) | **11 suites / 172 tests** passed — up from PR7a's baseline (11/169) by exactly +3 tests, zero regressions to any prior `ofertas` behavior |
+
+## Deviations from Design
+
+**No deviation in the HTTP contract itself.** Both routes match design.md
+D-E's route table verbatim: `POST /ofertas/:offerId/aceptar` (`@Roles('user')`,
+204 no body, `ParseUUIDPipe` on `:offerId`) and `GET /ofertas/bandeja`
+(`@Roles('user')`, 200 `OfferResponseDto[]`). `actor.profileId` — never
+`actor.companyId` — passed to both use cases, exactly as PR7a's own "What
+PR7b should know" section specified. `ERROR_STATUS_MAP`'s 3 new entries match
+design.md D-E's "Errores de dominio" table exactly (`OFFER_NOT_FOUND`/404,
+`TRANSICION_INVALIDA`/409, `OFERTA_YA_ACEPTADA`/409). `@Catch()` was
+confirmed — not assumed — to already list all 3 classes since PR4b (read the
+decorator directly before touching anything), so it needed zero changes,
+exactly as the task instructions predicted.
+
+**The "409 double-tap" e2e scenario is a simulation, not a real race — by
+design, per this batch's own explicit instructions.** tasks.md 7b.5's own
+wording ("2 near-simultaneous requests on 2 sibling offers of the same R")
+names the scenario the partial unique index `offers_refill_request_id_aceptada_uidx`
+protects against: TWO DIFFERENT sibling offers of the same `refillRequestId`
+racing to become `'aceptada'`. That race is a genuine concurrent-Postgres
+phenomenon and lives entirely inside `KyselyOfferRepository.marcarAceptada`'s
+own `23505`-to-`OfertaYaAceptadaError` translation, already unit-tested
+against a mocked query builder in PR3a. This e2e suite's own override
+convention — replacing `OFFER_REPOSITORY` with an in-memory jest mock — means
+2 genuinely concurrent HTTP requests would land on 2 in-memory function
+calls, not 2 rows in a real table with a real unique-index constraint; it
+cannot exercise the actual race condition, and firing 2 real concurrent
+`supertest` requests against 2 mocked calls would prove nothing beyond "the
+mock returns what it's told to return," while adding real flakiness risk
+(timing-dependent mock-call ordering) for zero additional coverage. What
+this test proves instead — the ONLY thing the use-case + HTTP layer is
+actually responsible for in this scenario — is that `AceptarOfertaUseCase`
+propagates whatever `OfertaYaAceptadaError` the adapter throws, uncaught,
+and `OfertasExceptionFilter` maps it to 409, never 500: `marcarAceptada` is
+mocked to reject with the exact error class the adapter's own translation
+would produce, standing in for "this request was the one that lost the
+race." Implemented as a single request (not two), matching the orchestrator's
+explicit instruction for this task. **This is a different gap from PR7a's own
+review finding** (documented in that section, "Orchestrator Review Notes
+(PR7a)"): PR7a flagged that `marcarAceptada`'s UPDATE has no
+`WHERE status = 'pendiente'` guard, so the SAME offer accepted twice
+concurrently is NOT caught by the unique index (a narrower, still-open gap,
+explicitly out of this PR's scope per the orchestrator's own framing) — this
+batch's 409 test is about the index's own, already-covered case (two
+DIFFERENT sibling offers), not a fix or re-test of PR7a's finding.
+
+**One non-tasks.md-numbered e2e test added to `ofertas-obtener-bandeja.e2e-spec.ts`,
+flagged, not silently absorbed.** tasks.md 7b.6 names exactly 2 scenarios
+("200 own offers only with items inline"; "401") — narrower than 4b.7's own
+4-scenario enumeration for the sibling `listarSolicitudesElegibles` route.
+This batch's spec file adds a 3rd test — "returns 200 with an empty array
+when the actor has zero offers" — mirroring the equivalent empty-array test
+`ofertas-listar-oportunidades.e2e-spec.ts` (PR4b) already has for its own
+GET route. Cheap, does not conflict with or duplicate either named scenario,
+and closes an obvious gap (an empty bandeja is the more common real-world
+case for a brand-new user) — but it is still an addition beyond the task's
+literal 2-scenario text, so it is named here explicitly rather than presented
+as if tasks.md asked for it.
+
+**Doc-comment upkeep beyond the literal task text.** Task 7b.2/7b.3 says
+"extend the filter spec" / "extend the filter" — this batch also rewrote 2
+stale doc-comment passages that would have been actively misleading after
+this change: the filter's own module-level comment ("6 of 9 now have one")
+and the `catch()` method's inline comment ("none reachable from any route
+wired as of this PR" — no longer true, both routes now wire to this filter).
+Judged this as required upkeep, not scope creep — leaving either comment
+un-updated would have left the file lying about its own state to the next
+reader, the same discipline this repo's own doc-comment-heavy convention
+already demands everywhere else.
+
+## Issues Found
+
+**One real bug caught and fixed during this batch's own verification —
+flagged prominently, not silently corrected.** The first draft of
+`ofertas-aceptar-oferta.e2e-spec.ts` never called
+`actorPort.findActorById.mockResolvedValueOnce(...)` for any of its
+authenticated-request tests (5 of 7) — an oversight, not a design decision.
+Running the suite immediately surfaced it: all 5 affected tests failed with
+`500 Internal Server Error`, traced to `AuthGuard.canActivate` throwing
+`TypeError: Cannot read properties of undefined (reading 'status')` (reading
+`.status` off an `undefined` actor — `ACTOR_PORT` was correctly overridden
+with a jest mock, but that mock's `findActorById` had no configured
+resolution for these 5 tests, so it returned `undefined` by Jest's own
+default). Fixed by adding `actorPort.findActorById.mockResolvedValueOnce(buildUserActor(profileId))`
+(twice, once per request, in the 2-request byte-identical-404 test) to each
+of the 5 affected tests. Re-run: 10/10 passed. This is the same class of
+"forgot to mock the actor" mistake `ofertas-listar-oportunidades.e2e-spec.ts`
+(PR4b) and every subsequent `ofertas` e2e file got right on the first
+attempt by copying that file's own established pattern — this batch's own
+first draft deviated from that pattern by omission, caught immediately by
+running the suite (never assumed green), and corrected before it reached
+this report.
+
+**One formatting fix, mechanical.** `prettier --write` reformatted the 3
+touched files — confirmed whitespace-only by re-running all 19 affected
+tests green immediately after (unchanged pass count).
+
+**Pre-existing Docker-paused environmental blocker persists, confirmed
+unrelated to this batch (re-verified, not assumed).** Same 2
+`refill-matching` e2e failures every batch has documented since PR3b —
+`docker ps`/`supabase status` both re-confirm the paused state, and
+`git status --porcelain` confirms this batch touches neither the 2 failing
+files nor any `refill-matching` production code.
+
+## What PR8a (next batch) should know
+
+- **`OfertasController` now has all 5 routes design.md D-E's table names**
+  (`GET oportunidades`, `POST /`, `POST proactivas`, `POST :offerId/aceptar`,
+  `GET bandeja`) — this domain's HTTP surface is COMPLETE. PR8a's own scope
+  (2 listeners in `refill-matching`, per tasks.md) touches zero files under
+  `domains/ofertas/`.
+- **`OfertasExceptionFilter`'s `ERROR_STATUS_MAP` is now 9/9 complete** — all
+  8 of `oferta.errors.ts`'s own classes plus `CatalogQueryUnavailableError`.
+  No class named in `@Catch()` still falls through to the 500 defensive
+  fallback. PR8a should not need to touch this file at all (its own listeners
+  live in `refill-matching`, with their own error-handling shape per
+  design.md D-F, not this filter).
+- **`OfertaEnviada`/`OfertaAceptada` are both live and published on the real
+  event bus** (`OfertaEnviada` since PR5a, `OfertaAceptada` since PR7a) — 2
+  events `MatchEncontradoListener`'s own channel-name-string convention
+  (`@OnEvent('ofertas.oferta_enviada')`/`@OnEvent('ofertas.oferta_aceptada')`)
+  is exactly what PR8a's own 2 new listeners in `refill-matching` need to
+  subscribe to, per tasks.md 8a.1's own local-payload-mirroring instruction
+  (never importing `ofertas`' event classes directly, D7).
+- **The `ofertas` domain's own PR chain (PR1 → PR7b) is now feature-complete
+  end to end** — every route, every use case, every domain error mapped.
+  PR8a/PR8b are the closing phases: cableado into `refill-matching` (8a) and
+  docs-only SPEC.md reconciliation (8b), per tasks.md's Dependency Notes.
+- **The 2 `refill-matching` e2e failures remain environmental (Docker
+  paused), not a regression** — no action needed from PR8a on that front,
+  though PR8a's own e2e contract tests (8a.7/8a.8) will need
+  `await moduleRef.init()`, never only `.compile()` — tasks.md 8a.7 itself
+  names the exact bug this guards against (the `catalogo` PR8b precedent
+  where `onApplicationBootstrap` never fired without it).
+
+## Workload / PR Boundary
+
+- Mode: chained PR slice (`stacked-to-main`, same as every prior batch —
+  tasks.md's Review Workload Forecast names PR7b at "220-290, Low-Medium")
+- Current work unit: Unit 7b "HTTP de aceptación + bandeja" — PR7b, tasks
+  7b.1–7b.6, all complete
+- Boundary: starts from PR7a's committed state (`2d597d4`,
+  `AceptarOfertaUseCase`/`ObtenerBandejaUseCase` fully implemented and unit-
+  tested but with zero HTTP wiring); ends with both use cases live on
+  `OfertasController`'s 4th/5th routes, `ERROR_STATUS_MAP` complete (9/9),
+  `ofertas.module.ts` registering both use cases — `pnpm lint`/`pnpm
+  typecheck`/`pnpm build`/`pnpm run format:check` all clean workspace-wide,
+  unit suite 100% green (71/71 suites, 652/652 tests, +3 tests over PR7a's
+  baseline, zero regressions), full `ofertas` domain regression green (11/11
+  suites, 172/172 tests), e2e suite at its established baseline plus this
+  batch's own 10/10 new tests (22 total suites, 20/22 passed — the 2
+  `refill-matching` failures are the same pre-existing Docker-paused blocker
+  every batch since PR3b has already documented, re-confirmed unrelated to
+  this batch's diff)
+- Estimated review budget impact: **~674 changed lines** (2 new e2e files:
+  367 + 168 = 535 lines; 4 modified production/spec files: 123 insertions +
+  16 deletions = 139 lines, `git diff --stat`-verified; plus `tasks.md`'s own
+  6-line checkbox-flip delta, process not implementation) — over tasks.md's
+  own 220-290 forecast for this PR (roughly 2.3-3.1x the upper bound).
+  Flagged honestly, same discipline every prior batch in this chain has used
+  for its own overrun (PR7a ran ~2.2-2.7x over, PR6b ~2.7-3x, PR5b ~3.2-4x —
+  this batch's overrun is actually the SMALLEST multiple in the chain so
+  far, consistent with tasks.md's own "cheaper than a first-surface PR" note
+  for this specific PR). No split proposed: this PR's own components are 2
+  route handlers on an already-existing controller (7b.1), 3 map entries on
+  an already-existing filter (7b.2/7b.3), 2 provider registrations on an
+  already-existing module (7b.4), and their own 2 e2e spec files (7b.5/7b.6)
+  — the e2e files ARE the bulk of the diff (535 of 674 lines, ~79%), and
+  tasks.md itself names each as belonging to its own route/use-case pairing;
+  splitting either e2e file from the route it proves would not reduce total
+  review surface, only make a directly-coupled pair harder to review
+  together, same reasoning every prior batch's own no-split analysis used.
+
+## Status
+
+**Cumulative**: 102/103 tasks complete across PR1 (10/10) + PR2 (10/10) +
+PR3a (11/11) + PR3b (12/13 — 3b.13 deferred, environmental blocker, not a
+code gap) + PR4a (7/7) + PR4b (7/7) + PR5a (9/9, plus 2 orchestrator fixes)
++ PR5b (7/7) + PR6a (4/4) + PR6b (10/10) + PR7a (9/9) + PR7b (6/6). Ready for
+PR8a (Phase 8a "Cableado — 2 listeners en `refill-matching`" — depends on
+Phase 5a's `OfertaEnviada` and Phase 7a's `OfertaAceptada`, both live and
+published since their respective batches), per tasks.md's dependency chain
+(`... → PR7b → PR8a → PR8b`). Finding #3 from PR5a's review (catalog-match
+correlation) remains open, unchanged by this batch, still pending a user
+decision, still not blocking. PR7a's own review finding (the missing
+`WHERE status = 'pendiente'` guard on `marcarAceptada`) also remains open,
+unchanged by this batch, explicitly out of scope per the orchestrator's own
+framing for this batch's 409 test — not re-litigated, not fixed, not
+forgotten. This batch's own discovery (the missing `ACTOR_PORT` mocks in the
+e2e spec's first draft) was fully caught and fixed within this batch, not
+carried forward as an open item.

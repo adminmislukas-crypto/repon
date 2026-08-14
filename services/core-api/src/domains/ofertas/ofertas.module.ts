@@ -5,9 +5,11 @@ import { MatchEncontradoListener } from './adapters/events/match-encontrado.list
 import { OfertasController } from './adapters/http/ofertas.controller';
 import { KyselyOfferOpportunityRepository } from './adapters/persistence/kysely-offer-opportunity.repository';
 import { KyselyOfferRepository } from './adapters/persistence/kysely-offer.repository';
+import { AceptarOfertaUseCase } from './ports-in/aceptar-oferta.use-case';
 import { EnviarOfertaProactivaUseCase } from './ports-in/enviar-oferta-proactiva.use-case';
 import { EnviarOfertaUseCase } from './ports-in/enviar-oferta.use-case';
 import { ListarSolicitudesElegiblesUseCase } from './ports-in/listar-solicitudes-elegibles.use-case';
+import { ObtenerBandejaUseCase } from './ports-in/obtener-bandeja.use-case';
 import { RegistrarOportunidadUseCase } from './ports-in/registrar-oportunidad.use-case';
 import { OFFER_OPPORTUNITY_REPOSITORY } from './ports-out/offer-opportunity-repository.port';
 import { OFFER_REPOSITORY } from './ports-out/offer-repository.port';
@@ -62,6 +64,13 @@ import { OFFER_REPOSITORY } from './ports-out/offer-repository.port';
  * consumes the same `CATALOG_QUERY_PORT` token via its own new method
  * (`obtenerItemsDeProveedor`, PR6a), not a second module edge.
  *
+ * PR7b (tasks.md 7b.4) adds `AceptarOfertaUseCase` + `ObtenerBandejaUseCase`
+ * — both were already implemented and unit-tested in PR7a with zero DI
+ * wiring; this batch is their first `providers` registration. Needs zero new
+ * `imports` either: neither consumes `CATALOG_QUERY_PORT`, only tokens
+ * `DatabaseModule` already exports (`TRANSACTION_MANAGER`) plus this
+ * module's own `OFFER_REPOSITORY`/`OFFER_OPPORTUNITY_REPOSITORY` bindings.
+ *
  * `exports: []`, deliberately (D15): this domain has no `contracts/` yet and
  * nothing else imports from it.
  *
@@ -80,6 +89,8 @@ import { OFFER_REPOSITORY } from './ports-out/offer-repository.port';
     ListarSolicitudesElegiblesUseCase,
     EnviarOfertaUseCase,
     EnviarOfertaProactivaUseCase,
+    AceptarOfertaUseCase,
+    ObtenerBandejaUseCase,
   ],
   exports: [],
 })

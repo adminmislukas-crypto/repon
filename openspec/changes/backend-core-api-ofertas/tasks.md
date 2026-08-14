@@ -217,12 +217,12 @@ Depends on Phase 3a's `marcarAceptada`/`desplazarHermanas`, Phase 3b's `cerrar`.
 
 Depends on Phase 7a.
 
-- [ ] 7b.1 `ofertas.controller.ts`: `POST /ofertas/:offerId/aceptar` (`@Roles('user')`, `ParseUUIDPipe`, **204 sin cuerpo** — `SPEC.md` declara `Promise<void>`, precedente `PUT .../precio`→204); `GET /ofertas/bandeja` (`@Roles('user')`, 200 `OfferResponseDto[]`, reusing 5b's DTO).
-- [ ] 7b.2 RED (extend the filter spec): `OfferNotFoundError`→404 `OFFER_NOT_FOUND`, `TransicionInvalidaError`→409 `TRANSICION_INVALIDA`, `OfertaYaAceptadaError`→409 `OFERTA_YA_ACEPTADA`.
-- [ ] 7b.3 GREEN (extend the filter): the 3 mappings.
-- [ ] 7b.4 `ofertas.module.ts`: register `AceptarOfertaUseCase`, `ObtenerBandejaUseCase`.
-- [ ] 7b.5 E2e: `test/ofertas-aceptar-oferta.e2e-spec.ts` — 204 happy path (siblings `'rechazada'`, opportunity closed, `OfertaAceptada` observable on the real bus after commit); 404 cross-tenant (byte-identical body to nonexistent); 409 already-non-`'pendiente'`; 409 double-tap (2 near-simultaneous requests on 2 sibling offers of the same R); proactiva accept touches nothing else; 401; 403 role `user` missing.
-- [ ] 7b.6 E2e: `test/ofertas-obtener-bandeja.e2e-spec.ts` — 200 own offers only with items inline; 401.
+- [x] 7b.1 `ofertas.controller.ts`: `POST /ofertas/:offerId/aceptar` (`@Roles('user')`, `ParseUUIDPipe`, **204 sin cuerpo** — `SPEC.md` declara `Promise<void>`, precedente `PUT .../precio`→204); `GET /ofertas/bandeja` (`@Roles('user')`, 200 `OfferResponseDto[]`, reusing 5b's DTO).
+- [x] 7b.2 RED (extend the filter spec): `OfferNotFoundError`→404 `OFFER_NOT_FOUND`, `TransicionInvalidaError`→409 `TRANSICION_INVALIDA`, `OfertaYaAceptadaError`→409 `OFERTA_YA_ACEPTADA`.
+- [x] 7b.3 GREEN (extend the filter): the 3 mappings.
+- [x] 7b.4 `ofertas.module.ts`: register `AceptarOfertaUseCase`, `ObtenerBandejaUseCase`.
+- [x] 7b.5 E2e: `test/ofertas-aceptar-oferta.e2e-spec.ts` — 204 happy path (siblings `'rechazada'`, opportunity closed, `OfertaAceptada` observable on the real bus after commit); 404 cross-tenant (byte-identical body to nonexistent); 409 already-non-`'pendiente'`; 409 double-tap (2 near-simultaneous requests on 2 sibling offers of the same R); proactiva accept touches nothing else; 401; 403 role `user` missing.
+- [x] 7b.6 E2e: `test/ofertas-obtener-bandeja.e2e-spec.ts` — 200 own offers only with items inline; 401.
 
 ## Phase 8a: Cableado — 2 listeners en `refill-matching` — Spec: `core-api-refill-matching`
 

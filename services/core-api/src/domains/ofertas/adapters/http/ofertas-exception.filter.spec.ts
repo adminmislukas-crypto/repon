@@ -4,8 +4,11 @@ import {
   DestinatarioNoElegibleError,
   ItemsNoDisponiblesError,
   OfertaInvalidaError,
+  OfertaYaAceptadaError,
+  OfferNotFoundError,
   OportunidadCerradaError,
   SolicitudNoElegibleError,
+  TransicionInvalidaError,
 } from '../../domain/oferta.errors';
 import { OfertasExceptionFilter } from './ofertas-exception.filter';
 
@@ -27,10 +30,12 @@ function fakeHost(): { host: ArgumentsHost; json: jest.Mock; status: jest.Mock }
 // (constructor-keyed map, one test per mapped class, independent of any
 // particular controller route — `test/ofertas-enviar-oferta.e2e-spec.ts`
 // proves at least the 404/409/400/503 set through the real HTTP pipeline).
-// This PR (6b, tasks.md 6b.7/6b.8) EXTENDS this same table with the 2 new
-// `enviarOfertaProactiva` rows — `DestinatarioNoElegibleError`/
-// `ItemsNoDisponiblesError` — never replacing the 4 rows above. 7b will do
-// the same for `aceptarOferta`'s 3 remaining classes.
+// PR7b (tasks.md 7b.2/7b.3) EXTENDS this same table with the 3 remaining
+// `aceptarOferta`/`obtenerBandeja` rows — `OfferNotFoundError`/
+// `TransicionInvalidaError`/`OfertaYaAceptadaError` — never replacing the 6
+// rows above. This closes out all 9 of `oferta.errors.ts`'s classes plus
+// `CatalogQueryUnavailableError` — every class named in `@Catch()` now has a
+// map entry, no more classes falling through to the 500 defensive fallback.
 describe.each([
   [
     new SolicitudNoElegibleError('11111111-1111-4111-8111-111111111111'),
@@ -54,6 +59,13 @@ describe.each([
     400,
     'OFERTA_ITEMS_NO_DISPONIBLES',
   ],
+  [new OfferNotFoundError('11111111-1111-4111-8111-111111111111'), 404, 'OFFER_NOT_FOUND'],
+  [
+    new TransicionInvalidaError('La oferta ya fue procesada y no puede aceptarse de nuevo.'),
+    409,
+    'TRANSICION_INVALIDA',
+  ],
+  [new OfertaYaAceptadaError('11111111-1111-4111-8111-111111111111'), 409, 'OFERTA_YA_ACEPTADA'],
 ] as const)('OfertasExceptionFilter — %#', (exception, statusCode, code) => {
   it(`maps ${exception.constructor.name} to ${statusCode} ${code}`, () => {
     const filter = new OfertasExceptionFilter();
