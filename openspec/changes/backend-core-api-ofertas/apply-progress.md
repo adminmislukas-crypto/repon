@@ -3799,3 +3799,171 @@ were both fully caught, verified, and resolved within this batch, not
 carried forward as open items. `openspec/changes/backend-core-api-ofertas/
 tasks.md` now shows only PR8b's 7 tasks unchecked — the entire rest of the
 14-PR chain (13 of 14 PRs) is complete.
+
+## PR8b — Phase 8b: Cierre (tasks 8b.1–8b.7) — FINAL PR in the 14-PR chain
+
+**Mode**: Docs-only, per the batch's own instructions and tasks.md's own
+Phase 8b framing ("Docs-only, on purpose") — no new production logic, so
+strict-TDD RED/GREEN cycles do not apply to this batch (`strict_tdd: true`
+remains active project-wide; it simply has nothing to gate here, same
+exception every prior domain's own closing phase already used). Delivery
+strategy: chained PR slice, stacked-to-main, same as every prior batch —
+tasks.md's Review Workload Forecast names PR8b at "150-210, Low".
+
+Starting point confirmed before any edit: `git log --oneline -5` showed
+`HEAD` at `e5de8ce` (PR8a), `git status --porcelain` showed only 2
+pre-existing, unrelated modified files (`.atl/.skill-registry.cache.json`,
+`.atl/skill-registry.md`) — not touched by this batch, not part of its diff,
+left exactly as found.
+
+### Tooling note — engram continuity chain not reachable from this execution context
+
+The batch instructions asked this agent to pull the engram continuity chain
+(`sdd/backend-core-api-ofertas/apply-progress-continuation-11`, PR8a's
+record) via mem_search/mem_get_observation, and to save a continuation-12
+entry via mem_save on completion. This agent's tool access in this
+execution context exposed only Read/Edit/Write/Bash — no mem_* MCP tools
+were callable, verified by attempting mem_search as a shell command
+(`mem_search not found`) before concluding it was unavailable, not by
+assuming. This is a gap in this batch's own execution environment, not a
+decision to skip the step. Per the batch's own framing, apply-progress.md
+(this file) is the filesystem source of truth for the full PR1-PR8a
+history, and this section fully captures PR8b's own work — nothing is lost.
+The orchestrator, which retains mem_* tool access, should perform the
+continuation-12 mem_save itself
+(`topic_key: sdd/backend-core-api-ofertas/apply-progress-continuation-12`),
+seeded from this section, before or alongside launching sdd-verify. Flagged
+here rather than silently omitted.
+
+### Completed Tasks (7/7 in this batch)
+
+- [x] 8b.1 Rewrote `services/core-api/domains/ofertas/SPEC.md`: "Eventos que consume" corrected to `MatchEncontrado` only + `RefillCreado` explicitly out (D2); auto-oferta conflation removed and named out-of-scope with a pointer to Fase 6 of `docs/ROADMAP.md` (D3); `enviarOfertaProactiva`'s `userId` documented as scoped by D10's relationship rule; every raw signature in `OfertasInboundPort` gains a "derived from actor" framing note (D11); `NotificationPort`/`EventPublisher` removed from the ports-out block, replaced with a note pointing to the shared kernel (D17).
+- [x] 8b.2 `packages/types/SPEC.md`: `src/ofertas.ts` table row now lists `NuevoOfferItem` (+ `NuevoOfferItemReactiva`/`NuevoOfferItemProactiva`), `DatosEntrega`, `SolicitudElegible` (+ `SolicitudElegibleItem`) alongside the existing `OfferKind`/`OfferStatus`/`OfferItem`/`Offer` exports (D14).
+- [x] 8b.3 Audited `ofertas.module.ts`: `exports: []` confirmed (D15); `imports: [DatabaseModule, CatalogoModule]` confirmed exactly, read directly, no 3rd import.
+- [x] 8b.4 Audited `refill-matching.module.ts` end-to-end: `git diff c94b7e5 HEAD -- .../refill-matching.module.ts` (`c94b7e5` = refill-matching's own last commit, immediately before this whole `backend-core-api-ofertas` change started at `57b655f`) confirms `imports`/`controllers`/`exports` byte-identical; `providers` gained exactly the 2 entries PR8a added (`OfertaEnviadaListener`, `OfertaAceptadaListener`), nothing else changed.
+- [x] 8b.5 Confirmed `domains/ofertas/` folder shape via `find`: `adapters/events/` contains exactly 1 listener (`match-encontrado.listener.ts` + its spec + `refill-matching-event.payloads.ts`), no `contracts/` directory anywhere under the domain, no `adapters/scheduling/` directory (D15).
+- [x] 8b.6 Full workspace verification run for real (see "Commands Run and Results" below) — `pnpm lint`/`typecheck`/`test`/`build`/`format:check` all executed, not skipped or assumed; 3b.13's opt-in integration suite re-checked and re-confirmed still environmentally blocked, not silently ignored.
+- [x] 8b.7 The 9 residual risks from design.md's closing section, plus 2 carried-forward review findings from earlier batches, documented below under "Residual Risks Carried Forward" — none silently dropped.
+
+### Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| Focused test command and exact result | `pnpm --filter core-api exec jest src/domains/ofertas` → 11/11 suites, 172/172 tests passed (unchanged from PR8a's own baseline — this batch touches zero `.ts` files under this domain); `pnpm --filter core-api exec jest src/domains/refill-matching` → 13/13 suites, 124/124 tests passed (unchanged from PR8a's own baseline) |
+| Runtime harness command/scenario and exact result | N/A — this batch has no runtime boundary of its own (no new route, listener, or transaction). The relevant runtime proof is the full e2e suite re-run below, which re-exercises every existing runtime boundary this domain and its sibling already have and shows zero change from PR8a's own baseline |
+| Rollback boundary | Exactly 2 files: `services/core-api/domains/ofertas/SPEC.md`, `packages/types/SPEC.md` (plus the process files `tasks.md`/`apply-progress.md`). Reverting either SPEC.md file alone restores its prior prose with zero effect on any executable code — nothing else in the repo depends on these 2 files' content at runtime or compile time |
+
+### Files Changed
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `services/core-api/domains/ofertas/SPEC.md` | Modified (+11/-8) | "Eventos que consume" rewritten (D2/D3); "Puertos de entrada" gains the D11 actor-derivation note + the D10 `enviarOfertaProactiva.userId` scoping note (+ a signature accuracy fix, see "Deviations" below); "Puertos de salida" drops `NotificationPort`/`EventPublisher` (D17) |
+| `packages/types/SPEC.md` | Modified (+1/-1) | `src/ofertas.ts` table row updated to list the 3 D14 additions (`NuevoOfferItem`, `DatosEntrega`, `SolicitudElegible`) |
+| `openspec/changes/backend-core-api-ofertas/tasks.md` | Modified (+7/-7) | Tasks 8b.1-8b.7 marked `[x]` |
+| `openspec/changes/backend-core-api-ofertas/apply-progress.md` | Modified | This section appended |
+
+No file under `services/core-api/src/` was touched — confirmed by `git status --porcelain` showing only the 2 `SPEC.md` docs plus the 2 process files, consistent with this phase's own docs-only mandate.
+
+### Commands Run and Results
+
+| Command | Result |
+|---|---|
+| `git log --oneline -5` / `git status --porcelain` (pre-flight) | `HEAD` at `e5de8ce` (PR8a); only 2 pre-existing unrelated `.atl/` cache files modified, not part of this batch |
+| `docker ps` | `Error response from daemon: Docker Desktop is manually paused. Unpause it through the Whale menu or Dashboard.` — re-confirmed directly, unchanged since PR3b |
+| `supabase status` | `LegacyStatusDbInspectError` (same paused-Docker root cause) — re-confirmed directly |
+| `pnpm lint` (workspace root) | Clean — 0 errors |
+| `pnpm typecheck` (workspace root) | Clean — `packages/types` and `services/core-api` both `Done` |
+| `pnpm test` — unit step (`jest`) | 73/73 suites, 660/660 tests passed — IDENTICAL to PR8a's own final baseline (zero regressions, zero new tests — docs-only batch) |
+| `pnpm test` — e2e step (`jest --config ./test/jest-e2e.json`) | 24 total suites, 22 passed/2 failed; 139 tests, 134 passed/5 failed — IDENTICAL to PR8a's own final baseline. The 2 failing suites are `refill-crear-solicitud.e2e-spec.ts`/`refill-completar-borrador.e2e-spec.ts`, same 500/connection-timeout root cause documented by every batch since PR3b |
+| `git status --porcelain -- test/refill-crear-solicitud.e2e-spec.ts test/refill-completar-borrador.e2e-spec.ts src/domains/refill-matching/` | Empty — confirms this batch touches neither failing file nor their domain's production code, ruling out a regression introduced by this batch |
+| `pnpm --filter core-api exec jest src/domains/ofertas` (focused domain regression) | 11/11 suites, 172/172 tests — unchanged from PR8a's baseline |
+| `pnpm --filter core-api exec jest src/domains/refill-matching` (focused domain regression) | 13/13 suites, 124/124 tests — unchanged from PR8a's baseline |
+| `pnpm build` (workspace root) | Clean — `services/core-api build` (`tsc -p tsconfig.build.json`) `Done` |
+| `pnpm format:check` (workspace root) | Clean on the first pass — "All matched files use Prettier code style!", no reformat needed |
+| 3b.13 opt-in integration suite (`supabase start` local, real Postgres round-trip of `reemplazar`) | NOT RUN — re-confirmed via the `docker ps`/`supabase status` calls above as the same environmental blocker documented every batch since PR3b; left `[ ]` in tasks.md exactly as it has been since PR3b, not a regression this batch introduced and not silently newly skipped |
+
+### Deviations from Design
+
+None in substance — this batch is prose plus read-only audits plus
+verification, exactly as tasks.md's own Phase 8b framing and the batch's own
+instructions specify. No production code was written or modified. One minor
+accuracy fix beyond the 5 literal deltas named in task 8b.1's own text:
+`enviarOfertaProactiva`'s SPEC.md signature was missing its
+`entrega: DatosEntrega` parameter (present in the real
+`EnviarOfertaProactivaUseCase.execute()` since PR6b, and in the DTO shape
+since tasks.md task 6b.5) — fixed in the same edit that added the D11
+"derived from actor" framing note, on the reasoning that leaving a
+known-incorrect signature in a doc block already being rewritten would be a
+documented staleness, not a neutral omission. Flagged here explicitly rather
+than folded in silently. Everything else in `OfertasInboundPort`/
+`OfferRepository` was left exactly as the prior (accurate) prose already had
+it — no other signature or param-order change was made, staying inside this
+task's own stated scope.
+
+### Issues Found
+
+None. No code was executed against a bug this batch; only doc edits and
+read-only audits were performed. All 3 audits (8b.3/8b.4/8b.5) matched the
+expected end-state exactly on first read — no surprises, no follow-up edits
+needed.
+
+### Residual Risks Carried Forward (task 8b.7)
+
+Per design.md's own closing section ("Riesgos residuales y preguntas
+abiertas"), the following 9 items are carried forward as documented,
+still-open follow-ups. None are silently dropped; none are resolved or
+newly introduced by this batch — this section only records their status,
+unchanged:
+
+1. R1's residual window — a provider suspended AFTER a match, before the next `buscarProveedoresCompatibles` re-run, still appears in `offer_opportunity_companies` and can offer. `enviarOferta`'s D8 re-query closes the composability gap (zero catalog matches means the offer can't be built), but the list entry itself persists until `EmpresaSuspendida` is heard — a listener this change deliberately does not add. Named exit: listen to `EmpresaSuspendida` and flip `vigente` — additive, one more listener, not built here.
+2. `isAlt`'s unenforced price ceiling (D-G.2) — `precioMaximo` only bounds non-`isAlt` items; an alternative-presentation item has no server-side price ceiling, because normalizing presentations to make the comparison meaningful is its own product change.
+3. `urgencia` as unchecked `text` (D-A.1) — no DB-level `CHECK`. Mitigated at the single write path (the local payload types it as `Urgencia`); inert today since no column reads it for a decision. Revisit the day the list filters by urgency.
+4. `cerrada_at`'s one-way monotonicity (D-A.3) — closing an opportunity cannot be reversed by this change. If a `pedidos-pagos` order is later cancelled, the solicitud does not return to any provider's list. Correct today (`pedidos-pagos` doesn't exist yet); explicitly named as `pedidos-pagos`'s own future conversation to have.
+5. `desplazarHermanas` crosses all companies (Q6) — displaces every `'pendiente'` sibling offer on the same `refillRequestId`, including other `'pendiente'` offers from the SAME company (a direct consequence of Q6: several offers from one provider can coexist). Consistent with `SPEC.md`'s own wording, but product should see it written explicitly, not just infer it from behavior.
+6. No push to the provider on acceptance (D-G.4) — `sendPush` takes a `profileId`; this domain only has `companyId`. Resolving it needs a new contract against `identidad`. Named as `pedidos-pagos`'s own work per `docs/ARCHITECTURE.md`.
+7. `findByRefillRequest` still uncalled (D-G.1) — kept because it's declared in `SPEC.md`; recorded explicitly so its absence of a caller is never mistaken for an oversight.
+8. `tx`-required on 4 methods, a deliberate convention break (D-G.5) — `marcarAceptada`/`desplazarHermanas` (`OfferRepository`) and `reemplazar`/`cerrar` (`OfferOpportunityRepository`) require `tx: TransactionContext`, not `tx?`, breaking this repo's usual optional-tx convention on purpose, scoped to exactly the 4 operations whose correctness IS atomicity. Reverting is "adding a `?`" if it ever becomes friction.
+9. R7's payload-freeze risk once `pedidos-pagos` lands — `OfertaAceptada` now carries `total` and `desplazadas`, but `pedidos-pagos`'s future `crearPedidoDesdeOferta(offerId)` will need the offer's items for `order_items`' immutable snapshot, which today's payload does not carry. Named exit in D15: `pedidos-pagos` will choose between a `contracts/` surface over `ofertas` or a fatter payload — both additive, decided with real evidence once that domain actually lands, not speculatively here.
+
+Also unresolved, carried forward from this chain's own prior batches' review
+findings — not new to this batch, not closed by it:
+
+- Finding #3 from PR5a's review (catalog-match correlation) — still open, still pending a user decision, still not blocking.
+- PR7a's review finding (the missing `WHERE status = 'pendiente'` guard on `marcarAceptada`, whose race is instead caught downstream by R4's unique-index-violation-to-409 translation, not by the `UPDATE`'s own `WHERE` clause) — still open, unchanged by this batch.
+
+### Workload / PR Boundary
+
+- Mode: chained PR slice (stacked-to-main), same as every prior batch — tasks.md's Review Workload Forecast names PR8b at "150-210, Low"
+- Current work unit: Unit 8b "Cierre: SPEC.md deltas + auditoría" — PR8b, tasks 8b.1-8b.7, all 7 complete, and the FINAL unit in the 14-PR chain
+- Boundary: starts from PR8a's committed state (`e5de8ce`, both cross-domain event contracts proven against the real bus, `refill-matching`'s 2 use cases wired to their first real callers); ends with `ofertas/SPEC.md` and `packages/types/SPEC.md` both reconciled against design.md's D2/D3/D10/D11/D14/D17 deltas, both module files audited clean, the domain's folder shape confirmed matching D15, and a full green workspace verification (lint/typecheck/build/format:check all clean; unit 100% green 73/73 suites, 660/660 tests; e2e at its established 22/24-suite baseline, the 2 failures being the same pre-existing Docker-paused blocker every batch since PR3b has documented and re-confirmed unrelated to this batch's diff)
+- Estimated review budget impact: ~35 changed lines (`services/core-api/domains/ofertas/SPEC.md`: +11/-8; `packages/types/SPEC.md`: +1/-1; `openspec/changes/backend-core-api-ofertas/tasks.md`: +7/-7 checkbox toggles, process not implementation) — well under tasks.md's own 150-210 forecast for this PR, and the only PR in the whole 14-PR chain to land under its own lower bound rather than over its upper bound. No split proposed or needed: this PR's own scope was already the smallest, single-review-pass unit by design (docs-only closing phase, same precedent as `consumo`/`refill-matching`'s own closing phases)
+
+### Status
+
+**Cumulative**: 117/118 tasks complete across PR1 (10/10) + PR2 (10/10) +
+PR3a (11/11) + PR3b (12/13 — 3b.13 still deferred, environmental blocker,
+not a code gap) + PR4a (7/7) + PR4b (7/7) + PR5a (9/9) + PR5b (7/7) + PR6a
+(4/4) + PR6b (10/10) + PR7a (9/9) + PR7b (6/6) + PR8a (8/8) + **PR8b (7/7,
+this batch, FINAL PR in the chain)**. The single remaining unchecked item,
+task 3b.13 (opt-in Postgres integration round-trip for `reemplazar`), is
+deliberately left `[ ]` — re-confirmed this batch (`docker ps`/`supabase
+status`) as the same environmental blocker documented every batch since
+PR3b, not a code gap and not part of any of PR8b's own 7 tasks; the
+mocked-query-builder tests in 3b.1-3b.12 already cover the same 5-statement
+order and idempotency-by-upsert structurally, and it remains available for
+the orchestrator/user to run once Docker Desktop is unpaused.
+
+The `backend-core-api-ofertas` 14-PR chain is now complete: all 8 slices of
+design.md's approach (groundwork through cableado + cierre), pre-split into
+14 chained PRs per tasks.md's own Review Workload Forecast, have landed on
+`main`, each independently reviewed, verified, and committed.
+`openspec/changes/backend-core-api-ofertas/tasks.md` shows every task
+checked except 3b.13. Ready for `sdd-verify` against `spec.md`/`design.md`,
+and after that, `sdd-archive`.
+
+### What `sdd-verify` (next phase) should know
+
+- This batch (PR8b) introduced zero production-code changes — verify should not expect any new test evidence beyond the workspace-wide green run recorded above.
+- The 9 residual risks + 2 carried-forward review findings listed under "Residual Risks Carried Forward" above are EXPECTED to still read as open — they are not defects introduced or left unaddressed by this batch; they are named, bounded, deliberate deferrals per design.md's own text.
+- Task 3b.13 is the one item across the whole 118-task list that is not checked. It is an opt-in, non-CI integration test blocked by a local Docker Desktop pause state, not a functional gap — the 12 tasks around it (3b.1-3b.12) already give the same behavior structural, mocked-query-builder coverage.
+- The engram continuity chain (`sdd/backend-core-api-ofertas/apply-progress-continuation-N`) could not be updated by this batch's own tool access (mem_* MCP tools were not exposed in this execution context) — the orchestrator should perform the continuation-12 mem_save itself, seeded from this file's PR8b section, before or alongside launching sdd-verify.
