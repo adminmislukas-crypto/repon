@@ -281,6 +281,66 @@ None beyond the 2 deviations above.
 - Boundary: starts from PR4's committed state (`b3d2b05`); ends with the real event bus provably wired end-to-end (e2e contract, not just unit-mocked), `pedidos-pagos.module.ts` no longer empty
 - Estimated review budget impact: within forecast (9 new/modified files, ~350 lines)
 
+## PR6 — Phase 5: Ciclo de vida (tasks 6.1–6.10)
+
+**Mode**: `strict_tdd: true`. RED genuinely confirmed for all 3 use cases.
+
+### Completed Tasks (10/10)
+
+- [x] 6.1 `IniciarPagoUseCase` — 8 tests.
+- [x] 6.2 `ObtenerEstadoPagoUseCase` — 5 tests.
+- [x] 6.3 `ActualizarEstadoPedidoUseCase` — 8 tests.
+- [x] 6.4 DTOs (`IniciarPagoResponseDto`, `EstadoPagoResponseDto`, `ActualizarEstadoPedidoDto`).
+- [x] 6.5 `pedidos.controller.ts` — 3 JWT routes.
+- [x] 6.6 `pedidos-pagos-exception.filter.ts` — 5 classes mapped.
+- [x] 6.7 404 cross-tenant e2e — 5 tests.
+- [x] 6.8 Pasarela-no-configurada e2e — 1 test, real binding.
+- [x] 6.9 `pedidos-pagos.module.ts` final wiring.
+- [x] 6.10 Phase verification: green.
+
+### Files Changed
+
+| File | Action | What |
+|---|---|---|
+| `services/core-api/src/shared/payments/payment-gateway.port.ts` | Modified | `crearTransaccion` widened again (+`gateway`) |
+| `services/core-api/src/shared/payments/pasarela-no-configurada.adapter.ts` | Modified | Return type updated to match |
+| `services/core-api/src/domains/pedidos-pagos/domain/pedido.errors.ts` | Modified | `PagoNoEncontradoError` generalized to a message constructor |
+| `services/core-api/src/domains/pedidos-pagos/ports-in/{iniciar-pago,obtener-estado-pago,actualizar-estado-pedido}.use-case.ts` (+specs) | New | The 3 use cases |
+| `services/core-api/src/domains/pedidos-pagos/adapters/http/{pedidos.controller.ts,pedidos-pagos-exception.filter.ts,pedidos-pagos.mapper.ts,dto/*.ts}` | New | HTTP surface |
+| `services/core-api/src/domains/pedidos-pagos/pedidos-pagos.module.ts` | Modified | `PAYMENT_REPOSITORY` bound, controller added |
+| `services/core-api/test/pedidos-pagos-ciclo-de-vida.e2e-spec.ts` | New | 11 tests |
+| `openspec/changes/backend-core-api-pedidos-pagos/specs/shared-payments/spec.md` | Modified | `gateway` field documented |
+
+### Commands Run and Results
+
+| Command | Result |
+|---|---|
+| RED runs (3 use cases) | `Cannot find module` — confirmed genuinely |
+| `pnpm --filter core-api exec jest domains/pedidos-pagos` | 8 suites, 78/78 |
+| `pnpm lint` / `pnpm typecheck` / `pnpm build` | Clean |
+| e2e `pedidos-pagos-ciclo-de-vida` (first run) | **11/11 failed with 401** — root cause: actor/order IDs were plain strings (`'user-a'`, `'order-1'`), and `AuthGuard`'s `UUID_RE.test(sub)` check rejects any JWT `sub` that isn't UUID-shaped before ever reaching the route. Fixed by switching to `randomUUID()` throughout, matching `ofertas`' own e2e precedent (which I had read but didn't fully carry over the first time) |
+| e2e `pedidos-pagos-ciclo-de-vida` (fixed) | 11/11 passed |
+| `pnpm --filter core-api exec jest` (full) | **82/82 suites, 749/749 tests** (728 + 21 new), zero regressions |
+| Full e2e suite | **24/26 suites, 148/153 tests** (+1 suite, +11 tests, all new green) — same 2 pre-existing Docker-paused `refill-matching` failures, re-confirmed via `docker ps` |
+| `pnpm format:check` | 2 rounds (9 files, then 1 more) — applied, re-verified clean, re-ran full suite + typecheck after |
+
+### Deviations from Design
+
+1. **`PaymentGatewayPort.crearTransaccion` widened a second time** (+`gateway: string`). `Payment.gateway` is `NOT NULL`, and neither `design.md` nor the PR5 widening (which added `externalTransactionId`) gave `IniciarPagoUseCase` any source for it — the concrete gateway adapter is the only thing that knows which gateway it is. Updated the delta spec (`specs/shared-payments/spec.md`) in the same commit, not left stale.
+2. **`PagoNoEncontradoError`'s constructor generalized** from `(gateway, externalTransactionId)` to `(message: string)`. Its PR1 shape was built narrowly for the webhook's "unknown transaction" case (PR7b, not yet written); `obtenerEstadoPago`'s "this order has never had a payment attempt" case is a different scenario with no gateway/transaction id to report. Same free-message pattern `TransicionInvalidaError`/`PedidoInvalidoError` already use.
+3. **`pedido.errors.ts`'s `PedidoInvalidoError` NOT added to the exception filter**, correcting task 6.6's own original text. It's thrown only by `crearPedidoDesdeOferta` (the listener, no HTTP route) — it can never reach this filter, so mapping it would be a dead map entry.
+
+### Issues Found
+
+The e2e UUID issue above (found and fixed within this batch, not carried forward).
+
+### Workload / PR Boundary
+
+- Mode: chained PR slice (stacked-to-main)
+- Current work unit: PR6 "Ciclo de vida" — tasks 6.1-6.10, all 10 complete
+- Boundary: starts from PR5's committed state (`4168c68`); ends with the full user-facing + provider-facing HTTP surface for this domain (except the webhook, PR7b), `PAYMENT_REPOSITORY` finally bound
+- Estimated review budget impact: over forecast (280-360 estimated; ~15 new/modified files, DTOs+controller+filter+3 use cases+e2e is a wide batch) — flagged honestly, not re-scoped after the fact
+
 ## Status
 
-**Cumulative**: 37/37 tasks complete across PR1 (9/9) + PR2 (4/4) + PR3 (8/8) + PR4 (7/7) + PR5 (9/9). Ready for PR6 (ciclo de vida).
+**Cumulative**: 47/47 tasks complete across PR1 (9/9) + PR2 (4/4) + PR3 (8/8) + PR4 (7/7) + PR5 (9/9) + PR6 (10/10). Ready for PR7a (pasarela — adaptador).

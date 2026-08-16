@@ -20,7 +20,11 @@ export class PasarelaNoConfiguradaAdapter implements PaymentGatewayPort {
   // repositorio falso) — cada método rechaza sin necesitar leer sus
   // argumentos, así que declararlos solo invitaría a un lint de
   // "parámetro no usado".
-  async crearTransaccion(): Promise<{ checkoutUrl: string; externalTransactionId: string }> {
+  async crearTransaccion(): Promise<{
+    checkoutUrl: string;
+    externalTransactionId: string;
+    gateway: string;
+  }> {
     throw new PasarelaNoConfiguradaError('credenciales de la pasarela de pago');
   }
 

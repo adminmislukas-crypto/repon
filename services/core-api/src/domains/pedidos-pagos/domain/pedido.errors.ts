@@ -59,16 +59,22 @@ export class PedidoNoPagableError extends Error {
 }
 
 /**
- * Mapea a 404 `PAGO_NO_ENCONTRADO` (design.md D-E, Diagrama 3). Lanzado por
+ * Mapea a 404 `PAGO_NO_ENCONTRADO` (design.md D-E). Dos llamadores, mismo
+ * significado ("no hay un pago que corresponda a lo pedido"), mensaje
+ * propio en cada uno — mismo criterio que `TransicionInvalidaError`/
+ * `PedidoInvalidoError` (constructor de mensaje libre, no de campos fijos):
+ * (1) `obtenerEstadoPago` (Fase 5) cuando `findUltimoPorPedido` devuelve
+ * `null` — el pedido existe y es del actor, pero nunca se llamó
+ * `iniciarPago`, así que no hay nada que mostrar todavía. (2)
  * `procesarWebhookPago` (Fase 6b) cuando `findByExternalTransactionId`
  * devuelve `null` — un webhook para una transacción que este dominio no
- * conoce. **404 a propósito**: un no-2xx hace que la pasarela reintente, y
- * ese reintento es la red contra la carrera "webhook antes de que commitee
- * `iniciarPago`".
+ * conoce. **404 a propósito en (2)**: un no-2xx hace que la pasarela
+ * reintente, y ese reintento es la red contra la carrera "webhook antes de
+ * que commitee `iniciarPago`".
  */
 export class PagoNoEncontradoError extends Error {
-  constructor(gateway: string, externalTransactionId: string) {
-    super(`No se encontró un pago de ${gateway} con transacción ${externalTransactionId}.`);
+  constructor(message: string) {
+    super(message);
     this.name = 'PagoNoEncontradoError';
   }
 }

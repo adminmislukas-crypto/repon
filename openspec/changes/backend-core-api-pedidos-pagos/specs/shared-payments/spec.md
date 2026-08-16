@@ -24,13 +24,13 @@ The real (or temporary) adapter for `PAYMENT_GATEWAY_PORT` MUST bind in `src/sha
 
 ### Requirement: crearTransaccion returns the gateway's own transaction identifier, not only a checkout URL
 
-`PaymentGatewayPort.crearTransaccion(orderId, monto)` MUST return `{ checkoutUrl: string; externalTransactionId: string }`. The narrower `{ checkoutUrl: string }` shape MUST NOT be used going forward: `payments.external_transaction_id` is `NOT NULL`, and without the gateway's own identifier at creation time no `payments` row can be written.
+`PaymentGatewayPort.crearTransaccion(orderId, monto)` MUST return `{ checkoutUrl: string; externalTransactionId: string; gateway: string }`. Neither the narrower original `{ checkoutUrl: string }` shape nor the once-widened `{ checkoutUrl; externalTransactionId }` shape (PR5) MUST be used going forward: `payments.external_transaction_id` and `payments.gateway` are both `NOT NULL`, and `IniciarPagoUseCase` (PR6) has no other source for either — the concrete gateway adapter is the only place that knows which gateway it is.
 
-#### Scenario: A created transaction always carries an external id
+#### Scenario: A created transaction always carries an external id and its gateway
 
 - GIVEN a successful call to `crearTransaccion(orderId, monto)`
 - WHEN the result is used to write a `payments` row
-- THEN `externalTransactionId` from the result populates `payments.external_transaction_id`, and the insert never has to leave that `NOT NULL` column unset
+- THEN `externalTransactionId` and `gateway` from the result populate `payments.external_transaction_id`/`payments.gateway`, and the insert never has to leave either `NOT NULL` column unset
 
 ### Requirement: verificarPago is the sole authority on payment state; a webhook body is never trusted directly
 
