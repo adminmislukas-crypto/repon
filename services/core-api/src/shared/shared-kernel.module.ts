@@ -4,6 +4,7 @@ import { AuthModule } from './auth/auth.module';
 import { DatabaseModule } from './database/database.module';
 import { EventBusModule } from './event-bus/event-bus.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { PaymentsModule } from './payments/payments.module';
 import { SupabaseModule } from './supabase/supabase.module';
 
 /**
@@ -13,9 +14,11 @@ import { SupabaseModule } from './supabase/supabase.module';
  * `app.module.ts` flagged). `shared/notifications` gained a real binding in
  * PR 5 (D9): `NotificationsModule` provides `NOTIFICATION_PORT` via
  * `ExpoPushNotificationAdapter`, so it is aggregated here like every other
- * bound module. `shared/payments` still declares a token but binds no
- * provider (task 3.9), so there is nothing for a Nest module to aggregate
- * there until a domain implements it — it remains intentionally not wired.
+ * bound module. `shared/payments` gained its first binding in
+ * `backend-core-api-pedidos-pagos` PR5 (design.md D-C.1):
+ * `PaymentsModule` provides `PAYMENT_GATEWAY_PORT` via
+ * `PasarelaNoConfiguradaAdapter` today, a real gateway adapter from that
+ * same change's PR7a on.
  */
 @Global()
 @Module({
@@ -26,6 +29,7 @@ import { SupabaseModule } from './supabase/supabase.module';
     AuditModule,
     AuthModule,
     NotificationsModule,
+    PaymentsModule,
   ],
   exports: [
     DatabaseModule,
@@ -34,6 +38,7 @@ import { SupabaseModule } from './supabase/supabase.module';
     AuditModule,
     AuthModule,
     NotificationsModule,
+    PaymentsModule,
   ],
 })
 export class SharedKernelModule {}

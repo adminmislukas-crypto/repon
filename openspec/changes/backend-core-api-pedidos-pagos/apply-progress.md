@@ -224,6 +224,63 @@ None beyond the 2 deviations above, both resolved within this batch with reasoni
 - Boundary: starts from PR3's committed state (`c4ee403`); ends with `ofertas`' own domain/persistence/HTTP layers fully aware of `id`/`nombre`, `OfertaAceptadaPayload` carrying `pedidos-pagos`' required line-item data, zero regressions across `ofertas` (180/180) and `refill-matching` (124/124)
 - Estimated review budget impact: over forecast (18 files touched, mostly test-fixture updates rippling from a type change — the 240-310 line estimate undercounted the fixture-update blast radius of widening `OfferItem`'s required fields across ~15 pre-existing test files). Flagged honestly; not re-scoped after the fact.
 
+## PR5 — Phase 4: Creación (tasks 5.1–5.9)
+
+**Mode**: `strict_tdd: true`. RED genuinely confirmed for the use case and listener (module-not-found before implementing). One deliberate exception: `PasarelaNoConfiguradaAdapter`'s test was written after its implementation — its shape was already fixed verbatim by `design.md`/`specs/shared-payments/spec.md`, low-risk, disclosed rather than silently done.
+
+### Completed Tasks (9/9)
+
+- [x] 5.1 `PasarelaNoConfiguradaError` in `shared/payments/payments.errors.ts`.
+- [x] 5.2 `PasarelaNoConfiguradaAdapter` — 3 tests.
+- [x] 5.3 `PaymentGatewayPort.crearTransaccion` widened.
+- [x] 5.4 `PaymentsModule` + `SharedKernelModule` + `pedidos-pagos.module.ts` wiring (`PAYMENT_REPOSITORY` deliberately deferred to PR6).
+- [x] 5.5 `CrearPedidoDesdeOfertaUseCase` — 5 tests.
+- [x] 5.6/5.7 `OfertaAceptadaListener` + local payload, negative covered in the same spec — 3 tests.
+- [x] 5.8 e2e contract test, real event bus, `moduleRef.init()` — 3 tests, all against the real `EventEmitterPublisher`.
+- [x] 5.9 Phase verification: green.
+
+### Files Changed
+
+| File | Action | What |
+|---|---|---|
+| `services/core-api/src/shared/payments/payments.errors.ts` | New | `PasarelaNoConfiguradaError` |
+| `services/core-api/src/shared/payments/pasarela-no-configurada.adapter.ts` (+`.spec.ts`) | New | Permanent no-credentials branch |
+| `services/core-api/src/shared/payments/payment-gateway.port.ts` | Modified | `crearTransaccion` widened |
+| `services/core-api/src/shared/payments/payments.module.ts` | New | `@Global()`, binds `PAYMENT_GATEWAY_PORT` |
+| `services/core-api/src/shared/shared-kernel.module.ts` | Modified | `+PaymentsModule` |
+| `services/core-api/src/domains/pedidos-pagos/ports-in/crear-pedido-desde-oferta.use-case.ts` (+`.spec.ts`) | New | The use case |
+| `services/core-api/src/domains/pedidos-pagos/adapters/events/{oferta-aceptada.listener.ts,ofertas-event.payloads.ts}` (+spec) | New | The listener |
+| `services/core-api/src/domains/pedidos-pagos/pedidos-pagos.module.ts` | Modified | No longer `@Module({})` |
+| `services/core-api/test/pedidos-pagos-contrato-oferta-aceptada.e2e-spec.ts` | New | The contract e2e |
+
+### Commands Run and Results
+
+| Command | Result |
+|---|---|
+| RED runs (use case, listener) | `Cannot find module` — confirmed genuinely |
+| `pnpm --filter core-api exec jest domains/pedidos-pagos` | 5 suites, 57/57 tests |
+| `pnpm typecheck` (first pass, after `PasarelaNoConfiguradaAdapter`'s zero-param methods) | Failed — test calling `adapter.crearTransaccion('order-1', 14990)` against the concrete class (0 declared params) rather than the `PaymentGatewayPort` interface. Fixed by typing the test's local variable as the interface (structural typing resolves it), not by adding unused params to the adapter (which then failed lint instead — tried both, settled on the interface-typed variable as correct per this repo's own established convention) |
+| `pnpm lint` / `pnpm typecheck` / `pnpm build` (final) | Clean |
+| `pnpm --filter core-api exec jest` (full) | **79/79 suites, 728/728 tests** (717 + 11 new), zero regressions |
+| e2e full suite | **23/25 suites, 137/142 tests** (+1 suite, +3 tests, all new ones green) — same 2 pre-existing Docker-paused `refill-matching` failures, re-confirmed unrelated |
+| `pnpm format:check` | 2 rounds, 1 file each — applied, re-verified clean, re-ran full unit suite + typecheck after each |
+
+### Deviations from Design
+
+1. **`PasarelaNoConfiguradaAdapter`'s test written after implementation**, not before — its shape was already fully specified (verbatim) by `design.md` D-C.2 and `specs/shared-payments/spec.md`, so there was no ambiguity a RED-first test would have caught. Disclosed rather than silently skipping the discipline.
+2. **`PAYMENT_REPOSITORY` not bound in `pedidos-pagos.module.ts` this PR**, though the class exists since PR3. Nothing in this PR's own scope (`CrearPedidoDesdeOfertaUseCase`) needs it — deferred to PR6, matching `refill-matching.module.ts`'s own established "add exactly what each phase first uses" convention.
+
+### Issues Found
+
+None beyond the 2 deviations above.
+
+### Workload / PR Boundary
+
+- Mode: chained PR slice (stacked-to-main)
+- Current work unit: PR5 "Creación" — tasks 5.1-5.9, all 9 complete
+- Boundary: starts from PR4's committed state (`b3d2b05`); ends with the real event bus provably wired end-to-end (e2e contract, not just unit-mocked), `pedidos-pagos.module.ts` no longer empty
+- Estimated review budget impact: within forecast (9 new/modified files, ~350 lines)
+
 ## Status
 
-**Cumulative**: 28/28 tasks complete across PR1 (9/9) + PR2 (4/4) + PR3 (8/8) + PR4 (7/7). Ready for PR5 (creación).
+**Cumulative**: 37/37 tasks complete across PR1 (9/9) + PR2 (4/4) + PR3 (8/8) + PR4 (7/7) + PR5 (9/9). Ready for PR6 (ciclo de vida).
