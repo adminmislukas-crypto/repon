@@ -64,6 +64,49 @@ None beyond the 3 deviations above, all resolved within this batch.
 - Boundary: starts from `f737176` (planning docs commit); ends with all groundwork types/ports/errors in place, workspace green (minus the explicitly-deferred migration application)
 - Estimated review budget impact: within forecast (9 files, mix of new/modified, no single file over ~120 lines)
 
+## PR2 — Phase 1: Dominio puro (tasks 2.1–2.4)
+
+**Mode**: `strict_tdd: true` — first PR in this chain with real RED/GREEN cycles. RED genuinely confirmed: `order.entity.spec.ts` was run against the not-yet-existing `order.entity.ts` (`Cannot find module './order.entity'`) before the implementation was written, not assumed.
+
+### Completed Tasks (4/4)
+
+- [x] 2.1 `crearPedidoPendiente` — `domain/order.entity.ts`.
+- [x] 2.2 Total invariant (`assertTotalCoherente`), validated before any `Order`/`OrderItem` is constructed.
+- [x] 2.3 `esTransicionValida`/`transicionar` — full `OrderStatus` state machine, design.md D-A.2.
+- [x] 2.4 Phase verification: green.
+
+### Files Changed
+
+| File | Action | What |
+|---|---|---|
+| `services/core-api/src/domains/pedidos-pagos/domain/order.entity.ts` | New | `crearPedidoPendiente`, `CANTIDAD_LINEA`, `esTransicionValida`/`transicionar` |
+| `services/core-api/src/domains/pedidos-pagos/domain/order.entity.spec.ts` | New | 24 tests |
+
+### Commands Run and Results
+
+| Command | Result |
+|---|---|
+| `pnpm --filter core-api exec jest domains/pedidos-pagos/domain/order.entity.spec.ts` (RED, pre-implementation) | Suite failed to run: `Cannot find module './order.entity'` — confirms the test was written first, genuinely |
+| Same command (GREEN, post-implementation) | 24/24 tests passed |
+| `pnpm lint` / `pnpm typecheck` / `pnpm build` | Clean |
+| `pnpm --filter core-api exec jest` (full suite) | **74/74 suites, 684/684 tests** (660 baseline + 24 new), zero regressions |
+| `pnpm format:check` | 1 file needed `prettier --write` (the new spec file) — applied, re-verified clean |
+
+### Deviations from Design
+
+None. `Order`/`OrderItem` shapes used exactly as PR1 defined them (including PR1's own `costoDespacho` correction).
+
+### Issues Found
+
+None.
+
+### Workload / PR Boundary
+
+- Mode: chained PR slice (stacked-to-main)
+- Current work unit: PR2 "Dominio puro" — tasks 2.1-2.4, all 4 complete
+- Boundary: starts from PR1's committed state (`4cfdacb`); ends with `crearPedidoPendiente` and the full `OrderStatus` state machine, pure and fully tested, zero I/O
+- Estimated review budget impact: within forecast (2 new files, ~290 lines combined)
+
 ## Status
 
-**Cumulative**: 9/9 tasks complete for PR1. Ready for PR2 (dominio puro).
+**Cumulative**: 13/13 tasks complete across PR1 (9/9) + PR2 (4/4). Ready for PR3 (persistencia).
