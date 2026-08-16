@@ -1,6 +1,7 @@
 /**
  * Domain-invariant violations for `pedidos-pagos` (design.md D-E's tabla de
- * errores). Plain `Error` subclasses, zero framework imports
+ * errores, más `PedidoYaExisteError` de D-F Diagrama 1 — señal interna, no
+ * mapeada a HTTP). Plain `Error` subclasses, zero framework imports
  * (`core-api-hexagonal-layout`: `domain/`/`ports-in/` MUST NOT import
  * HTTP-framework types) — `adapters/http/pedidos-pagos-exception.filter.ts`
  * (Phase 5+) maps each class to a status code.
@@ -83,5 +84,21 @@ export class PedidoInvalidoError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'PedidoInvalidoError';
+  }
+}
+
+/**
+ * Señal interna, NUNCA mapeada a HTTP (design.md D-F, Diagrama 1). Lanzada
+ * por `KyselyOrderRepository.crear` (Fase 3) cuando el driver reporta un
+ * `23505` sobre `orders_offer_id_uidx` — el TOCTOU de dos entregas casi
+ * simultáneas de `OfertaAceptada` para la misma oferta. `crearPedidoDesdeOferta`
+ * (Fase 4) la captura y la trata como el MISMO resultado no-op que su propio
+ * `findByOfferId` read-and-skip: cero escrituras adicionales, cero eventos.
+ * Nunca llega al filtro de excepciones porque nunca sale del caso de uso.
+ */
+export class PedidoYaExisteError extends Error {
+  constructor(offerId: string) {
+    super(`Ya existe un pedido para la oferta ${offerId}.`);
+    this.name = 'PedidoYaExisteError';
   }
 }

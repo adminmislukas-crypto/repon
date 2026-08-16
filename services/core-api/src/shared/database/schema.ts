@@ -344,7 +344,12 @@ export interface PaymentsTable {
   // El driver lee jsonb ya parseado como objeto, pero Kysely exige `string`
   // en insert/update: hay que serializar con JSON.stringify (gotcha nuevo,
   // primera columna jsonb del repo, design.md D-G.3). raw_payload NUNCA sale
-  // de adapters/persistence/ -- no esta en `Payment` de `@repon/types`.
+  // de adapters/persistence/ -- no esta en `Payment` de `@repon/types`. La
+  // columna SI tiene default ('{}'::jsonb, migracion 06), pero se mantiene
+  // SIN Generated<>: `Generated<ColumnType<...>>` produce un tipo que
+  // Kysely rechaza al hacer `.set()` en un UPDATE (probado, no supuesto).
+  // `crear` (Fase 3) la escribe explicita como `'{}'` en vez de confiar en
+  // el default -- mismo criterio "SIEMPRE explicito" que `status`.
   raw_payload: ColumnType<unknown, string, string>;
   paid_at: string | null;
   created_at: Generated<string>;

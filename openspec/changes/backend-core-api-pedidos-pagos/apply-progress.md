@@ -107,6 +107,56 @@ None.
 - Boundary: starts from PR1's committed state (`4cfdacb`); ends with `crearPedidoPendiente` and the full `OrderStatus` state machine, pure and fully tested, zero I/O
 - Estimated review budget impact: within forecast (2 new files, ~290 lines combined)
 
+## PR3 — Phase 2: Persistencia (tasks 3.1–3.8)
+
+**Mode**: `strict_tdd: true` — RED genuinely confirmed for both repositories (`Cannot find module` against the not-yet-existing files) before implementing.
+
+### Completed Tasks (8/8)
+
+- [x] 3.1/3.2 `KyselyOrderRepository` — `crear` (2 inserts, `tx` required, `PedidoYaExisteError` on `23505`/`orders_offer_id_uidx`), `findById`, `findByOfferId`, `transicionar` (conditional UPDATE + RETURNING). 14 tests.
+- [x] 3.3 Numeric mapper — verified in both directions across all `orders`/`order_items` numeric columns.
+- [x] 3.4/3.5 `KyselyPaymentRepository` — `crear`, `findByExternalTransactionId`, `findUltimoPorPedido` (order by `created_at desc` limit 1), `marcarResultado` (conditional UPDATE + RETURNING). 11 tests.
+- [x] 3.6 jsonb gotcha — see "Deviations" below for the `Generated<>` reversal.
+- [x] 3.7 `paid_at` nullable, conditionally set only on `estado === 'pagado'`.
+- [x] 3.8 Phase verification: green.
+
+### Files Changed
+
+| File | Action | What |
+|---|---|---|
+| `services/core-api/src/domains/pedidos-pagos/domain/pedido.errors.ts` | Modified | +`PedidoYaExisteError` (internal signal, never HTTP-mapped) |
+| `services/core-api/src/domains/pedidos-pagos/adapters/persistence/kysely-order.repository.ts` | New | `KyselyOrderRepository`, 4 methods |
+| `services/core-api/src/domains/pedidos-pagos/adapters/persistence/kysely-order.repository.spec.ts` | New | 14 tests |
+| `services/core-api/src/domains/pedidos-pagos/adapters/persistence/kysely-payment.repository.ts` | New | `KyselyPaymentRepository`, 4 methods |
+| `services/core-api/src/domains/pedidos-pagos/adapters/persistence/kysely-payment.repository.spec.ts` | New | 11 tests |
+| `services/core-api/src/shared/database/schema.ts` | Modified | `raw_payload` type comment updated (see Deviations) |
+
+### Commands Run and Results
+
+| Command | Result |
+|---|---|
+| RED runs (both repos, pre-implementation) | `Cannot find module` — confirmed genuinely, not assumed |
+| `pnpm --filter core-api exec jest domains/pedidos-pagos` (GREEN) | 3 suites, 49/49 tests |
+| `pnpm lint` / `pnpm typecheck` / `pnpm build` | Clean (after the `raw_payload` typing fix below) |
+| `pnpm --filter core-api exec jest` (full) | **76/76 suites, 709/709 tests** (660 pre-chain baseline + 49 new), zero regressions |
+| `pnpm format:check` | 2 files needed `prettier --write` — applied, re-verified clean, re-ran full suite + typecheck after to confirm nothing broke |
+
+### Deviations from Design
+
+1. **`raw_payload`'s `Generated<>` wrapping reverted.** Tried `raw_payload: Generated<ColumnType<unknown, string, string>>` (to make it optional on insert, matching its real DB default) — `pnpm typecheck` failed: `Type 'string' is not assignable to type 'ValueExpression<DB, "payments", ColumnType<unknown, string, string>> | undefined'` when calling `.set({ raw_payload: ... })` in `marcarResultado`'s UPDATE. Reverted to plain `ColumnType<unknown, string, string>` and made `crear` write `raw_payload: '{}'` explicitly instead of relying on the column default — consistent with this project's established "state-bearing columns are always written explicit" discipline (same reasoning as `orders.status`'s dropped default). Verified: real Kysely type error, not assumed.
+2. **No `23505` translation added for `payments_order_id_pagado_uidx` in `marcarResultado`.** `design.md` names this index as protection against a race, but `marcarResultado`'s own `WHERE estado <> $estado` already makes a second `'pagado'` write a 0-row no-op before any constraint would fire in every call path this change's own tasks define (Fases 4-7b). Left undone with reasoning recorded here rather than added speculatively; `sdd-verify` should confirm no real path bypasses the `WHERE` guard before this is treated as settled.
+
+### Issues Found
+
+None beyond the 2 deviations above, both resolved/reasoned within this batch.
+
+### Workload / PR Boundary
+
+- Mode: chained PR slice (stacked-to-main)
+- Current work unit: PR3 "Persistencia" — tasks 3.1-3.8, all 8 complete
+- Boundary: starts from PR2's committed state (`47a206d`); ends with both repositories fully implemented and unit-tested against mocked Kysely query builders (Docker still down — no real-Postgres integration check possible, same deferral as PR1's migrations)
+- Estimated review budget impact: within forecast (6 files, ~500 lines combined)
+
 ## Status
 
-**Cumulative**: 13/13 tasks complete across PR1 (9/9) + PR2 (4/4). Ready for PR3 (persistencia).
+**Cumulative**: 21/21 tasks complete across PR1 (9/9) + PR2 (4/4) + PR3 (8/8). Ready for PR4 (delta sobre `ofertas`).
