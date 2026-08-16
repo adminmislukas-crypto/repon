@@ -43,6 +43,7 @@ const JOIN_SELECT = [
   'o.total',
   'o.mensaje',
   'i.id as item_id',
+  'i.nombre',
   'i.refill_item_id',
   'i.provider_catalog_item_id',
   'i.is_alt',
@@ -64,6 +65,7 @@ interface OfferItemJoinRow {
   total: string;
   mensaje: string | null;
   item_id: string;
+  nombre: string;
   refill_item_id: string | null;
   provider_catalog_item_id: string | null;
   is_alt: boolean;
@@ -78,9 +80,15 @@ interface OfferItemJoinRow {
  * `refill_item_id`/`provider_catalog_item_id` is non-NULL (the migration
  * `05` CHECK guarantees exactly one). `alt_size`/`alt_qty` NULL -> `undefined`
  * explicitly — tasks.md 3a.1/3a.3's own scenario, never a naive `Number()`.
+ * `id`/`nombre` (`backend-core-api-pedidos-pagos` design.md D-B.4, PR4):
+ * `row.item_id` ya NO se descarta — antes de este cambio el `JOIN_SELECT`
+ * ya lo traía pero `toOfferItem` lo tiraba, un hueco que ninguna Q había
+ * nombrado hasta que el diseño de `pedidos-pagos` lo encontró.
  */
 function toOfferItem(row: OfferItemJoinRow): OfferItemReactiva | OfferItemProactiva {
   const base = {
+    id: row.item_id,
+    nombre: row.nombre,
     precio: Number(row.precio),
     isAlt: row.is_alt,
     altNote: row.alt_note ?? undefined,
@@ -170,7 +178,12 @@ function toOfferItemRowValues(offerId: string, item: OfferItemReactiva | OfferIt
     'providerCatalogItemId' in item ? (item.providerCatalogItemId ?? null) : null;
 
   return {
+    // `id`/`nombre` explícitos (design.md D-B.4, PR4): `id` viene de la
+    // factory (`randomUUID()`, nunca el default `Generated<string>` de la
+    // columna — misma convención "ids desde la app" que `Offer.id`).
+    id: item.id,
     offer_id: offerId,
+    nombre: item.nombre,
     refill_item_id: refillItemId,
     provider_catalog_item_id: providerCatalogItemId,
     is_alt: item.isAlt,

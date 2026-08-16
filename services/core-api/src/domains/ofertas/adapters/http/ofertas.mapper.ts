@@ -66,6 +66,8 @@ export function toOfferResponseDto(offer: Offer): OfferResponseDto {
     total: offer.total,
     mensaje: offer.mensaje,
     items: offer.items.map((item) => ({
+      id: item.id,
+      nombre: item.nombre,
       refillItemId: item.refillItemId,
       providerCatalogItemId: item.providerCatalogItemId,
       precio: item.precio,

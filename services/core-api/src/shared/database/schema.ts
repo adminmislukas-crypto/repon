@@ -47,13 +47,13 @@ import type { ColumnType, Generated } from 'kysely';
 // .../20260809120100_17b_pedidos_pagos_fix_forward.sql (orders.status'
 // dropped default, orders.costo_despacho, the unique/partial-unique indexes)
 // — from this domain's own backend-core-api-pedidos-pagos PR 1 (design.md
-// D-A). All 6 tables spanning `ofertas`/`pedidos-pagos` are now typed here;
-// `OfferItemsTable.nombre` (design.md D-B.2/D-B.4) is deliberately NOT added
-// in this same PR — it lands in this change's own PR 4 alongside the
+// D-A). All 6 tables spanning `ofertas`/`pedidos-pagos` are now typed here.
+// `OfferItemsTable.nombre` (design.md D-B.2/D-B.4) was deliberately held
+// back from this change's own PR 1 — added in PR 4 instead, alongside the
 // `ofertas` mapper edit that actually populates it, so no PR in this chain
-// ever leaves `offer_items`' Kysely inserts referencing a required column
-// nothing yet writes (a compile-order deviation from design.md G.3's own
-// prose, disclosed here rather than silently applied).
+// ever left `offer_items`' Kysely inserts referencing a required column
+// nothing yet wrote (a compile-order deviation from design.md G.3's own
+// prose, disclosed in PR 1's own commit and resolved here in PR 4).
 
 export type CompanyStatusRow = 'pendiente' | 'activo' | 'suspendido';
 export type RoleRow = 'user' | 'provider' | 'admin';
@@ -253,6 +253,11 @@ export interface OfferItemsTable {
   // (offer.kind = 'reactiva' -> refill_item_id; 'proactiva' -> provider_catalog_item_id).
   refill_item_id: string | null;
   provider_catalog_item_id: string | null;
+  // NOT NULL, sin default (migracion 17b): backend-core-api-pedidos-pagos
+  // design.md D-B.2, PR4 -- deliberadamente NO se agrego en PR1 (ver la
+  // nota del encabezado de este archivo): las factories de `ofertas`
+  // (domain/offer.entity.ts) recien empiezan a poblarla en este mismo PR.
+  nombre: string;
   is_alt: Generated<boolean>;
   alt_size: string | null; // numeric -> STRING, y ademas nullable
   alt_qty: string | null; // numeric -> STRING, y ademas nullable

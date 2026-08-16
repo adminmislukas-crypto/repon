@@ -42,7 +42,15 @@ function offerFixture(overrides: Partial<Extract<Offer, { kind: 'reactiva' }>> =
     total: 13990,
     kind: 'reactiva',
     refillRequestId: 'refill-request-a',
-    items: [{ refillItemId: 'item-a', precio: 11990, isAlt: false }],
+    items: [
+      {
+        id: 'offer-item-a',
+        nombre: 'Agua 20L',
+        refillItemId: 'item-a',
+        precio: 11990,
+        isAlt: false,
+      },
+    ],
     ...overrides,
   };
 }
@@ -95,7 +103,17 @@ describe('ObtenerBandejaUseCase', () => {
     it("returns Offer[] with items already inline — findByUser's own contract (Phase 3a), no per-offer follow-up call", async () => {
       const { offerRepository, useCase } = buildUseCase();
       const offers = [
-        offerFixture({ items: [{ refillItemId: 'item-a', precio: 11990, isAlt: false }] }),
+        offerFixture({
+          items: [
+            {
+              id: 'offer-item-a',
+              nombre: 'Agua 20L',
+              refillItemId: 'item-a',
+              precio: 11990,
+              isAlt: false,
+            },
+          ],
+        }),
       ];
       offerRepository.findByUser.mockResolvedValue(offers);
 

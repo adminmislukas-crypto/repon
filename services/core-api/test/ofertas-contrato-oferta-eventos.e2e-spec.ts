@@ -84,6 +84,8 @@ describe('OfertaEnviada/OfertaAceptada — cross-domain event contract with ofer
       refillRequestId: 'refill-request-default',
       total: 15990,
       desplazadas: [],
+      costoDespacho: 2000,
+      lineas: [],
       ...overrides,
     };
   }

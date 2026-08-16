@@ -476,6 +476,29 @@ describe('EnviarOfertaUseCase', () => {
       expect(offer.total).toBe(11990 + entrega.costoDespacho);
     });
 
+    // backend-core-api-pedidos-pagos design.md D-B.2 (PR4): `nombre` viene
+    // del RefillItem SOLICITADO (lo que el usuario pidió), nunca del
+    // catálogo del proveedor — core-api-ofertas spec, "A reactive line's
+    // nombre comes from the requested RefillItem, not the catalog".
+    it("resolves each item's nombre from the matched RefillItem in oportunidad.items, not the catalog match", async () => {
+      const { opportunityRepository, catalogQueryPort, useCase } = buildUseCase();
+      opportunityRepository.findElegible.mockResolvedValue(
+        oportunidadFixture({ items: [refillItemFixture({ nombre: 'Alimento perro 15kg' })] }),
+      );
+      catalogQueryPort.buscarCoincidencias.mockResolvedValue([
+        providerCatalogItemFixture({ nombre: 'Otro nombre del catálogo del proveedor' }),
+      ]);
+
+      const offer = await useCase.execute(
+        'company-a',
+        'refill-request-a',
+        [nuevoItemFixture()],
+        entrega,
+      );
+
+      expect(offer.items[0].nombre).toBe('Alimento perro 15kg');
+    });
+
     it('publishes OfertaEnviada only AFTER offerRepository.save (commit) resolves', async () => {
       const { opportunityRepository, catalogQueryPort, offerRepository, eventPublisher, useCase } =
         buildUseCase();

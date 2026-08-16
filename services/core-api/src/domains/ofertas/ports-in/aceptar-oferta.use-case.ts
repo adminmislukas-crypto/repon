@@ -7,7 +7,10 @@ import {
 import { aceptar } from '../domain/offer.entity';
 import { OfferNotFoundError } from '../domain/oferta.errors';
 import { OfertaAceptada } from '../events/oferta-aceptada.event';
-import type { OfertaAceptadaPayload } from '../events/oferta-aceptada.payload';
+import type {
+  OfertaAceptadaLineaPayload,
+  OfertaAceptadaPayload,
+} from '../events/oferta-aceptada.payload';
 import {
   OFFER_OPPORTUNITY_REPOSITORY,
   type OfferOpportunityRepository,
@@ -131,7 +134,20 @@ export class AceptarOfertaUseCase {
     });
     // ---- COMMIT ----
 
-    // (5)
+    // (5) `backend-core-api-pedidos-pagos` D1/D-B.4: `lineas`/`costoDespacho`
+    // salen de `offer` (la misma `aceptada` que `aceptar()` devolvió en (2)),
+    // que YA tiene `items` hidratados por el `findById` de (1) — cero
+    // round-trips nuevos, verificado contra el código (design.md D-B.1).
+    const lineas: readonly OfertaAceptadaLineaPayload[] = offer.items.map((item) => ({
+      offerItemId: item.id,
+      nombre: item.nombre,
+      precio: item.precio,
+      isAlt: item.isAlt,
+      altSize: item.altSize,
+      altQty: item.altQty,
+      altNote: item.altNote,
+    }));
+
     const payload: OfertaAceptadaPayload = {
       offerId: offer.id,
       companyId: offer.companyId,
@@ -139,6 +155,8 @@ export class AceptarOfertaUseCase {
       refillRequestId: offer.kind === 'reactiva' ? offer.refillRequestId : null,
       total: offer.total,
       desplazadas,
+      costoDespacho: offer.costoDespacho,
+      lineas,
     };
     await this.eventPublisher.publish(new OfertaAceptada(payload));
   }

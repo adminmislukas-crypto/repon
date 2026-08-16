@@ -21,25 +21,36 @@ const USER_ID = '33333333-3333-3333-3333-333333333333';
 const REFILL_ITEM_1_ID = '44444444-4444-4444-4444-444444444444';
 const REFILL_ITEM_2_ID = '55555555-5555-5555-5555-555555555555';
 
-function itemReactiva(overrides: Partial<NuevoOfferItemReactiva> = {}): NuevoOfferItemReactiva {
+// `nombre` (backend-core-api-pedidos-pagos design.md D-B.2/D-B.4, PR4): las
+// factories ahora reciben `NuevoOfferItem* & { nombre: string }` — ya
+// resuelto por el caso de uso en producción, acá simplemente lo fija el
+// fixture, mismo criterio que `itemReactiva`/`itemProactiva` ya usaban para
+// el resto de los campos.
+function itemReactiva(
+  overrides: Partial<NuevoOfferItemReactiva & { nombre: string }> = {},
+): NuevoOfferItemReactiva & { nombre: string } {
   return {
     refillItemId: REFILL_ITEM_1_ID,
+    nombre: 'Agua 20L',
     isAlt: false,
     precio: 12990,
     ...overrides,
-  } as NuevoOfferItemReactiva;
+  } as NuevoOfferItemReactiva & { nombre: string };
 }
 
 const PROVIDER_CATALOG_ITEM_1_ID = '66666666-6666-6666-6666-666666666666';
 const PROVIDER_CATALOG_ITEM_2_ID = '77777777-7777-7777-7777-777777777777';
 
-function itemProactiva(overrides: Partial<NuevoOfferItemProactiva> = {}): NuevoOfferItemProactiva {
+function itemProactiva(
+  overrides: Partial<NuevoOfferItemProactiva & { nombre: string }> = {},
+): NuevoOfferItemProactiva & { nombre: string } {
   return {
     providerCatalogItemId: PROVIDER_CATALOG_ITEM_1_ID,
+    nombre: 'Bidón 10L',
     isAlt: false,
     precio: 8990,
     ...overrides,
-  } as NuevoOfferItemProactiva;
+  } as NuevoOfferItemProactiva & { nombre: string };
 }
 
 function entrega(overrides: Partial<DatosEntrega> = {}): DatosEntrega {
@@ -135,6 +146,37 @@ describe('crearOfertaReactiva', () => {
 
     expect(first.id).toMatch(UUID_RE);
     expect(first.id).not.toBe(second.id);
+  });
+
+  // backend-core-api-pedidos-pagos design.md D-B.4 (PR4): cada item gana
+  // `id`/`nombre`. `id` lo genera esta factory; `nombre` llega ya resuelto
+  // por el caso de uso — acá el fixture lo fija, mismo criterio que el
+  // resto de sus campos.
+  it("generates a fresh randomUUID() id per item, distinct from the offer's own id", () => {
+    const offer = crearOfertaReactiva(
+      COMPANY_ID,
+      REFILL_REQUEST_ID,
+      [itemReactiva(), itemReactiva({ refillItemId: REFILL_ITEM_2_ID })],
+      entrega(),
+      USER_ID,
+    );
+
+    expect(offer.items[0].id).toMatch(UUID_RE);
+    expect(offer.items[1].id).toMatch(UUID_RE);
+    expect(offer.items[0].id).not.toBe(offer.items[1].id);
+    expect(offer.items[0].id).not.toBe(offer.id);
+  });
+
+  it('copies nombre from the input item by value, never inventing or dropping it', () => {
+    const offer = crearOfertaReactiva(
+      COMPANY_ID,
+      REFILL_REQUEST_ID,
+      [itemReactiva({ nombre: 'Bidón 20L retornable' })],
+      entrega(),
+      USER_ID,
+    );
+
+    expect(offer.items[0].nombre).toBe('Bidón 20L retornable');
   });
 
   it('rejects an empty items array with OfertaInvalidaError', () => {
@@ -241,6 +283,31 @@ describe('crearOfertaProactiva', () => {
 
     expect(first.id).toMatch(UUID_RE);
     expect(first.id).not.toBe(second.id);
+  });
+
+  it("generates a fresh randomUUID() id per item, distinct from the offer's own id", () => {
+    const offer = crearOfertaProactiva(
+      COMPANY_ID,
+      USER_ID,
+      [itemProactiva(), itemProactiva({ providerCatalogItemId: PROVIDER_CATALOG_ITEM_2_ID })],
+      entrega(),
+    );
+
+    expect(offer.items[0].id).toMatch(UUID_RE);
+    expect(offer.items[1].id).toMatch(UUID_RE);
+    expect(offer.items[0].id).not.toBe(offer.items[1].id);
+    expect(offer.items[0].id).not.toBe(offer.id);
+  });
+
+  it('copies nombre from the input item by value, never inventing or dropping it', () => {
+    const offer = crearOfertaProactiva(
+      COMPANY_ID,
+      USER_ID,
+      [itemProactiva({ nombre: 'Saco 25kg' })],
+      entrega(),
+    );
+
+    expect(offer.items[0].nombre).toBe('Saco 25kg');
   });
 
   it('rejects an empty items array with OfertaInvalidaError', () => {

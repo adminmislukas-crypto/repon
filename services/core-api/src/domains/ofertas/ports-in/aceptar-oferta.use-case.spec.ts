@@ -79,7 +79,15 @@ function offerReactivaFixture(overrides: Partial<OfferReactiva> = {}): OfferReac
     total: 13990,
     kind: 'reactiva',
     refillRequestId: 'refill-request-a',
-    items: [{ refillItemId: 'item-a', precio: 11990, isAlt: false }],
+    items: [
+      {
+        id: 'offer-item-a',
+        nombre: 'Agua 20L',
+        refillItemId: 'item-a',
+        precio: 11990,
+        isAlt: false,
+      },
+    ],
     ...overrides,
   };
 }
@@ -94,7 +102,15 @@ function offerProactivaFixture(overrides: Partial<OfferProactiva> = {}): OfferPr
     costoDespacho: 2000,
     total: 13990,
     kind: 'proactiva',
-    items: [{ providerCatalogItemId: 'catalog-item-a', precio: 11990, isAlt: false }],
+    items: [
+      {
+        id: 'offer-item-b',
+        nombre: 'Bidón 10L',
+        providerCatalogItemId: 'catalog-item-a',
+        precio: 11990,
+        isAlt: false,
+      },
+    ],
     ...overrides,
   };
 }
@@ -239,6 +255,18 @@ describe('AceptarOfertaUseCase', () => {
           refillRequestId: null,
           total: 13990,
           desplazadas: [],
+          costoDespacho: 2000,
+          lineas: [
+            {
+              offerItemId: 'offer-item-b',
+              nombre: 'Bidón 10L',
+              precio: 11990,
+              isAlt: false,
+              altSize: undefined,
+              altQty: undefined,
+              altNote: undefined,
+            },
+          ],
         });
       });
     },
@@ -295,6 +323,18 @@ describe('AceptarOfertaUseCase', () => {
             refillRequestId: 'refill-request-a',
             total: 13990,
             desplazadas: ['sibling-b', 'sibling-c'],
+            costoDespacho: 2000,
+            lineas: [
+              {
+                offerItemId: 'offer-item-a',
+                nombre: 'Agua 20L',
+                precio: 11990,
+                isAlt: false,
+                altSize: undefined,
+                altQty: undefined,
+                altNote: undefined,
+              },
+            ],
           });
         },
       );

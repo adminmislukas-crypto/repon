@@ -30,16 +30,33 @@ interface OfferItemPricing {
   precio: number;
 }
 
+/**
+ * `id`/`nombre` (design.md D-B.4, `backend-core-api-pedidos-pagos`):
+ * `offer_items.id`, generado por el dominio al componer (`randomUUID()`,
+ * nunca el default de la columna — `pedidos-pagos` lo necesita como
+ * `order_items.offer_item_id`, `NOT NULL` con FK). `nombre` se congela al
+ * componer la oferta, el mismo instante en que se congela `precio` — nunca
+ * lo envía el cliente. Ambos viven SOLO en `OfferItem`, nunca en
+ * `NuevoOfferItem` (ver su propio comentario más abajo: la primera
+ * divergencia real entre "lo que el cliente envía" y "lo que se persiste").
+ */
+interface OfferItemPersisted {
+  id: string;
+  nombre: string;
+}
+
 /** Item of a `kind: 'reactiva'` offer — responds to a `RefillRequest`. */
 export type OfferItemReactiva = OfferItemPricing &
-  OfferItemAlt & {
+  OfferItemAlt &
+  OfferItemPersisted & {
     refillItemId: string;
     providerCatalogItemId?: never;
   };
 
 /** Item of a `kind: 'proactiva'` offer — no originating `RefillRequest`. */
 export type OfferItemProactiva = OfferItemPricing &
-  OfferItemAlt & {
+  OfferItemAlt &
+  OfferItemPersisted & {
     providerCatalogItemId: string;
     refillItemId?: never;
   };

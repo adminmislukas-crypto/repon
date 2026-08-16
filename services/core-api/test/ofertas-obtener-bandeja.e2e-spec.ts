@@ -66,7 +66,15 @@ function offerFixture(overrides: Partial<Extract<Offer, { kind: 'reactiva' }>> =
     total: 13990,
     kind: 'reactiva',
     refillRequestId: randomUUID(),
-    items: [{ refillItemId: randomUUID(), precio: 11990, isAlt: false }],
+    items: [
+      {
+        id: randomUUID(),
+        nombre: 'Agua 20L',
+        refillItemId: randomUUID(),
+        precio: 11990,
+        isAlt: false,
+      },
+    ],
     ...overrides,
   };
 }

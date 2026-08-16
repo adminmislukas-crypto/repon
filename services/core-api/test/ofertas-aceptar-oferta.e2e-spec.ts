@@ -115,7 +115,15 @@ function offerReactivaFixture(overrides: Partial<OfferReactiva> = {}): OfferReac
     total: 13990,
     kind: 'reactiva',
     refillRequestId: randomUUID(),
-    items: [{ refillItemId: randomUUID(), precio: 11990, isAlt: false }],
+    items: [
+      {
+        id: randomUUID(),
+        nombre: 'Agua 20L',
+        refillItemId: randomUUID(),
+        precio: 11990,
+        isAlt: false,
+      },
+    ],
     ...overrides,
   };
 }
@@ -130,7 +138,15 @@ function offerProactivaFixture(overrides: Partial<OfferProactiva> = {}): OfferPr
     costoDespacho: 2000,
     total: 13990,
     kind: 'proactiva',
-    items: [{ providerCatalogItemId: randomUUID(), precio: 11990, isAlt: false }],
+    items: [
+      {
+        id: randomUUID(),
+        nombre: 'Bidón 10L',
+        providerCatalogItemId: randomUUID(),
+        precio: 11990,
+        isAlt: false,
+      },
+    ],
     ...overrides,
   };
 }

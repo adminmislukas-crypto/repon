@@ -157,6 +157,73 @@ None beyond the 2 deviations above, both resolved/reasoned within this batch.
 - Boundary: starts from PR2's committed state (`47a206d`); ends with both repositories fully implemented and unit-tested against mocked Kysely query builders (Docker still down — no real-Postgres integration check possible, same deferral as PR1's migrations)
 - Estimated review budget impact: within forecast (6 files, ~500 lines combined)
 
+## PR4 — Phase 3: Delta sobre `ofertas` (tasks 4.1–4.7) — único PR que toca un dominio archivado
+
+**Mode**: `strict_tdd: true`. RED confirmed for the domain/repository-level additions (new tests against not-yet-changed behavior); the use-case-level nombre-resolution tests and the HTTP mapper fix were added GREEN-first-discovery (an existing e2e caught the mapper gap, not a pre-written failing test) — disclosed, not hidden.
+
+### Completed Tasks (7/7)
+
+- [x] 4.1 `OfferItem` gains `id`/`nombre` in `@repon/types` (new `OfferItemPersisted` interface, intersected — `NuevoOfferItem*` untouched).
+- [x] 4.2 Factories generate `id`, accept resolved `nombre`; both use cases resolve it (reactiva from `refillItemsById`, proactiva from a new `matchesById`).
+- [x] 4.3 `KyselyOfferRepository` mapper stops discarding `item_id`, reads/writes `nombre`. `OfferItemsTable.nombre` added to `schema.ts` (closing PR1's deferral).
+- [x] 4.4 `OfertaAceptadaPayload` gains `lineas[]`/`costoDespacho`, built from the already-hydrated `offer` in `AceptarOfertaUseCase`.
+- [x] 4.5 `refill-matching` regression confirmed unaffected (structural proof: zero files touched, 124/124 unchanged).
+- [x] 4.6 No-op reminder for `sdd-archive`.
+- [x] 4.7 Phase verification: green (see below) — surfaced and fixed a real HTTP-mapper gap.
+
+### Files Changed
+
+| File | Action | What |
+|---|---|---|
+| `packages/types/src/ofertas.ts` | Modified | `OfferItemPersisted` (`id`/`nombre`) intersected into `OfferItemReactiva`/`OfferItemProactiva` |
+| `services/core-api/src/domains/ofertas/domain/offer.entity.ts` | Modified | Factories generate `id`, accept `& { nombre: string }`-widened item params |
+| `services/core-api/src/domains/ofertas/domain/offer.entity.spec.ts` | Modified | Fixtures updated + 4 new tests (id/nombre per item, both kinds) |
+| `services/core-api/src/domains/ofertas/ports-in/enviar-oferta.use-case.ts` | Modified | Resolves `nombre` from `refillItemsById` before calling the factory |
+| `services/core-api/src/domains/ofertas/ports-in/enviar-oferta.use-case.spec.ts` | Modified | +1 test (nombre from RefillItem, not catalog) |
+| `services/core-api/src/domains/ofertas/ports-in/enviar-oferta-proactiva.use-case.ts` | Modified | Builds `matchesById`, resolves `nombre` from `ProviderCatalogItem` |
+| `services/core-api/src/domains/ofertas/ports-in/enviar-oferta-proactiva.use-case.spec.ts` | Modified | +1 test (nombre from catalog match) |
+| `services/core-api/src/domains/ofertas/ports-in/aceptar-oferta.use-case.ts` | Modified | Builds `lineas`/`costoDespacho` from `offer.items` |
+| `services/core-api/src/domains/ofertas/ports-in/aceptar-oferta.use-case.spec.ts` | Modified | Fixtures + 2 payload assertions updated |
+| `services/core-api/src/domains/ofertas/ports-in/obtener-bandeja.use-case.spec.ts` | Modified | Fixtures updated (id/nombre) |
+| `services/core-api/src/domains/ofertas/events/oferta-aceptada.payload.ts` | Modified | +`OfertaAceptadaLineaPayload`, `OfertaAceptadaPayload` +`lineas`/`costoDespacho` |
+| `services/core-api/src/domains/ofertas/adapters/persistence/kysely-offer.repository.ts` | Modified | Mapper reads/writes `id`/`nombre` |
+| `services/core-api/src/domains/ofertas/adapters/persistence/kysely-offer.repository.spec.ts` | Modified | Fixtures + 2 new explicit tests |
+| `services/core-api/src/domains/ofertas/adapters/http/ofertas.mapper.ts` | Modified | **Found via e2e failure**: `toOfferResponseDto` now includes `id`/`nombre` |
+| `services/core-api/src/domains/ofertas/adapters/http/dto/offer-response.dto.ts` | Modified | `OfferItemResponseDto` gains `id`/`nombre` |
+| `services/core-api/src/shared/database/schema.ts` | Modified | `OfferItemsTable.nombre` added (PR1 deferral resolved) |
+| `services/core-api/test/ofertas-aceptar-oferta.e2e-spec.ts` | Modified | Fixtures updated |
+| `services/core-api/test/ofertas-obtener-bandeja.e2e-spec.ts` | Modified | Fixtures updated (this is the file whose own e2e assertion caught the mapper gap) |
+| `services/core-api/test/ofertas-contrato-oferta-eventos.e2e-spec.ts` | Modified | Fixture gains `costoDespacho`/`lineas` |
+
+### Commands Run and Results
+
+| Command | Result |
+|---|---|
+| `pnpm typecheck` (first pass, after types+factories+mapper+payload+use-case edits, before fixing existing tests) | **Failed** — ~15 pre-existing test files needed their `OfferItem`/`NuevoOfferItem` fixtures updated for the new required fields. Expected and fixed systematically, not a surprise. |
+| `pnpm --filter core-api exec jest domains/ofertas` (after fixture fixes) | 11/11 suites, 180/180 tests |
+| `pnpm --filter core-api exec jest domains/refill-matching` | 13/13 suites, 124/124 tests — unchanged, confirms task 4.5 |
+| `pnpm typecheck` (second pass) | Clean |
+| e2e `ofertas` suite | **1 failure** (`ofertas-obtener-bandeja`) — `res.body` missing `id`/`nombre` per item vs. what the test's own (unmodified) assertion logic expected from the now-richer `Offer` fixture. Root cause: `toOfferResponseDto` never carried these fields. Fixed (see Deviations). Re-run: 7/7 suites, 33/33 tests. |
+| Full e2e suite | 22/24 suites, 134/139 tests — same 2 pre-existing Docker-paused `refill-matching` failures documented since `ofertas`' own PR3b, re-confirmed via `docker ps` immediately before this batch, unrelated to this PR's diff |
+| `pnpm lint` / `pnpm build` | Clean |
+| `pnpm format:check` | 5 files needed `prettier --write` — applied, re-verified clean, re-ran typecheck + full unit suite after (76/76, 717/717) |
+
+### Deviations from Design
+
+1. **`enviar-oferta-proactiva.use-case.ts` gains a `matchesById` Map not previously in the code.** `obtenerItemsDeProveedor`'s own contract (D-B) only guarantees cardinality (`matches.length === ids.length`), never per-item correlation — so resolving `nombre` per requested item required building an id-keyed lookup that didn't exist before this PR. Not a redesign of D-B's cardinality-only check (still exactly that for validation); the new Map is purely for the additive nombre-resolution step.
+2. **HTTP response DTO (`OfferItemResponseDto`) gains `id`/`nombre`, not named in tasks.md 4.1-4.6.** Discovered via a genuine e2e test failure (`ofertas-obtener-bandeja`), not anticipated in planning. Judged in-scope to fix rather than defer: withholding `nombre` from `GET /ofertas/bandeja`'s response would leave the user-facing inbox unable to show what an offer actually contains — a real product regression, not a cosmetic gap. `id` included alongside it for consistency (harmless, no PCI/security reason to withhold it, unlike `payments.raw_payload`).
+
+### Issues Found
+
+None beyond the 2 deviations above, both resolved within this batch with reasoning recorded.
+
+### Workload / PR Boundary
+
+- Mode: chained PR slice (stacked-to-main)
+- Current work unit: PR4 "Delta sobre ofertas" — tasks 4.1-4.7, all 7 complete
+- Boundary: starts from PR3's committed state (`c4ee403`); ends with `ofertas`' own domain/persistence/HTTP layers fully aware of `id`/`nombre`, `OfertaAceptadaPayload` carrying `pedidos-pagos`' required line-item data, zero regressions across `ofertas` (180/180) and `refill-matching` (124/124)
+- Estimated review budget impact: over forecast (18 files touched, mostly test-fixture updates rippling from a type change — the 240-310 line estimate undercounted the fixture-update blast radius of widening `OfferItem`'s required fields across ~15 pre-existing test files). Flagged honestly; not re-scoped after the fact.
+
 ## Status
 
-**Cumulative**: 21/21 tasks complete across PR1 (9/9) + PR2 (4/4) + PR3 (8/8). Ready for PR4 (delta sobre `ofertas`).
+**Cumulative**: 28/28 tasks complete across PR1 (9/9) + PR2 (4/4) + PR3 (8/8) + PR4 (7/7). Ready for PR5 (creación).

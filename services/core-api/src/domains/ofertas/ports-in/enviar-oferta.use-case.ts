@@ -183,11 +183,19 @@ export class EnviarOfertaUseCase {
 
     // (9) `total` se calcula DENTRO de la factory, antes de abrir la
     // transaccion -- construir la entidad aca ya satisface el orden de
-    // D13.
+    // D13. `nombre` se resuelve ACA (backend-core-api-pedidos-pagos
+    // design.md D-B.2) contra `refillItemsById` -- ya construido en (6),
+    // cero round-trips nuevos -- y es el nombre del ITEM SOLICITADO (lo
+    // que el usuario pidio y el proveedor acepto surtir), nunca el del
+    // catalogo del proveedor.
+    const itemsConNombre = items.map((item) => ({
+      ...item,
+      nombre: refillItemsById.get(item.refillItemId)!.nombre,
+    }));
     const offer = crearOfertaReactiva(
       companyId,
       refillRequestId,
-      items,
+      itemsConNombre,
       entrega,
       oportunidad.userId,
     );

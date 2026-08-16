@@ -22,6 +22,8 @@ const UNUSED_DB = {} as unknown as Kysely<DB>;
 
 function itemReactiva(overrides: Partial<OfferItemReactiva> = {}): OfferItemReactiva {
   return {
+    id: 'offer-item-1',
+    nombre: 'Agua 20L',
     refillItemId: 'refill-item-1',
     precio: 12990,
     isAlt: false,
@@ -31,6 +33,8 @@ function itemReactiva(overrides: Partial<OfferItemReactiva> = {}): OfferItemReac
 
 function itemProactiva(overrides: Partial<OfferItemProactiva> = {}): OfferItemProactiva {
   return {
+    id: 'offer-item-2',
+    nombre: 'Bidón 10L',
     providerCatalogItemId: 'catalog-item-1',
     precio: 15990,
     isAlt: false,
@@ -89,6 +93,7 @@ interface JoinRow {
   total: string;
   mensaje: string | null;
   item_id: string;
+  nombre: string;
   refill_item_id: string | null;
   provider_catalog_item_id: string | null;
   is_alt: boolean;
@@ -111,6 +116,7 @@ function reactivaJoinRow(overrides: Partial<JoinRow> = {}): JoinRow {
     total: '14990.00',
     mensaje: null,
     item_id: 'item-1',
+    nombre: 'Agua 20L',
     refill_item_id: 'refill-item-1',
     provider_catalog_item_id: null,
     is_alt: false,
@@ -135,6 +141,7 @@ function proactivaJoinRow(overrides: Partial<JoinRow> = {}): JoinRow {
     total: '17990.00',
     mensaje: null,
     item_id: 'item-2',
+    nombre: 'Bidón 10L',
     refill_item_id: null,
     provider_catalog_item_id: 'catalog-item-1',
     is_alt: false,
@@ -331,6 +338,24 @@ describe('KyselyOfferRepository', () => {
       expect(itemRows[0]).toMatchObject({ precio: '12990.00' });
     });
 
+    // backend-core-api-pedidos-pagos design.md D-B.4 (PR4): `id`/`nombre`
+    // dejan de descartarse. `id` viene de la factory (`randomUUID()`, nunca
+    // el default `Generated<string>` de la columna); `nombre` ya resuelto
+    // por el caso de uso antes de llegar acá.
+    it('writes id and nombre explicitly, never relying on the id column default', async () => {
+      const { db, itemsInsertChain } = buildSaveDb();
+      const repo = new KyselyOfferRepository(db);
+
+      await repo.save(
+        reactivaOfferFixture({
+          items: [itemReactiva({ id: 'offer-item-9', nombre: 'Agua 20L' })],
+        }),
+      );
+
+      const [itemRows] = itemsInsertChain.values.mock.calls[0] as [Record<string, unknown>[]];
+      expect(itemRows[0]).toMatchObject({ id: 'offer-item-9', nombre: 'Agua 20L' });
+    });
+
     it('writes alt_size/alt_qty as NULL (never "0") when the domain item omits them', async () => {
       const { db, itemsInsertChain } = buildSaveDb();
       const repo = new KyselyOfferRepository(db);
@@ -449,6 +474,20 @@ describe('KyselyOfferRepository', () => {
       expect(result!.kind).toBe('reactiva');
       expect((result as { refillRequestId: string }).refillRequestId).toBe('request-1');
       expect(result!.items[0]).toMatchObject({ refillItemId: 'refill-item-1', precio: 12990 });
+    });
+
+    // backend-core-api-pedidos-pagos design.md D-B.4/D-B.1 (PR4): `row.item_id`
+    // ya NO se descarta -- verificado, no solo agregado. `nombre` se lee del
+    // mismo join, sin round-trip nuevo.
+    it('maps item_id/nombre onto items[].id/.nombre, never discarding item_id', async () => {
+      const { db } = buildJoinSelectDb([
+        reactivaJoinRow({ item_id: 'item-9', nombre: 'Agua 20L' }),
+      ]);
+      const repo = new KyselyOfferRepository(db);
+
+      const result = await repo.findById('offer-1');
+
+      expect(result!.items[0]).toMatchObject({ id: 'item-9', nombre: 'Agua 20L' });
     });
 
     it('maps a proactiva offer: kind/items[].providerCatalogItemId populated, refillRequestId absent', async () => {

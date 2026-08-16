@@ -17,6 +17,12 @@ const OFFER_STATUSES: readonly OfferStatus[] = ['pendiente', 'aceptada', 'rechaz
  * `SolicitudElegibleItemDto`/`ProviderCatalogItemResponseDto` already use).
  */
 export class OfferItemResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty()
+  nombre!: string;
+
   @ApiPropertyOptional({ format: 'uuid' })
   refillItemId?: string;
 

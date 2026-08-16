@@ -306,6 +306,21 @@ describe('EnviarOfertaProactivaUseCase', () => {
   // (D17). No es un ítem numerado propio de tasks.md, pero es la misma
   // disciplina que 5a.8 estableció para `enviarOferta`, y es exactamente el
   // punto donde design.md's "misma forma" (línea 662) exige la prueba.
+  // backend-core-api-pedidos-pagos design.md D-B.2 (PR4): `nombre` viene de
+  // `ProviderCatalogItem.nombre` — core-api-ofertas spec, "A proactive
+  // line's nombre comes from the provider's catalog listing".
+  it("resolves each item's nombre from the matched ProviderCatalogItem", async () => {
+    const { opportunityRepository, catalogQueryPort, useCase } = buildUseCase();
+    opportunityRepository.existeRelacion.mockResolvedValue(true);
+    catalogQueryPort.obtenerItemsDeProveedor.mockResolvedValue([
+      providerCatalogItemFixture({ nombre: 'Bidón 10L' }),
+    ]);
+
+    const offer = await useCase.execute('company-a', 'user-a', [nuevoItemFixture()], entrega);
+
+    expect(offer.items[0].nombre).toBe('Bidón 10L');
+  });
+
   describe('The happy path — event/push (design.md D6/D17, diferencia (c): refillRequestId viaja null)', () => {
     it('publishes OfertaEnviada with refillRequestId: null, only AFTER save (commit) resolves', async () => {
       const { opportunityRepository, catalogQueryPort, offerRepository, eventPublisher, useCase } =

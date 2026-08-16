@@ -69,15 +69,20 @@ function assertEntregaValida(entrega: DatosEntrega): void {
  * retorno es la rama `reactiva` de la unión `Offer`, nunca requiere un
  * cast. `id` vía `randomUUID()` (nunca un default de la DB, mismo
  * precedente que `refill-request.entity.ts`'s `crearSolicitudActiva`).
- * `items` no lleva `id` propio: ni `OfferItemReactiva` ni
- * `NuevoOfferItemReactiva` declaran uno (`offer_items.id` es
- * `Generated<string>`, `shared-types-package` deliberadamente no lo
- * expone en el dominio).
+ *
+ * `items` gana `id`/`nombre` (`backend-core-api-pedidos-pagos` design.md
+ * D-B.4): `id` lo genera esta factory (`randomUUID()`, nunca el default de
+ * la columna — `pedidos-pagos` lo necesita como `order_items.offer_item_id`,
+ * `NOT NULL` con FK). `nombre` llega YA RESUELTO por el caso de uso
+ * (`EnviarOfertaUseCase`, que tiene `refillItemsById` en la mano) — el
+ * ensanchamiento local `& { nombre: string }` es del PARÁMETRO de esta
+ * factory, nunca de `NuevoOfferItemReactiva` en `@repon/types`, que sigue
+ * sin declarar ni `id` ni `nombre`: el cliente nunca los envía.
  */
 export function crearOfertaReactiva(
   companyId: string,
   refillRequestId: string,
-  items: readonly NuevoOfferItemReactiva[],
+  items: readonly (NuevoOfferItemReactiva & { nombre: string })[],
   entrega: DatosEntrega,
   userId: string,
   mensaje?: string,
@@ -85,7 +90,10 @@ export function crearOfertaReactiva(
   assertItemsValidos(items);
   assertEntregaValida(entrega);
 
-  const itemsOferta: OfferItemReactiva[] = items.map((item) => ({ ...item }));
+  const itemsOferta: OfferItemReactiva[] = items.map((item) => ({
+    ...item,
+    id: randomUUID(),
+  }));
 
   return {
     id: randomUUID(),
@@ -114,18 +122,25 @@ export function crearOfertaReactiva(
  * `undefined` explícito por accidente. `providerCatalogItemId` requerido
  * por ítem ya lo exige `NuevoOfferItemProactiva` en tiempo de compilación
  * (`refillItemId?: never`) — nada que validar en runtime además de eso.
+ *
+ * `items` gana `id`/`nombre`, mismo criterio que `crearOfertaReactiva`:
+ * `id` vía `randomUUID()` acá; `nombre` ya resuelto por el caso de uso
+ * (`EnviarOfertaProactivaUseCase`, desde `ProviderCatalogItem.nombre`).
  */
 export function crearOfertaProactiva(
   companyId: string,
   userId: string,
-  items: readonly NuevoOfferItemProactiva[],
+  items: readonly (NuevoOfferItemProactiva & { nombre: string })[],
   entrega: DatosEntrega,
   mensaje?: string,
 ): Offer {
   assertItemsValidos(items);
   assertEntregaValida(entrega);
 
-  const itemsOferta: OfferItemProactiva[] = items.map((item) => ({ ...item }));
+  const itemsOferta: OfferItemProactiva[] = items.map((item) => ({
+    ...item,
+    id: randomUUID(),
+  }));
 
   return {
     id: randomUUID(),

@@ -134,8 +134,17 @@ export class EnviarOfertaProactivaUseCase {
 
     // (9) `total` se calcula DENTRO de la factory, antes de abrir la
     // transaccion -- construir la entidad aca ya satisface el orden de
-    // D13.
-    const offer = crearOfertaProactiva(companyId, userId, items, entrega, mensaje);
+    // D13. `nombre` se resuelve ACA (backend-core-api-pedidos-pagos
+    // design.md D-B.2) desde `ProviderCatalogItem.nombre` -- `matches` ya
+    // se resolvio en (7), cero round-trips nuevos. El chequeo de (8) es de
+    // CARDINALIDAD, no de correlacion 1 a 1, asi que el mapa por id se
+    // construye aca, no antes.
+    const matchesById = new Map(matches.map((match) => [match.id, match]));
+    const itemsConNombre = items.map((item) => ({
+      ...item,
+      nombre: matchesById.get(item.providerCatalogItemId)!.nombre,
+    }));
+    const offer = crearOfertaProactiva(companyId, userId, itemsConNombre, entrega, mensaje);
 
     // (10)
     await this.transactionManager.runInTransaction(async (tx) => {
