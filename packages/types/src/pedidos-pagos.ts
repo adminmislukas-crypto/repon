@@ -1,4 +1,5 @@
-export type OrderStatus = 'confirmado' | 'preparando' | 'en_camino' | 'entregado';
+export type OrderStatus =
+  'expirado' | 'pendiente_pago' | 'confirmado' | 'preparando' | 'en_camino' | 'entregado';
 
 export interface Order {
   id: string;
@@ -7,6 +8,13 @@ export interface Order {
   companyId: string;
   status: OrderStatus;
   total: number;
+  /**
+   * Copied by value from `offers.costoDespacho` at creation time
+   * (design.md D-A.6) — `total` already includes it. Breaks the total down
+   * so `OrderRepository.crear` can populate `orders.costo_despacho` without
+   * a second parameter, mirroring `Offer.costoDespacho`'s own precedent.
+   */
+  costoDespacho: number;
 }
 
 export interface OrderItem {

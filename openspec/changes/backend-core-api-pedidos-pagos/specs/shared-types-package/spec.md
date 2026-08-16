@@ -20,7 +20,7 @@
 
 ### Requirement: OrderStatus gains pendiente_pago and expirado
 
-`packages/types/src/pedidos-pagos.ts`'s `OrderStatus` MUST export `'pendiente_pago'` and `'expirado'` alongside the existing `'confirmado' | 'preparando' | 'en_camino' | 'entregado'`, matching `db-schema-pedidos-pagos`'s `order_status` enum (D-A.1) — without this, `pedidos-pagos`' own domain layer and HTTP DTOs cannot type the state machine's two new states. `Order`, `OrderItem`, `Payment`, `PaymentStatus` keep their existing shape unchanged; only `OrderStatus`'s member set grows.
+`packages/types/src/pedidos-pagos.ts`'s `OrderStatus` MUST export `'pendiente_pago'` and `'expirado'` alongside the existing `'confirmado' | 'preparando' | 'en_camino' | 'entregado'`, matching `db-schema-pedidos-pagos`'s `order_status` enum (D-A.1) — without this, `pedidos-pagos`' own domain layer and HTTP DTOs cannot type the state machine's two new states. `OrderItem`, `Payment`, `PaymentStatus` keep their existing shape unchanged; only `OrderStatus`'s member set grows.
 
 #### Scenario: OrderStatus includes both new states
 
@@ -28,8 +28,18 @@
 - WHEN its members are enumerated
 - THEN they are exactly `'expirado' | 'pendiente_pago' | 'confirmado' | 'preparando' | 'en_camino' | 'entregado'`
 
-#### Scenario: Order, OrderItem, Payment, and PaymentStatus are unaffected
+### Requirement: Order gains costoDespacho, mirroring Offer's own precedent
 
-- GIVEN `@repon/types`'s `Order`, `OrderItem`, `Payment`, `PaymentStatus`
+`Order` MUST gain `costoDespacho: number`, copied by value from `offers.costoDespacho` at creation time (design.md D-A.6) — `total` already includes it, but `OrderRepository.crear(order: Order, items, tx)` needs the breakdown as a field of `order` itself to populate `orders.costo_despacho` without a second parameter. This mirrors `Offer.costoDespacho`'s own existing precedent in `packages/types/src/ofertas.ts`. **Correction to this spec's own earlier claim** (written before `OrderRepository.crear`'s exact signature was cross-checked against `Order`'s then-current shape): `Order` is NOT unaffected by this change.
+
+#### Scenario: Order exposes costoDespacho
+
+- GIVEN `@repon/types`'s `Order`
+- WHEN its fields are enumerated
+- THEN it includes `costoDespacho: number`, alongside its existing `total: number`
+
+#### Scenario: OrderItem and Payment/PaymentStatus are unaffected
+
+- GIVEN `@repon/types`'s `OrderItem`, `Payment`, `PaymentStatus`
 - WHEN their fields/members are compared before and after this change
-- THEN none of the four changes shape — only `OrderStatus` gains members
+- THEN none of the three changes shape

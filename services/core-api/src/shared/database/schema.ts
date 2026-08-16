@@ -1,4 +1,4 @@
-import type { Generated } from 'kysely';
+import type { ColumnType, Generated } from 'kysely';
 
 // Kysely row types (`snake_case`, matches Postgres columns 1:1) for the
 // tables this change's scope touches — `profiles`/`companies`/`admin_roles`
@@ -38,9 +38,22 @@ import type { Generated } from 'kysely';
 // typed here for the first time, NOT edited by this change, fix-forward)
 // plus .../20260808120000_16_ofertas_discovery_projection.sql
 // (offer_opportunities, offer_opportunity_companies, offer_opportunity_items)
-// — from this domain's own backend-core-api-ofertas PR 1 (design.md D-A/D14).
-// The remaining 1 table (`pedidos-pagos`) gets typed here as its owning
-// domain change lands.
+// — from this domain's own backend-core-api-ofertas PR 1 (design.md D-A/D14);
+// .../20260803120600_06_pedidos_pagos.sql (orders, order_items, payments —
+// already applied since the migrations change, typed here for the first
+// time, NOT edited, fix-forward per D5) plus
+// .../20260809120000_17a_pedidos_pagos_order_status_values.sql (the 2 new
+// order_status enum values) and
+// .../20260809120100_17b_pedidos_pagos_fix_forward.sql (orders.status'
+// dropped default, orders.costo_despacho, the unique/partial-unique indexes)
+// — from this domain's own backend-core-api-pedidos-pagos PR 1 (design.md
+// D-A). All 6 tables spanning `ofertas`/`pedidos-pagos` are now typed here;
+// `OfferItemsTable.nombre` (design.md D-B.2/D-B.4) is deliberately NOT added
+// in this same PR — it lands in this change's own PR 4 alongside the
+// `ofertas` mapper edit that actually populates it, so no PR in this chain
+// ever leaves `offer_items`' Kysely inserts referencing a required column
+// nothing yet writes (a compile-order deviation from design.md G.3's own
+// prose, disclosed here rather than silently applied).
 
 export type CompanyStatusRow = 'pendiente' | 'activo' | 'suspendido';
 export type RoleRow = 'user' | 'provider' | 'admin';
@@ -286,6 +299,58 @@ export interface OfferOpportunityItemsTable {
   updated_at: Generated<string>;
 }
 
+export type OrderStatusRow =
+  'expirado' | 'pendiente_pago' | 'confirmado' | 'preparando' | 'en_camino' | 'entregado';
+export type PaymentStatusRow = 'pendiente' | 'pagado' | 'fallido' | 'reembolsado';
+
+export interface OrdersTable {
+  id: Generated<string>;
+  offer_id: string;
+  user_id: string;
+  company_id: string;
+  // SIN Generated: el batch 17b DROPEA el default (design.md D-A.4). Olvidar
+  // la columna en un insert es un error de COMPILACION, no un pedido
+  // 'confirmado' -- pagado -- creado gratis.
+  status: OrderStatusRow;
+  total: string; // numeric(12,2) -> STRING
+  costo_despacho: Generated<string>; // numeric(12,2) -> STRING; default 0 (design.md D-A.6)
+  created_at: Generated<string>;
+  updated_at: Generated<string>;
+}
+
+export interface OrderItemsTable {
+  id: Generated<string>;
+  order_id: string;
+  offer_item_id: string;
+  nombre: string;
+  cantidad: string; // numeric -> STRING (siempre '1', design.md D-B.3)
+  precio_unitario: string; // numeric(12,2) -> STRING
+  subtotal: string; // numeric(12,2) -> STRING
+  is_alt: Generated<boolean>;
+  alt_size: string | null; // numeric -> STRING, y ademas nullable
+  alt_qty: string | null; // numeric -> STRING, y ademas nullable
+  alt_note: string | null;
+  created_at: Generated<string>; // sin updated_at: inmutable por revocacion de grants (R6)
+}
+
+export interface PaymentsTable {
+  id: Generated<string>;
+  order_id: string;
+  gateway: string;
+  external_transaction_id: string;
+  monto: string; // numeric(12,2) -> STRING
+  moneda: Generated<string>; // default 'CLP'
+  estado: Generated<PaymentStatusRow>; // default 'pendiente'; el adaptador lo escribe explicito igual
+  // El driver lee jsonb ya parseado como objeto, pero Kysely exige `string`
+  // en insert/update: hay que serializar con JSON.stringify (gotcha nuevo,
+  // primera columna jsonb del repo, design.md D-G.3). raw_payload NUNCA sale
+  // de adapters/persistence/ -- no esta en `Payment` de `@repon/types`.
+  raw_payload: ColumnType<unknown, string, string>;
+  paid_at: string | null;
+  created_at: Generated<string>;
+  updated_at: Generated<string>;
+}
+
 export interface DB {
   companies: CompaniesTable;
   profiles: ProfilesTable;
@@ -304,4 +369,7 @@ export interface DB {
   offer_opportunities: OfferOpportunitiesTable;
   offer_opportunity_companies: OfferOpportunityCompaniesTable;
   offer_opportunity_items: OfferOpportunityItemsTable;
+  orders: OrdersTable;
+  order_items: OrderItemsTable;
+  payments: PaymentsTable;
 }

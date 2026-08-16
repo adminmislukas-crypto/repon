@@ -21,6 +21,10 @@ Columns fixed by `Order` (`packages/types/SPEC.md`), plus physical: `offer_id` R
 | cantidad | numeric | NOT NULL, CHECK (cantidad > 0) |
 | precio_unitario | numeric(12,2) | NOT NULL, CHECK (precio_unitario >= 0) |
 | subtotal | numeric(12,2) | NOT NULL, CHECK (subtotal >= 0) |
+| is_alt | boolean | NOT NULL DEFAULT `false` |
+| alt_size | numeric | NULL |
+| alt_qty | numeric | NULL |
+| alt_note | text | NULL |
 | created_at | timestamptz | NOT NULL DEFAULT `now()` |
 
 No `updated_at` — rows are immutable snapshots by design. No owner column (Q8).
