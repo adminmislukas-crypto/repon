@@ -18,3 +18,8 @@ supabase/.temp/
 # graphify knowledge graph — local dev artifact, regenerated via
 # `graphify update .` (see .git/hooks/post-commit), never committed
 graphify-out/
+
+# /repon skill (.claude/skills/repon) runtime logs
+.dev/
+# Local AI runtime state
+.atl/
