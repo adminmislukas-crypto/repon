@@ -343,4 +343,6 @@ The e2e UUID issue above (found and fixed within this batch, not carried forward
 
 ## Status
 
-**Cumulative**: 47/47 tasks complete across PR1 (9/9) + PR2 (4/4) + PR3 (8/8) + PR4 (7/7) + PR5 (9/9) + PR6 (10/10). Ready for PR7a (pasarela — adaptador).
+**Cumulative**: 47/47 tasks complete across PR1 (9/9) + PR2 (4/4) + PR3 (8/8) + PR4 (7/7) + PR5 (9/9) + PR6 (10/10).
+
+**⏸ PAUSED at PR7a, 2026-08-16** — asked the maintainer directly which payment gateway to implement (task 7a.1, `design.md`'s own anticipated stop point, D2). Answer: defer the choice, keep `PasarelaNoConfiguradaAdapter` as the binding for now. Tasks 7a.2-7a.5 and all of PR7b depend on that choice (credential shape, SDK, webhook signature algorithm) — nothing further can be built until it's made. The system is coherent and fully functional short of real payment processing: orders are created from accepted offers, tracked, providers advance their lifecycle, `iniciarPago` fails explicitly with 503 (by design, D-C.2) instead of breaking anything. Resume at task 7a.1 once the gateway is chosen — do not skip ahead of it.
