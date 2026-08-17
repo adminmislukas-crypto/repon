@@ -2,6 +2,20 @@ packages:
   - 'apps/*'
   - 'services/*'
   - 'packages/*'
+# Expo's web dev server (Metro + @expo/router-server + friends) assumes
+# classic hoisted node_modules resolution — it requires transitive
+# dependencies (expo-modules-core, @expo/log-box, debug, @react-native/
+# normalize-colors, etc.) that pnpm's default isolated linker deliberately
+# does not expose unless a package declares them directly. This is the fix
+# Expo's own docs recommend for pnpm monorepos. On this pnpm version
+# (11.17.0), node-linker moved from .npmrc to pnpm-workspace.yaml — a plain
+# `.npmrc` with `node-linker=hoisted` is silently ignored (verified: `pnpm
+# config get node-linker` stayed undefined and node_modules/.modules.yaml
+# still reported nodeLinker: isolated after a full reinstall). Trade-off:
+# workspace-wide, including the backend domains — pnpm's "phantom
+# dependency" protection (an undeclared-but-resolvable import silently
+# working) is lost everywhere, not just in apps/usuario-mobile.
+nodeLinker: hoisted
 allowBuilds:
   # unrs-resolver is eslint-plugin-import-x's native (Rust) module resolver —
   # required for the cross-domain import boundary rule in eslint.config.js to
@@ -29,3 +43,13 @@ minimumReleaseAgeExclude:
   - '@typescript-eslint/utils@8.66.0'
   - '@typescript-eslint/visitor-keys@8.66.0'
   - typescript-eslint@8.66.0
+  - '@expo/cli@57.0.16'
+  - '@expo/config@57.0.8'
+  - '@expo/fingerprint@0.20.8'
+  - '@expo/inline-modules@0.1.6'
+  - '@expo/log-box@57.0.3'
+  - expo-asset@57.0.12
+  - expo-constants@57.0.12
+  - expo-router@57.0.14
+  - expo-splash-screen@57.0.7
+  - expo@57.0.14

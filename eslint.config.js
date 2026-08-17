@@ -119,9 +119,16 @@ export default tseslint.config(
   {
     // Root-level Node tooling config files (this file included) — not part
     // of any workspace package's tsconfig, plain Node/CJS-or-ESM globals.
-    files: ['*.config.{js,mjs,cjs,ts}', 'eslint.config.js'],
+    // Also covers each app's own `metro.config.js`/`babel.config.js`
+    // (`apps/*/`): Metro/Babel's own config loader requires CommonJS
+    // (`require`/`module.exports`) regardless of the package's own
+    // `"type"` field — not a style violation, a tooling constraint.
+    files: ['*.config.{js,mjs,cjs,ts}', 'eslint.config.js', 'apps/*/{metro,babel}.config.{js,cjs}'],
     languageOptions: {
       globals: globals.node,
+    },
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
     },
   },
   {
