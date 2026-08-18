@@ -1,0 +1,23 @@
+# Shared by every Dockerfile in this repo — all of them build with the repo
+# root as context (pnpm workspace, hoisted linking needs the full tree).
+
+**/node_modules
+**/dist
+**/.expo
+**/.turbo
+**/coverage
+**/*.tsbuildinfo
+
+.git
+.dev
+.vscode
+.idea
+*.log
+
+# openspec/graphify output is documentation, not build input
+graphify-out
+openspec/changes/archive
+
+# local-only, never bake into an image
+**/.env
+!**/.env.example
