@@ -1,4 +1,5 @@
 import type { Company, Profile } from '@repon/types';
+import type { SesionResult } from '../../ports-in/iniciar-sesion.use-case';
 import { RegistrarEmpresaDto } from './dto/registrar-empresa.dto';
 import { RegistrarUsuarioDto } from './dto/registrar-usuario.dto';
 import {
@@ -6,6 +7,7 @@ import {
   toProfileResponseDto,
   toRegistrarEmpresaCommand,
   toRegistrarUsuarioCommand,
+  toSesionResponseDto,
 } from './identidad.mapper';
 
 describe('identidad.mapper', () => {
@@ -78,5 +80,36 @@ describe('identidad.mapper', () => {
     };
 
     expect(toCompanyResponseDto(company)).toEqual(company);
+  });
+
+  it('toSesionResponseDto maps every field, adds tokenType: bearer, and reuses toProfileResponseDto', () => {
+    const result: SesionResult = {
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      expiresAt: 1_700_000_000,
+      perfil: { id: 'p1', role: 'provider', status: 'activo', nombre: 'P', email: 'p@x.cl', companyId: 'co-1' },
+      companyStatus: 'pendiente',
+    };
+
+    expect(toSesionResponseDto(result)).toEqual({
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      tokenType: 'bearer',
+      expiresAt: 1_700_000_000,
+      perfil: toProfileResponseDto(result.perfil),
+      companyStatus: 'pendiente',
+    });
+  });
+
+  it('toSesionResponseDto omits companyStatus rather than inventing null for a user', () => {
+    const result: SesionResult = {
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+      expiresAt: 1_700_000_000,
+      perfil: { id: 'p1', role: 'user', status: 'activo', nombre: 'U', email: 'u@x.cl' },
+      companyStatus: null,
+    };
+
+    expect(toSesionResponseDto(result).companyStatus).toBeUndefined();
   });
 });

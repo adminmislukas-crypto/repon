@@ -1,7 +1,9 @@
 import { plainToInstance } from 'class-transformer';
 import { validate, type ValidationError } from 'class-validator';
 import { AsignarRolAdminDto } from './asignar-rol-admin.dto';
+import { IniciarSesionDto } from './iniciar-sesion.dto';
 import { ReactivacionDto } from './reactivacion.dto';
+import { RefrescarSesionDto } from './refrescar-sesion.dto';
 import { RegistrarEmpresaDto } from './registrar-empresa.dto';
 import { RegistrarUsuarioDto } from './registrar-usuario.dto';
 import { SuspensionDto } from './suspension.dto';
@@ -108,5 +110,66 @@ describe('AsignarRolAdminDto', () => {
   it('rejects a value outside the AdminRole union', async () => {
     const dto = plainToInstance(AsignarRolAdminDto, { rol: 'not-a-role' });
     expect(hasConstraint(await validate(dto, STRICT_OPTIONS), 'rol')).toBe(true);
+  });
+});
+
+describe('IniciarSesionDto', () => {
+  const valid = { email: 'ana@proveedora.cl', password: 'x' };
+
+  it('accepts a valid payload with no expectedRole', async () => {
+    const dto = plainToInstance(IniciarSesionDto, valid);
+    expect(await validate(dto, STRICT_OPTIONS)).toHaveLength(0);
+  });
+
+  it('accepts a valid payload with expectedRole: user', async () => {
+    const dto = plainToInstance(IniciarSesionDto, { ...valid, expectedRole: 'user' });
+    expect(await validate(dto, STRICT_OPTIONS)).toHaveLength(0);
+  });
+
+  it('accepts a valid payload with expectedRole: provider', async () => {
+    const dto = plainToInstance(IniciarSesionDto, { ...valid, expectedRole: 'provider' });
+    expect(await validate(dto, STRICT_OPTIONS)).toHaveLength(0);
+  });
+
+  it('rejects an invalid email', async () => {
+    const dto = plainToInstance(IniciarSesionDto, { ...valid, email: 'not-an-email' });
+    expect(hasConstraint(await validate(dto, STRICT_OPTIONS), 'email')).toBe(true);
+  });
+
+  it('rejects an empty password', async () => {
+    const dto = plainToInstance(IniciarSesionDto, { ...valid, password: '' });
+    expect(hasConstraint(await validate(dto, STRICT_OPTIONS), 'password')).toBe(true);
+  });
+
+  it('accepts a short password — deliberately no @MinLength (design.md D-2, avoids leaking the policy)', async () => {
+    const dto = plainToInstance(IniciarSesionDto, { ...valid, password: 'x' });
+    expect(hasConstraint(await validate(dto, STRICT_OPTIONS), 'password')).toBe(false);
+  });
+
+  it('rejects expectedRole: admin — self-service session gate MUST NOT accept admin', async () => {
+    const dto = plainToInstance(IniciarSesionDto, { ...valid, expectedRole: 'admin' });
+    expect(hasConstraint(await validate(dto, STRICT_OPTIONS), 'expectedRole')).toBe(true);
+  });
+
+  it('rejects an unknown extra field', async () => {
+    const dto = plainToInstance(IniciarSesionDto, { ...valid, isAdmin: true });
+    expect(hasConstraint(await validate(dto, STRICT_OPTIONS), 'isAdmin')).toBe(true);
+  });
+});
+
+describe('RefrescarSesionDto', () => {
+  it('accepts a non-empty refreshToken', async () => {
+    const dto = plainToInstance(RefrescarSesionDto, { refreshToken: 'rt-123' });
+    expect(await validate(dto, STRICT_OPTIONS)).toHaveLength(0);
+  });
+
+  it('rejects an empty refreshToken', async () => {
+    const dto = plainToInstance(RefrescarSesionDto, { refreshToken: '' });
+    expect(hasConstraint(await validate(dto, STRICT_OPTIONS), 'refreshToken')).toBe(true);
+  });
+
+  it('rejects a missing refreshToken', async () => {
+    const dto = plainToInstance(RefrescarSesionDto, {});
+    expect(hasConstraint(await validate(dto, STRICT_OPTIONS), 'refreshToken')).toBe(true);
   });
 });

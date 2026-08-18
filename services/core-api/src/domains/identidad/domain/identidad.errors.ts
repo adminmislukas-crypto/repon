@@ -82,3 +82,95 @@ export class CompanyNotSuspendedError extends Error {
     this.name = 'CompanyNotSuspendedError';
   }
 }
+
+/**
+ * Maps to 401 `CREDENCIALES_INVALIDAS` in `adapters/http/` (mobile-auth-login
+ * design.md D-4, Phase 9). Thrown by `IniciarSesionUseCase` for both an
+ * unknown email and a wrong password — deliberately the same class/message
+ * either way, so the two are indistinguishable to the caller (spec:
+ * "Wrong password and unknown email are indistinguishable").
+ */
+export class CredencialesInvalidasError extends Error {
+  constructor(message = 'Credenciales inválidas.', options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'CredencialesInvalidasError';
+  }
+}
+
+/**
+ * Maps to 401 `SESION_EXPIRADA` in `adapters/http/` (mobile-auth-login
+ * design.md D-4, Phase 9). Thrown by `RefrescarSesionUseCase` when
+ * `AuthProvider.refreshSession` classifies the refresh token as
+ * expired/reused/rotated-away — the refresh-time counterpart to
+ * `CredencialesInvalidasError`, distinct so the client knows to sign out
+ * rather than retry.
+ */
+export class SesionExpiradaError extends Error {
+  constructor(message = 'La sesión ha expirado.', options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'SesionExpiradaError';
+  }
+}
+
+/**
+ * Maps to 503 `AUTH_PROVIDER_NO_DISPONIBLE` in `adapters/http/`
+ * (mobile-auth-login design.md D-4, Phase 9). Thrown by `IniciarSesionUseCase`/
+ * `RefrescarSesionUseCase` when `AuthProvider.signIn`/`refreshSession`
+ * rejects with `AuthProviderAmbiguousError` (429/5xx/network failure/timeout)
+ * — never collapsed into `CredencialesInvalidasError`, per the explicit
+ * success criterion that a backend outage is never phrased as "invalid
+ * credentials".
+ */
+export class AuthProviderNoDisponibleError extends Error {
+  constructor(message = 'El proveedor de autenticación no está disponible.', options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'AuthProviderNoDisponibleError';
+  }
+}
+
+/**
+ * Maps to 403 `PROFILE_SUSPENDED` in `adapters/http/` (mobile-auth-login
+ * design.md D-4a, Phase 9). Thrown by `assertSesionPermitida` when a
+ * profile's `status` is `'suspendido'` at login or refresh time — refused
+ * before any session material is returned, and the just-minted GoTrue
+ * grant is revoked (D-4a's exit). Reuses the wire `code` `AuthGuard` already
+ * emits for the same condition on a later authenticated request, but is a
+ * distinct class — `AuthError`/`AuthErrorCode` (`shared/auth/`) stay
+ * untouched; only the `code` string is shared, not the class.
+ */
+export class PerfilSuspendidoError extends Error {
+  constructor(message = 'El perfil está suspendido.', options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'PerfilSuspendidoError';
+  }
+}
+
+/**
+ * Maps to 403 `COMPANY_SUSPENDED` in `adapters/http/` (mobile-auth-login
+ * design.md D-4a, Phase 9). Thrown by `assertSesionPermitida` for a
+ * `role === 'provider'` whose `companyStatus` is `'suspendido'`. This is a
+ * business rule the login/refresh use cases own, not `AuthGuard` —
+ * `companyStatus` is loaded but deliberately never enforced by the guard
+ * on later authenticated requests (`shared/auth/ports/actor.port.ts`).
+ */
+export class EmpresaSuspendidaError extends Error {
+  constructor(message = 'La empresa está suspendida.', options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'EmpresaSuspendidaError';
+  }
+}
+
+/**
+ * Maps to 403 `ROL_NO_PERMITIDO` in `adapters/http/` (mobile-auth-login
+ * design.md D-5, Phase 9). Thrown by `assertSesionPermitida` when the
+ * client-supplied `expectedRole` doesn't match the resolved profile's
+ * role. UX only, never the security boundary — `AuthGuard`/`RolesGuard`
+ * remain the sole authorization boundary on subsequent requests, unaffected
+ * by this check.
+ */
+export class RolNoPermitidoError extends Error {
+  constructor(message = 'La cuenta no tiene el rol esperado para esta aplicación.', options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'RolNoPermitidoError';
+  }
+}

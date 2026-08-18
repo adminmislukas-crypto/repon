@@ -44,6 +44,12 @@ Cada producto de la solicitud tiene un toggle "tengo esta presentación" / "no t
 - Formulario de oferta en construcción (por producto: exacto vs. alternativo, precio) — estado local de pantalla
 - Catálogo, solicitudes, pedidos — TanStack Query contra Supabase
 
+## Autenticación (login) — cambio `mobile-auth-login`
+
+- Mismo mecanismo que `usuario-mobile` (ver ese `SPEC.md`): pantalla `login.tsx`, `useSession().signIn` de `@repon/auth` contra `POST /identidad/sesion`, sesión persistida vía `expo-secure-store`/`localStorage`, guard `RequireSession` sobre `app/(tabs)/_layout.tsx`. Aquí con `expectedRole: 'provider'` y mensajes propios (ej. `ROL_NO_PERMITIDO` sugiere "usa la app de usuarios").
+- Diferencia clave: una empresa en estado `pendiente` **sí puede** iniciar sesión (no es un rechazo — el backend la trata como login exitoso), pero queda atrapada en una pantalla nueva, `pending-approval.tsx`: el `PendingApprovalGate` dentro de `(tabs)/_layout.tsx` lee `companyStatus` de la sesión y redirige ahí en vez de mostrar el tab tree normal, hasta que un admin la aprueba (ver flujo de aprobación en `apps/admin-web/SPEC.md`).
+- Una empresa `suspendido`, a diferencia de `pendiente`, sí es rechazada en el login (código `COMPANY_SUSPENDED`, mensaje distinto al de credenciales inválidas).
+
 ## Pendiente al migrar del mockup a Expo
 - Reemplazar `go()` / `goBack()` por Expo Router
 - `recalcTotal()`, `updateAltNote()`, `setAvail()` pasan de manipular el DOM a manejar estado de formulario (React Hook Form o estado local)

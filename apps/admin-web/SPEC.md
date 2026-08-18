@@ -6,7 +6,7 @@ Panel de administración interno. Next.js (App Router), no mobile.
 
 ## Diferencia clave de arquitectura respecto a las apps móviles
 
-Las apps de usuario y proveedor acceden a Supabase directo desde el cliente con la clave pública (`anon key`), limitadas por RLS. `admin-web` es la única pieza del sistema con acceso total: las acciones sensibles pasan por API routes de Next.js que corren en el servidor y usan la `service role key`. Esa clave nunca se expone al navegador ni se usa desde el cliente. Ver `docs/ARCHITECTURE.md`.
+**Corrección declarada (`mobile-auth-login`)**: esta sección decía originalmente que las apps de usuario y proveedor accedían a Supabase directo desde el cliente con la clave pública (`anon key`), limitadas por RLS. Eso no se construyó así: ambas apps se autentican exclusivamente contra las rutas de sesión de `core-api` (`POST /identidad/sesion`, `POST /identidad/sesion/refresco`, `DELETE /identidad/sesion` — ver `services/core-api/domains/identidad/SPEC.md`), que a su vez habla con Supabase Auth por detrás vía un `GoTrueAuthClient` propio. Ninguna de las dos apps sostiene una clave de Supabase, `anon` o de otro tipo. `admin-web` es la única pieza del sistema con acceso total: las acciones sensibles pasan por API routes de Next.js que corren en el servidor y usan la `service role key`. Esa clave nunca se expone al navegador ni se usa desde el cliente. Ver `docs/ARCHITECTURE.md`.
 
 ## Roles (tabla `admin_roles`)
 

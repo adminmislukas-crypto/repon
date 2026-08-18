@@ -94,6 +94,9 @@ describe('Identidad HTTP adapter (e2e)', () => {
       createAccount: jest.fn(),
       deleteAccount: jest.fn(),
       findAccountByEmail: jest.fn(),
+      signIn: jest.fn(),
+      refreshSession: jest.fn(),
+      revokeSession: jest.fn(),
     };
     auditLogPort = { record: jest.fn().mockResolvedValue(undefined) };
     eventPublisher = { publish: jest.fn().mockResolvedValue(undefined) };

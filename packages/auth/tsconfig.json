@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "jsx": "react-jsx",
+    // "DOM" added on top of the base's "ES2022": `session-storage.web.ts`
+    // (PR8a, mobile-auth-login design.md D-6) uses the real `localStorage`
+    // global, the `expo-secure-store`-backed `session-storage.ts` doesn't
+    // need it but isn't harmed by it either — one program, both files
+    // typechecked together regardless of which one Metro actually bundles
+    // per platform.
+    "lib": ["ES2022", "DOM"],
+    // TS's automatic @types inclusion doesn't reliably find a hoisted
+    // node_modules/@types/jest under this workspace's `nodeLinker: hoisted`
+    // layout (same gap hit in both apps' and core-api's tsconfig — see
+    // their own comments); explicit is the established fix.
+    "types": ["jest"]
+  },
+  "include": ["src"]
+}

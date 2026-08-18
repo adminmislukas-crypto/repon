@@ -8,17 +8,20 @@
     "android": "EXPO_USE_METRO_WORKSPACE_ROOT=1 expo start --android",
     "ios": "EXPO_USE_METRO_WORKSPACE_ROOT=1 expo start --ios",
     "web": "EXPO_USE_METRO_WORKSPACE_ROOT=1 expo start --web",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "jest"
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.10",
     "@expo/vector-icons": "^15.0.2",
+    "@repon/auth": "workspace:*",
     "@repon/types": "workspace:*",
     "expo": "~57.0.14",
     "expo-constants": "~57.0.12",
     "expo-font": "~57.0.1",
     "expo-linking": "~57.0.6",
     "expo-router": "~57.0.14",
+    "expo-secure-store": "^57.0.1",
     "expo-splash-screen": "~57.0.7",
     "expo-status-bar": "~57.0.1",
     "expo-web-browser": "~57.0.2",
@@ -32,7 +35,13 @@
     "react-native-worklets": "0.10.1"
   },
   "devDependencies": {
+    "@testing-library/react-native": "^14.0.1",
+    "@types/jest": "^29.5.14",
     "@types/react": "~19.2.2",
+    "babel-preset-expo": "^57.0.7",
+    "jest": "^29.7.0",
+    "jest-expo": "^57.0.4",
+    "react-test-renderer": "^19.2.8",
     "typescript": "~6.0.3"
   }
 }

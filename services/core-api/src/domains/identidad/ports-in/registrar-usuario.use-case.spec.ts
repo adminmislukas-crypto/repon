@@ -27,6 +27,9 @@ function buildDeps() {
     createAccount: jest.fn(),
     deleteAccount: jest.fn(),
     findAccountByEmail: jest.fn(),
+    signIn: jest.fn(),
+    refreshSession: jest.fn(),
+    revokeSession: jest.fn(),
   };
   const profileRepository: jest.Mocked<ProfileRepository> = {
     insertIfAbsent: jest.fn(),

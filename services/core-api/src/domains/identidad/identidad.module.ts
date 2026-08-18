@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ACTOR_PORT } from '../../shared/auth/ports/actor.port';
 import { DatabaseModule } from '../../shared/database/database.module';
+import { RateLimitModule } from '../../shared/rate-limit/rate-limit.module';
 import { KyselyAdminRoleRepository } from './adapters/persistence/kysely-admin-role.repository';
 import { KyselyCompanyRepository } from './adapters/persistence/kysely-company.repository';
 import { KyselyProfileRepository } from './adapters/persistence/kysely-profile.repository';
@@ -9,7 +10,10 @@ import { IdentidadController } from './adapters/http/identidad.controller';
 import { IdentidadActorAdapter } from './contracts/identidad-actor.adapter';
 import { AprobarEmpresaUseCase } from './ports-in/aprobar-empresa.use-case';
 import { AsignarRolAdminUseCase } from './ports-in/asignar-rol-admin.use-case';
+import { CerrarSesionUseCase } from './ports-in/cerrar-sesion.use-case';
+import { IniciarSesionUseCase } from './ports-in/iniciar-sesion.use-case';
 import { ReactivarEmpresaUseCase } from './ports-in/reactivar-empresa.use-case';
+import { RefrescarSesionUseCase } from './ports-in/refrescar-sesion.use-case';
 import { RegistrarEmpresaUseCase } from './ports-in/registrar-empresa.use-case';
 import { RegistrarUsuarioUseCase } from './ports-in/registrar-usuario.use-case';
 import { SuspenderEmpresaUseCase } from './ports-in/suspender-empresa.use-case';
@@ -28,7 +32,7 @@ import { PROFILE_REPOSITORY } from './ports-out/profile-repository.port';
 // injected straight from the `@Global()` shared kernel (design.md's
 // DI-token table) — nothing to bind here for those three.
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, RateLimitModule],
   controllers: [IdentidadController],
   providers: [
     { provide: PROFILE_REPOSITORY, useClass: KyselyProfileRepository },
@@ -43,6 +47,9 @@ import { PROFILE_REPOSITORY } from './ports-out/profile-repository.port';
     SuspenderEmpresaUseCase,
     ReactivarEmpresaUseCase,
     AsignarRolAdminUseCase,
+    IniciarSesionUseCase,
+    RefrescarSesionUseCase,
+    CerrarSesionUseCase,
   ],
   exports: [ACTOR_PORT],
 })

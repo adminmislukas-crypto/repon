@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/components/useColorScheme';
+import { SessionProvider, useSession, type AuthConfig } from '@repon/auth';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -17,6 +18,14 @@ export const unstable_settings = {
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
+
+// mobile-auth-login design.md D-6: @repon/auth never reads `process.env`
+// itself — this app is the one place `EXPO_PUBLIC_API_URL` (see
+// `.env.example`) is read, inlined by Expo at bundle time.
+const authConfig: AuthConfig = {
+  apiBaseUrl: process.env.EXPO_PUBLIC_API_URL ?? '',
+  expectedRole: 'provider',
+};
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -34,26 +43,41 @@ export default function RootLayout() {
     if (error) throw error;
   }, [error]);
 
-  useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded]);
-
   if (!loaded) {
     return null;
   }
 
-  return <RootLayoutNav />;
+  return (
+    <SessionProvider config={authConfig}>
+      <RootLayoutNav />
+    </SessionProvider>
+  );
 }
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
+  const { state } = useSession();
+
+  // Splash stays up through font loading (above) AND session rehydration
+  // (design.md D-6, "this is what makes 'survives app restart' true") — a
+  // stored session must be applied before the first real screen renders,
+  // never a login-screen flash first.
+  useEffect(() => {
+    if (state !== 'loading') {
+      void SplashScreen.hideAsync();
+    }
+  }, [state]);
+
+  if (state === 'loading') {
+    return null;
+  }
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="login" options={{ headerShown: false }} />
+        <Stack.Screen name="pending-approval" options={{ headerShown: false }} />
       </Stack>
     </ThemeProvider>
   );

@@ -46,7 +46,11 @@ interface AuthProvider {          // adaptador hacia Supabase Auth — sin `tx?`
   createAccount(email: string, password: string): Promise<string>
   deleteAccount(id: string): Promise<void>      // única eliminación física permitida (design.md D-1)
   findAccountByEmail(email: string): Promise<{ id: string } | null>
+  signIn(email: string, password: string): Promise<AuthSession>         // delta `mobile-auth-login`, sin `tx?`
+  refreshSession(refreshToken: string): Promise<AuthSession>            // delta `mobile-auth-login`, sin `tx?`
+  revokeSession(accessToken: string): Promise<void>                     // delta `mobile-auth-login`, sin `tx?`
 }
+// AuthSession { accessToken, refreshToken, expiresAt, userId } — delta `mobile-auth-login`
 interface EventPublisher {        // implementado por el shared kernel (`EVENT_PUBLISHER`, design.md §"Convenciones de DI"), no un adaptador propio de identidad
   publish(event: DomainEvent): Promise<void>
 }
@@ -55,6 +59,14 @@ interface EventPublisher {        // implementado por el shared kernel (`EVENT_P
 **Delta 5.4 (`backend-core-api-foundation`, design.md D-A): todo método de `ProfileRepository`/`CompanyRepository`/`AdminRoleRepository` lleva un `tx?: TransactionContext` final opcional** — permite que `aprobarEmpresa`/`suspenderUsuario`/`suspenderEmpresa`/`asignarRolAdmin` escriban su mutación y su entrada de `AuditLogPort` (ver más abajo) dentro de la misma transacción SQL. `AuthProvider` y `EventPublisher` quedan afuera de esta regla a propósito: Auth es un sistema externo sin transacción SQL que compartir, y publicar un evento nunca debe revertirse junto con un rollback de base de datos.
 
 **Delta 5.4: `identidad` consume `AuditLogPort`/`AUDIT_LOG_PORT` del shared kernel** (`shared/audit/`, design.md D-C) — no es un ports-out propio de este dominio, es infraestructura compartida (ver `core-api/SPEC.md`). Los 4 casos de uso que mutan con actor admin (`aprobarEmpresa`, `suspenderUsuario`, `suspenderEmpresa`, `asignarRolAdmin`) escriben su entrada de auditoría dentro del mismo `TransactionManager.runInTransaction` que la mutación — nunca fuera. `registrarUsuario`/`registrarEmpresa` NO auditan: son auto-servicio, sin actor admin, y `audit_log.actor_profile_id` es `NOT NULL`.
+
+### Delta `AuthProvider.signIn`/`refreshSession`/`revokeSession` (`mobile-auth-login`)
+
+`AuthProvider` gana tres métodos nuevos para sostener el login de `usuario-mobile`/`proveedor-mobile`, implementados por `SupabaseAuthProvider` sobre un `GoTrueAuthClient` propio (HTTP directo a GoTrue, no `supabase-js` — un bug de concurrencia verificado en el single-flight de refresh de `supabase-js` descartó esa opción, ver `design.md` D-1). Los tres, igual que `createAccount`/`deleteAccount`, viven fuera de la transacción SQL.
+
+Tres casos de uso nuevos en `ports-in` los consumen — `IniciarSesionUseCase`, `RefrescarSesionUseCase`, `CerrarSesionUseCase` — expuestos por tres rutas HTTP nuevas: `POST /identidad/sesion`, `POST /identidad/sesion/refresco`, `DELETE /identidad/sesion` (con rate limiting por IP+email, ver `design.md` D-3). Antes de devolver una sesión recién emitida, `assertSesionPermitida` la valida: perfil suspendido, empresa suspendida, o un rol que no corresponde a la app llamante (`expectedRole`) revocan esa sesión y rechazan el login — nunca queda una sesión a medio emitir. Una empresa proveedora `pendiente` es la única excepción: login exitoso, resuelto client-side (ver `apps/proveedor-mobile/SPEC.md`), no un rechazo del backend.
+
+Detalle completo (clasificación de errores, rate-limit exacto, tabla de precedencia de `assertSesionPermitida`) en `openspec/changes/mobile-auth-login/design.md` (D-1 a D-7, D-4a).
 
 ### Contrato de compensación de `AuthProvider` (design.md D-B, corrige D-1)
 

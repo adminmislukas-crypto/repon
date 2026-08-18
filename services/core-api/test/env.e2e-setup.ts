@@ -10,6 +10,7 @@
 process.env.NODE_ENV ??= 'test';
 process.env.SUPABASE_URL ??= 'http://127.0.0.1:54321';
 process.env.SUPABASE_SERVICE_ROLE_KEY ??= 'test-service-role-key';
+process.env.SUPABASE_ANON_KEY ??= 'test-anon-key';
 process.env.DATABASE_URL ??= 'postgres://postgres:postgres@127.0.0.1:54322/postgres';
 process.env.AUTH_JWT_MODE ??= 'hs256';
 process.env.SUPABASE_JWT_SECRET ??= 'test-secret';

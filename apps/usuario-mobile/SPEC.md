@@ -42,6 +42,14 @@ App del comprador. React Native + Expo.
 - Tab activo persona/mascota en Consumos — estado local de pantalla
 - Catálogo, ofertas, historial — TanStack Query contra Supabase
 
+## Autenticación (login) — cambio `mobile-auth-login`
+
+- Pantalla `login.tsx` (sin nav, primera pantalla si no hay sesión): formulario email/password. Llama a `useSession().signIn` de `@repon/auth`, que golpea `POST /identidad/sesion` en `core-api` con `expectedRole: 'user'` — nunca contra Supabase directo.
+- La sesión (`accessToken`/`refreshToken`/`perfil`) se persiste vía `expo-secure-store` en nativo y `localStorage` en web. `@repon/auth`'s `authFetch` la refresca proactivamente y en single-flight ante un 401.
+- Guard: `RequireSession` envuelve `app/(tabs)/_layout.tsx` completo — sin sesión, redirige a `/login`; con sesión, renderiza el tab tree normal.
+- Cada código de error del backend (`CREDENCIALES_INVALIDAS`, `PROFILE_SUSPENDED`, `ROL_NO_PERMITIDO`, `DEMASIADOS_INTENTOS`, `AUTH_PROVIDER_NO_DISPONIBLE`) se mapea a un mensaje en español distinto en pantalla — nunca revela si el problema fue el email o la contraseña.
+- `companyStatus` (empresa `pendiente`/`suspendido`) no aplica a esta app: solo existe para `role: 'provider'`, ver `proveedor-mobile/SPEC.md`.
+
 ## Pendiente al migrar del mockup a Expo
 - Reemplazar `go()` / `goBack()` (manipulación directa del DOM) por Expo Router
 - Reemplazar el JS inline de simulación (`marcarDosis`, `aceptarOferta`, etc.) por mutaciones reales contra Supabase

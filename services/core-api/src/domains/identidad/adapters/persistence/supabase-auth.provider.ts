@@ -1,11 +1,67 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { AuthError, SupabaseClient } from '@supabase/supabase-js';
-import { SUPABASE_CLIENT } from '../../../../shared/supabase/supabase.module';
+import type { GoTrueAuthClient, GoTrueResult } from '../../../../shared/supabase/gotrue-auth.client';
+import { GOTRUE_AUTH_CLIENT, SUPABASE_CLIENT } from '../../../../shared/supabase/supabase.module';
 import {
   AuthProviderAmbiguousError,
   AuthProviderDeterministicError,
   type AuthProvider,
+  type AuthSession,
 } from '../../ports-out/auth-provider.port';
+
+// mobile-auth-login design.md D-4: `error_code`/`error` values GoTrue's
+// token endpoint has used across versions for "wrong password or unknown
+// email" — matching both is cheap and mirrors `EMAIL_TAKEN_CODES` below.
+const INVALID_CREDENTIALS_CODES = new Set(['invalid_grant', 'invalid_credentials']);
+
+function extractGrantErrorCode(body: unknown): string | undefined {
+  if (body === null || typeof body !== 'object') return undefined;
+  const record = body as Record<string, unknown>;
+  const code = record.error_code ?? record.error;
+  return typeof code === 'string' ? code : undefined;
+}
+
+/**
+ * Classifies a GoTrue token-endpoint result per mobile-auth-login
+ * design.md D-4 — status-class only, never message text: a response was
+ * received with 4xx ⇒ deterministic; 429/5xx ⇒ ambiguous. A malformed 200
+ * body (missing a required field) is a GoTrue contract violation, same
+ * class as `createAccount`'s "no user and no error" case below —
+ * genuinely unknown outcome, not a 500.
+ */
+function classifyGrantResult(result: GoTrueResult): AuthSession {
+  if (result.ok) return toAuthSession(result.body);
+  if (result.status >= 400 && result.status < 500 && result.status !== 429) {
+    const code = extractGrantErrorCode(result.body);
+    if (code && INVALID_CREDENTIALS_CODES.has(code)) {
+      throw new AuthProviderDeterministicError('invalid_credentials', result.body);
+    }
+    throw new AuthProviderDeterministicError('other', result.body);
+  }
+  throw new AuthProviderAmbiguousError(result.body);
+}
+
+function toAuthSession(body: unknown): AuthSession {
+  const record = body as {
+    access_token?: unknown;
+    refresh_token?: unknown;
+    expires_at?: unknown;
+    user?: { id?: unknown };
+  } | null;
+  const accessToken = record?.access_token;
+  const refreshToken = record?.refresh_token;
+  const expiresAt = record?.expires_at;
+  const userId = record?.user?.id;
+  if (
+    typeof accessToken !== 'string' ||
+    typeof refreshToken !== 'string' ||
+    typeof expiresAt !== 'number' ||
+    typeof userId !== 'string'
+  ) {
+    throw new AuthProviderAmbiguousError(new Error('GoTrue grant response missing required fields'));
+  }
+  return { accessToken, refreshToken, expiresAt, userId };
+}
 
 // Deterministic (safe-to-classify, no ambiguity about whether Auth actually
 // wrote anything) `AuthError.code` values this adapter recognizes as
@@ -53,7 +109,10 @@ function classifyCreateAccountError(error: AuthError): never {
  */
 @Injectable()
 export class SupabaseAuthProvider implements AuthProvider {
-  constructor(@Inject(SUPABASE_CLIENT) private readonly supabase: SupabaseClient) {}
+  constructor(
+    @Inject(SUPABASE_CLIENT) private readonly supabase: SupabaseClient,
+    @Inject(GOTRUE_AUTH_CLIENT) private readonly gotrueAuthClient: GoTrueAuthClient,
+  ) {}
 
   async createAccount(email: string, password: string): Promise<string> {
     const { data, error } = await this.supabase.auth.admin.createUser({
@@ -95,5 +154,33 @@ export class SupabaseAuthProvider implements AuthProvider {
     if (error) throw error;
     const match = data.users.find((user) => user.email === email);
     return match ? { id: match.id } : null;
+  }
+
+  async signIn(email: string, password: string): Promise<AuthSession> {
+    const result = await this.grantOrAmbiguous(() => this.gotrueAuthClient.passwordGrant(email, password));
+    return classifyGrantResult(result);
+  }
+
+  async refreshSession(refreshToken: string): Promise<AuthSession> {
+    const result = await this.grantOrAmbiguous(() => this.gotrueAuthClient.refreshGrant(refreshToken));
+    return classifyGrantResult(result);
+  }
+
+  /**
+   * `'local'` scope, best-effort at the caller's discretion — this method
+   * itself lets a failure propagate unchanged (design.md D-4a/D-5: the use
+   * case is what swallows a revoke failure, not this adapter).
+   */
+  async revokeSession(accessToken: string): Promise<void> {
+    await this.gotrueAuthClient.revoke(accessToken);
+  }
+
+  /** `GoTrueAuthClient` only rejects on a network failure/timeout — never message text, always ambiguous (design.md D-4). */
+  private async grantOrAmbiguous(call: () => Promise<GoTrueResult>): Promise<GoTrueResult> {
+    try {
+      return await call();
+    } catch (error) {
+      throw new AuthProviderAmbiguousError(error);
+    }
   }
 }

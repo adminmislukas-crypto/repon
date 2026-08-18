@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   HttpCode,
   HttpStatus,
   Param,
@@ -8,6 +9,7 @@ import {
   Post,
   Put,
   UseFilters,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -17,28 +19,40 @@ import {
   ApiForbiddenResponse,
   ApiNoContentResponse,
   ApiNotFoundResponse,
+  ApiOkResponse,
   ApiOperation,
   ApiParam,
   ApiTags,
+  ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { Actor } from '../../../../shared/auth/decorators/actor.decorator';
+import { BearerToken } from '../../../../shared/auth/decorators/bearer-token.decorator';
 import { AdminRoles } from '../../../../shared/auth/decorators/roles.decorator';
 import { Public } from '../../../../shared/auth/decorators/public.decorator';
 import type { AuthenticatedActor } from '../../../../shared/auth/ports/actor.port';
+import { RateLimit } from '../../../../shared/rate-limit/rate-limit.decorator';
+import { RateLimitInterceptor } from '../../../../shared/rate-limit/rate-limit.interceptor';
+import { CredencialesInvalidasError, SesionExpiradaError } from '../../domain/identidad.errors';
 import { AprobarEmpresaUseCase } from '../../ports-in/aprobar-empresa.use-case';
 import { AsignarRolAdminUseCase } from '../../ports-in/asignar-rol-admin.use-case';
+import { CerrarSesionUseCase } from '../../ports-in/cerrar-sesion.use-case';
+import { IniciarSesionUseCase } from '../../ports-in/iniciar-sesion.use-case';
 import { ReactivarEmpresaUseCase } from '../../ports-in/reactivar-empresa.use-case';
+import { RefrescarSesionUseCase } from '../../ports-in/refrescar-sesion.use-case';
 import { RegistrarEmpresaUseCase } from '../../ports-in/registrar-empresa.use-case';
 import { RegistrarUsuarioUseCase } from '../../ports-in/registrar-usuario.use-case';
 import { SuspenderEmpresaUseCase } from '../../ports-in/suspender-empresa.use-case';
 import { SuspenderUsuarioUseCase } from '../../ports-in/suspender-usuario.use-case';
 import { AsignarRolAdminDto } from './dto/asignar-rol-admin.dto';
 import { CompanyResponseDto } from './dto/company-response.dto';
+import { IniciarSesionDto } from './dto/iniciar-sesion.dto';
 import { ProfileResponseDto } from './dto/profile-response.dto';
 import { ReactivacionDto } from './dto/reactivacion.dto';
+import { RefrescarSesionDto } from './dto/refrescar-sesion.dto';
 import { RegistrarEmpresaDto } from './dto/registrar-empresa.dto';
 import { RegistrarUsuarioDto } from './dto/registrar-usuario.dto';
+import { SesionResponseDto } from './dto/sesion-response.dto';
 import { SuspensionDto } from './dto/suspension.dto';
 import { IdentidadExceptionFilter } from './identidad-exception.filter';
 import {
@@ -46,6 +60,7 @@ import {
   toProfileResponseDto,
   toRegistrarEmpresaCommand,
   toRegistrarUsuarioCommand,
+  toSesionResponseDto,
 } from './identidad.mapper';
 
 // design.md's "Superficie HTTP de identidad" table — 6 routes, one per
@@ -66,7 +81,74 @@ export class IdentidadController {
     private readonly suspenderEmpresaUseCase: SuspenderEmpresaUseCase,
     private readonly reactivarEmpresaUseCase: ReactivarEmpresaUseCase,
     private readonly asignarRolAdminUseCase: AsignarRolAdminUseCase,
+    private readonly iniciarSesionUseCase: IniciarSesionUseCase,
+    private readonly refrescarSesionUseCase: RefrescarSesionUseCase,
+    private readonly cerrarSesionUseCase: CerrarSesionUseCase,
   ) {}
+
+  // mobile-auth-login design.md D-2/D-3: core-api is the only party that
+  // speaks to Supabase GoTrue — these 3 routes are the session-issuance
+  // surface. `@RateLimit` keys/thresholds are the exact spec numbers
+  // (5/email + 20/ip per 15 min for login, 20/ip per 15 min for refresh).
+  @Public()
+  @Post('sesion')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(RateLimitInterceptor)
+  @RateLimit({
+    keys: [
+      { scope: 'sesion', dimension: 'email', limit: 5, windowMs: 900_000 },
+      { scope: 'sesion', dimension: 'ip', limit: 20, windowMs: 900_000 },
+    ],
+    resetOnSuccess: ['email'],
+    countsAsFailure: (error) => error instanceof CredencialesInvalidasError,
+  })
+  @ApiOperation({
+    summary: 'Inicia sesión (usuario o proveedor) contra core-api — el cliente nunca ve Supabase.',
+  })
+  @ApiOkResponse({ type: SesionResponseDto })
+  @ApiUnauthorizedResponse({ description: 'Credenciales inválidas (email y password son indistinguibles).' })
+  @ApiForbiddenResponse({ description: 'Perfil/empresa suspendidos, o rol no permitido para esta app.' })
+  @ApiTooManyRequestsResponse({ description: 'Demasiados intentos fallidos — reintenta luego de Retry-After.' })
+  async iniciarSesion(@Body() dto: IniciarSesionDto): Promise<SesionResponseDto> {
+    const result = await this.iniciarSesionUseCase.execute({
+      email: dto.email,
+      password: dto.password,
+      expectedRole: dto.expectedRole,
+    });
+    return toSesionResponseDto(result);
+  }
+
+  @Public()
+  @Post('sesion/refresco')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(RateLimitInterceptor)
+  @RateLimit({
+    keys: [{ scope: 'refresco', dimension: 'ip', limit: 20, windowMs: 900_000 }],
+    resetOnSuccess: [],
+    countsAsFailure: (error) => error instanceof SesionExpiradaError,
+  })
+  @ApiOperation({ summary: 'Refresca una sesión existente — re-resuelve status/companyStatus.' })
+  @ApiOkResponse({ type: SesionResponseDto })
+  @ApiUnauthorizedResponse({ description: 'Refresh token expirado, reutilizado o inválido.' })
+  @ApiForbiddenResponse({ description: 'La cuenta fue suspendida desde el último login.' })
+  @ApiTooManyRequestsResponse({ description: 'Demasiados intentos fallidos — reintenta luego de Retry-After.' })
+  async refrescarSesion(@Body() dto: RefrescarSesionDto): Promise<SesionResponseDto> {
+    const result = await this.refrescarSesionUseCase.execute(dto.refreshToken);
+    return toSesionResponseDto(result);
+  }
+
+  // Authenticated (not @Public()) — AuthGuard/RolesGuard already verified
+  // the bearer before this handler runs; `@BearerToken()` just forwards it.
+  // Always 204, even if revocation itself fails (design.md D-2: logout is
+  // client-authoritative, server best-effort — see `CerrarSesionUseCase`).
+  @Delete('sesion')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Cierra sesión — revoca el refresh token (best-effort), siempre responde 204.' })
+  @ApiNoContentResponse()
+  @ApiUnauthorizedResponse({ description: 'Token ausente o inválido.' })
+  async cerrarSesion(@BearerToken() token: string): Promise<void> {
+    await this.cerrarSesionUseCase.execute(token);
+  }
 
   @Public()
   @Post('usuarios')

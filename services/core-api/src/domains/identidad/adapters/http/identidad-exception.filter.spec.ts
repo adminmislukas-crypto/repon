@@ -1,12 +1,18 @@
 import type { ArgumentsHost } from '@nestjs/common';
 import {
   AuthProviderError,
+  AuthProviderNoDisponibleError,
   CompanyNotFoundError,
   CompanyNotSuspendedError,
+  CredencialesInvalidasError,
   EmailYaRegistradoError,
+  EmpresaSuspendidaError,
   InvalidProfileError,
+  PerfilSuspendidoError,
   ProfileNotFoundError,
   RegistroFallidoError,
+  RolNoPermitidoError,
+  SesionExpiradaError,
 } from '../../domain/identidad.errors';
 import { IdentidadExceptionFilter } from './identidad-exception.filter';
 
@@ -32,6 +38,12 @@ describe.each([
   [new CompanyNotFoundError('c1'), 404, 'COMPANY_NOT_FOUND'],
   [new ProfileNotFoundError('p1'), 404, 'PROFILE_NOT_FOUND'],
   [new CompanyNotSuspendedError('c1'), 409, 'COMPANY_NOT_SUSPENDED'],
+  [new CredencialesInvalidasError(), 401, 'CREDENCIALES_INVALIDAS'],
+  [new SesionExpiradaError(), 401, 'SESION_EXPIRADA'],
+  [new AuthProviderNoDisponibleError(), 503, 'AUTH_PROVIDER_NO_DISPONIBLE'],
+  [new PerfilSuspendidoError(), 403, 'PROFILE_SUSPENDED'],
+  [new EmpresaSuspendidaError(), 403, 'COMPANY_SUSPENDED'],
+  [new RolNoPermitidoError(), 403, 'ROL_NO_PERMITIDO'],
 ] as const)('IdentidadExceptionFilter — %#', (exception, statusCode, code) => {
   it(`maps ${exception.constructor.name} to ${statusCode} ${code}`, () => {
     const filter = new IdentidadExceptionFilter();

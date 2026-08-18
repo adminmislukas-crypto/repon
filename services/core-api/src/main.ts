@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './shared/auth/global-exception.filter';
@@ -18,7 +19,15 @@ async function bootstrap(): Promise<void> {
   // secondary safety net, not the primary path, for *this* scenario — it
   // still matters for failures after a successful create() (e.g.
   // `app.listen()` failing because the port is taken).
-  const app = await NestFactory.create(AppModule);
+  //
+  // `NestExpressApplication`, not the platform-agnostic default (mobile-auth-login
+  // design.md D-3): `app.set('trust proxy', ...)` below is Express-specific,
+  // needed so `req.ip` reflects the real client behind a load balancer
+  // instead of the socket peer — otherwise every request shares one IP and
+  // the login rate limiter's per-IP key degrades into one shared bucket.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const config = app.get(ConfigService);
+  app.set('trust proxy', config.get<number>('TRUST_PROXY_HOPS', 0));
 
   // core-api-bootstrap spec, "Global validation pipe rejects malformed
   // DTOs": whitelist strips unknown properties, forbidNonWhitelisted turns
@@ -36,7 +45,6 @@ async function bootstrap(): Promise<void> {
   // no stack trace or internal detail leaks into the response body.
   app.useGlobalFilters(new GlobalExceptionFilter());
 
-  const config = app.get(ConfigService);
   const nodeEnv = config.get<string>('NODE_ENV', 'development');
   const port = config.get<number>('PORT', 3000);
 

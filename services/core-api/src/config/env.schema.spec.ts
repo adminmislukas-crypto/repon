@@ -10,6 +10,7 @@ const validHs256Env = {
   PORT: '3000',
   SUPABASE_URL: 'http://127.0.0.1:54321',
   SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+  SUPABASE_ANON_KEY: 'anon-key',
   DATABASE_URL: 'postgres://postgres:postgres@127.0.0.1:54322/postgres',
   AUTH_JWT_MODE: 'hs256',
   SUPABASE_JWT_SECRET: 'super-secret',
@@ -57,6 +58,24 @@ describe('validateEnv', () => {
     const { SUPABASE_SERVICE_ROLE_KEY, ...rest } = validHs256Env;
 
     expect(() => validateEnv(rest)).toThrow(/SUPABASE_SERVICE_ROLE_KEY/);
+  });
+
+  it('rejects a missing SUPABASE_ANON_KEY', () => {
+    const { SUPABASE_ANON_KEY, ...rest } = validHs256Env;
+
+    expect(() => validateEnv(rest)).toThrow(/SUPABASE_ANON_KEY/);
+  });
+
+  it('defaults TRUST_PROXY_HOPS to 0 when absent', () => {
+    const result = validateEnv(validHs256Env);
+
+    expect(result.TRUST_PROXY_HOPS).toBe(0);
+  });
+
+  it('accepts an explicit TRUST_PROXY_HOPS', () => {
+    const result = validateEnv({ ...validHs256Env, TRUST_PROXY_HOPS: '2' });
+
+    expect(result.TRUST_PROXY_HOPS).toBe(2);
   });
 
   it('rejects hs256 mode without SUPABASE_JWT_SECRET', () => {

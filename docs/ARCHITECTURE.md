@@ -10,7 +10,7 @@ App proveedor (Expo) ─┼─► core-api (NestJS) ──► Postgres, Auth, St
 Panel admin (Next.js)─┘   monolito modular, hexagonal por dominio
 ```
 
-- **Apps móviles y panel admin** llaman a `core-api` por HTTP para toda operación con reglas de negocio (crear un refill, enviar una oferta, aprobar una empresa). Ninguna toca Postgres directo salvo lecturas simples que no tienen lógica asociada.
+- **Apps móviles y panel admin** llaman a `core-api` por HTTP para toda operación con reglas de negocio (crear un refill, enviar una oferta, aprobar una empresa). Ninguna toca Postgres directo salvo lecturas simples que no tienen lógica asociada. La autenticación nunca es una de esas excepciones: ni siquiera es una lectura simple, ver la fila de Auth más abajo (cambio `mobile-auth-login`).
 - **`core-api`** es un monolito modular: seis dominios de negocio, cada uno con arquitectura hexagonal interna (dominio aislado de infraestructura mediante puertos), comunicados entre sí por eventos. Ver `services/core-api/SPEC.md` y `services/core-api/domains/*/SPEC.md` para el detalle de cada uno.
 - **Supabase** pasa a ser infraestructura pura: hosting de Postgres, Auth (como adaptador desde el dominio `identidad`), Storage y Realtime (para las notificaciones en vivo de la bandeja de ofertas).
 
@@ -18,7 +18,7 @@ Panel admin (Next.js)─┘   monolito modular, hexagonal por dominio
 
 | Servicio | Para qué se usa |
 |---|---|
-| Auth | Registro y sesión de usuarios y proveedores |
+| Auth | Registro y sesión de usuarios y proveedores — las apps móviles nunca llaman a Supabase Auth directo ni sostienen sus claves; siempre pasan por las rutas de sesión del dominio `identidad` de `core-api` (`POST`/`DELETE /identidad/sesion`, `POST /identidad/sesion/refresco`), que actúa como único adaptador hacia GoTrue (cambio `mobile-auth-login`) |
 | Postgres + RLS | Toda la data: perfiles, mascotas, consumo, catálogos, solicitudes, ofertas, pedidos |
 | Realtime | Las ofertas de proveedores llegan a la bandeja del usuario sin recargar |
 | Edge Functions | Webhooks de pago |

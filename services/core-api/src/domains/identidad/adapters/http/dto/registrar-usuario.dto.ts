@@ -17,7 +17,7 @@ import { IsEmail, IsIn, IsOptional, IsString, IsUUID, MinLength } from 'class-va
  * this change today — this restriction is belt-and-suspenders, not the
  * only gate).
  */
-const SELF_SERVICE_ROLES = ['user', 'provider'] as const;
+export const SELF_SERVICE_ROLES = ['user', 'provider'] as const;
 export type SelfServiceRole = (typeof SELF_SERVICE_ROLES)[number];
 
 export class RegistrarUsuarioDto {

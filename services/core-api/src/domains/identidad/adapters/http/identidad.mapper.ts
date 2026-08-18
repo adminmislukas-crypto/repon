@@ -1,10 +1,12 @@
 import type { Company, Profile } from '@repon/types';
 import type { RegistrarEmpresaCommand } from '../../ports-in/registrar-empresa.use-case';
 import type { RegistrarUsuarioCommand } from '../../ports-in/registrar-usuario.use-case';
+import type { SesionResult } from '../../ports-in/iniciar-sesion.use-case';
 import type { CompanyResponseDto } from './dto/company-response.dto';
 import type { ProfileResponseDto } from './dto/profile-response.dto';
 import type { RegistrarEmpresaDto } from './dto/registrar-empresa.dto';
 import type { RegistrarUsuarioDto } from './dto/registrar-usuario.dto';
+import type { SesionResponseDto } from './dto/sesion-response.dto';
 
 /**
  * `core-api-hexagonal-layout` spec, "DTOs and framework decorators stay in
@@ -50,5 +52,17 @@ export function toCompanyResponseDto(company: Company): CompanyResponseDto {
     rut: company.rut,
     giro: company.giro,
     status: company.status,
+  };
+}
+
+/** Reuses `toProfileResponseDto` (design.md D-2 task 9.4) — one profile-shape mapping, everywhere it's returned. */
+export function toSesionResponseDto(result: SesionResult): SesionResponseDto {
+  return {
+    accessToken: result.accessToken,
+    refreshToken: result.refreshToken,
+    tokenType: 'bearer',
+    expiresAt: result.expiresAt,
+    perfil: toProfileResponseDto(result.perfil),
+    companyStatus: result.companyStatus ?? undefined,
   };
 }

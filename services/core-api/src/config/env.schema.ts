@@ -22,6 +22,11 @@ const baseEnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
   SUPABASE_URL: z.string().min(1, 'SUPABASE_URL is required'),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1, 'SUPABASE_SERVICE_ROLE_KEY is required'),
+  // mobile-auth-login design.md D-1: the anon-scoped key `GoTrueAuthClient`
+  // sends as `apikey`/`Authorization` on the password/refresh grants — never
+  // the service-role key above. Required unconditionally, same fail-fast
+  // class as `SUPABASE_SERVICE_ROLE_KEY`.
+  SUPABASE_ANON_KEY: z.string().min(1, 'SUPABASE_ANON_KEY is required'),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   AUTH_JWT_ISSUER: z.string().min(1, 'AUTH_JWT_ISSUER is required'),
   AUTH_JWT_AUDIENCE: z.string().min(1, 'AUTH_JWT_AUDIENCE is required'),
@@ -33,6 +38,14 @@ const baseEnvSchema = z.object({
   // as a real boolean. Validated here so an out-of-union value is a
   // fail-fast boot error, not a silent default (D-E).
   CONSUMO_CRON_ENABLED: z.enum(['true', 'false']).default('true'),
+  // mobile-auth-login design.md D-3: how many hops of `X-Forwarded-For` to
+  // trust for `req.ip` (Express `trust proxy`). `0` (default) is correct for
+  // local dev with no reverse proxy in front; behind a load balancer this
+  // MUST be set to the real hop count, or the per-IP rate-limit key
+  // degrades into one shared bucket for every request. Has a safe default,
+  // so — unlike the vars above — it is not fail-fast, same class as
+  // NODE_ENV/PORT below.
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
 });
 
 const hs256EnvSchema = baseEnvSchema.extend({
