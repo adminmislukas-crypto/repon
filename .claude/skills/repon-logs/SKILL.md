@@ -33,7 +33,7 @@ Load when the user asks to review/check logs for this repo (repon-monorepo), rep
 
 1. `lsof -ti:3000 -ti:8091 -ti:8092` to know which services are currently live.
 2. Read each relevant `.dev/repon/<service>.log`, tail if large.
-3. Grep for: `\[Nest\].*ERROR`, `TypeError`, `ReferenceError`, `Unhandled.*[Rr]ejection`, `ECONNREFUSED`, `ETIMEDOUT`, HTTP `4\d\d|5\d\d` on request lines, Metro/Expo `SyntaxError`/`Cannot use import statement`/bundling failures, Supabase connection errors.
+3. Grep with `-a` always — `core-api.log` carries Nest's ANSI color codes, and plain `grep` silently treats it as binary and reports zero matches (confirmed false negative in practice). Patterns: `\[Nest\].*ERROR`, `EADDRINUSE`, `TypeError`, `ReferenceError`, `Unhandled.*[Rr]ejection`, `ECONNREFUSED`, `ETIMEDOUT`, HTTP `4\d\d|5\d\d` on request lines, Metro/Expo `SyntaxError`/`Cannot use import statement`/bundling failures, Supabase connection errors.
 4. For each hit, grep the actual source file the trace names to confirm the exact line before proposing a fix.
 5. Group by service + error signature — never report line-by-line duplicates as separate findings.
 
