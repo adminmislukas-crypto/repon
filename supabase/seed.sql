@@ -19,12 +19,20 @@ begin
     insert into auth.users (
       id, instance_id, aud, role, email, encrypted_password,
       email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
-      created_at, updated_at
+      created_at, updated_at,
+      confirmation_token, recovery_token, email_change_token_new, email_change,
+      phone_change, phone_change_token, reauthentication_token, email_change_token_current
     ) values (
       v_admin_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
       'admin@local.dev', extensions.crypt('admin12345', extensions.gen_salt('bf')),
       now(), '{"provider":"email","providers":["email"]}', '{}',
-      now(), now()
+      now(), now(),
+      -- GoTrue's Go structs scan these as non-nullable strings; leaving them
+      -- NULL (the column default) makes GoTrue's own login query fail with
+      -- "Database error querying schema" the first time this user signs in.
+      -- Only reachable via a direct INSERT like this one — GoTrue's own
+      -- signup endpoint always writes '' itself.
+      '', '', '', '', '', '', '', ''
     );
   end if;
 
@@ -53,12 +61,16 @@ begin
     insert into auth.users (
       id, instance_id, aud, role, email, encrypted_password,
       email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
-      created_at, updated_at
+      created_at, updated_at,
+      confirmation_token, recovery_token, email_change_token_new, email_change,
+      phone_change, phone_change_token, reauthentication_token, email_change_token_current
     ) values (
       v_provider_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
       'proveedor@proveedor.cl', extensions.crypt('1234', extensions.gen_salt('bf')),
       now(), '{"provider":"email","providers":["email"]}', '{}',
-      now(), now()
+      now(), now(),
+      -- see the admin block above for why these can't be left NULL
+      '', '', '', '', '', '', '', ''
     );
   end if;
 
@@ -78,12 +90,16 @@ begin
     insert into auth.users (
       id, instance_id, aud, role, email, encrypted_password,
       email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
-      created_at, updated_at
+      created_at, updated_at,
+      confirmation_token, recovery_token, email_change_token_new, email_change,
+      phone_change, phone_change_token, reauthentication_token, email_change_token_current
     ) values (
       v_user_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
       'usuario@usuario.cl', extensions.crypt('1234', extensions.gen_salt('bf')),
       now(), '{"provider":"email","providers":["email"]}', '{}',
-      now(), now()
+      now(), now(),
+      -- see the admin block above for why these can't be left NULL
+      '', '', '', '', '', '', '', ''
     );
   end if;
 
