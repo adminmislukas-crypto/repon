@@ -255,4 +255,22 @@ export class KyselyConsumptionRepository implements ConsumptionRepository {
       .executeTakeFirstOrThrow();
     return Number(row.stock_actual);
   }
+
+  /**
+   * usuario-mobile-consumo design.md D-3/D-4: `user_id = $1` inside the SQL
+   * itself, never a post-`filter()` in JS. Powers both `GET
+   * /consumo/mis-consumos` and, indirectly, `GET /consumo/mi-adherencia`
+   * (`CalcularAdherenciaSemanalUseCase` calls this FIRST to derive its own
+   * actor-scoped id set before ever touching `ConsumptionLogRepository`).
+   * Reuses `mapUserConsumptionRow`, same as `findById` above.
+   */
+  async findByUserId(userId: string, tx?: TransactionContext): Promise<UserConsumption[]> {
+    const rows = await this.executor(tx)
+      .selectFrom('user_consumption')
+      .selectAll()
+      .where('user_id', '=', userId)
+      .orderBy('created_at', 'asc')
+      .execute();
+    return rows.map(mapUserConsumptionRow);
+  }
 }

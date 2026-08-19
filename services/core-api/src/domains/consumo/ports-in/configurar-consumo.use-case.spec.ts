@@ -20,6 +20,7 @@ function buildConsumptionRepository(): jest.Mocked<ConsumptionRepository> {
     intentarMarcarStockBajo: jest.fn(),
     limpiarMarcaStockBajo: jest.fn(),
     descontarStock: jest.fn(),
+    findByUserId: jest.fn(),
   };
 }
 
@@ -27,6 +28,7 @@ function buildPetRepository(): jest.Mocked<PetRepository> {
   return {
     save: jest.fn(),
     findById: jest.fn(),
+    findByUserId: jest.fn(),
   };
 }
 

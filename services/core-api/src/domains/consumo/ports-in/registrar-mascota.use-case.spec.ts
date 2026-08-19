@@ -13,6 +13,7 @@ function buildRepository(): jest.Mocked<PetRepository> {
   return {
     save: jest.fn().mockResolvedValue(undefined),
     findById: jest.fn(),
+    findByUserId: jest.fn(),
   };
 }
 

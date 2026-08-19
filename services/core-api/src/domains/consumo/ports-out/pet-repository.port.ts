@@ -19,6 +19,15 @@ import type { TransactionContext } from '../../../shared/database/transaction';
 export interface PetRepository {
   save(pet: Pet, tx?: TransactionContext): Promise<void>;
   findById(petId: string, tx?: TransactionContext): Promise<Pet | null>;
+
+  /**
+   * usuario-mobile-consumo design.md D-3/D-4: powers `GET /consumo/mis-mascotas`
+   * (`ListarMascotasUseCase`). `userId` is the actor's own id — the ONLY
+   * scoping mechanism, never a client-supplied filter (D-4). Ordered by
+   * `created_at` so list order is stable across refetches. An empty result
+   * is a valid, expected value (a user with no pets yet) — never throws.
+   */
+  findByUserId(userId: string, tx?: TransactionContext): Promise<Pet[]>;
 }
 
 export const PET_REPOSITORY = Symbol('PET_REPOSITORY');

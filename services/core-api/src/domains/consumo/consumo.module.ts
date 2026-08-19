@@ -5,8 +5,11 @@ import { KyselyConsumptionLogRepository } from './adapters/persistence/kysely-co
 import { KyselyConsumptionRepository } from './adapters/persistence/kysely-consumption.repository';
 import { KyselyPetRepository } from './adapters/persistence/kysely-pet.repository';
 import { ConsumoController } from './adapters/http/consumo.controller';
+import { CalcularAdherenciaSemanalUseCase } from './ports-in/calcular-adherencia-semanal.use-case';
 import { CalcularDiasRestantesUseCase } from './ports-in/calcular-dias-restantes.use-case';
 import { ConfigurarConsumoUseCase } from './ports-in/configurar-consumo.use-case';
+import { ListarConsumosUseCase } from './ports-in/listar-consumos.use-case';
+import { ListarMascotasUseCase } from './ports-in/listar-mascotas.use-case';
 import { MarcarDosisTomadaUseCase } from './ports-in/marcar-dosis-tomada.use-case';
 import { ProcesarConsumosVencidosUseCase } from './ports-in/procesar-consumos-vencidos.use-case';
 import { RegistrarMascotaUseCase } from './ports-in/registrar-mascota.use-case';
@@ -52,6 +55,9 @@ import { PET_REPOSITORY } from './ports-out/pet-repository.port';
     RegistrarMascotaUseCase,
     ConfigurarConsumoUseCase,
     MarcarDosisTomadaUseCase,
+    ListarMascotasUseCase,
+    ListarConsumosUseCase,
+    CalcularAdherenciaSemanalUseCase,
     ProcesarConsumosVencidosUseCase,
     ConsumptionCheckJob,
   ],

@@ -41,6 +41,7 @@ App del comprador. React Native + Expo.
 - Carrito de refill en construcción (`refillItems`) — Zustand
 - Tab activo persona/mascota en Consumos — estado local de pantalla
 - Catálogo, ofertas, historial — TanStack Query contra Supabase
+- **Consumos** (`usuario-mobile-consumo`) — declarado distinto a lo anterior a propósito: `authFetch` (`@repon/auth`) + `useState`/`StyleSheet` locales por pantalla, sin store ni cache client-side. Cubre las 5 pantallas del dominio (`s-consumo`, `consumo-nuevo`, `consumo-nuevo-pet`, `s-consumo-config`, `s-consumo-historial`); no aplica a ningún otro dominio de esta lista
 
 ## Autenticación (login) — cambio `mobile-auth-login`
 
@@ -52,5 +53,5 @@ App del comprador. React Native + Expo.
 
 ## Pendiente al migrar del mockup a Expo
 - Reemplazar `go()` / `goBack()` (manipulación directa del DOM) por Expo Router
-- Reemplazar el JS inline de simulación (`marcarDosis`, `aceptarOferta`, etc.) por mutaciones reales contra Supabase
+- Reemplazar el JS inline de simulación (`aceptarOferta`, etc.) por mutaciones reales — **resuelto para consumos** (`usuario-mobile-consumo`): `marcarDosis` y el resto de las pantallas del dominio golpean las rutas de consumo de `core-api` (`/consumo/...`) vía `authFetch`, nunca Supabase directo. `s-consumo-config` es de solo lectura en v1 — no existe endpoint de reconfiguración; "Editar" se muestra deshabilitado con copy honesto en vez de ocultarse o enrutar al formulario de creación, para no duplicar el item activo (D4)
 - Conectar `s-inbox` a un canal de Supabase Realtime en vez de datos estáticos

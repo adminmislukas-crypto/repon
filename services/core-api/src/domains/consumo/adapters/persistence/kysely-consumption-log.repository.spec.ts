@@ -93,4 +93,114 @@ describe('KyselyConsumptionLogRepository', () => {
       expect(txInsertChain.execute).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('contarTomasPorDia — one grouped query for the 7-day adherence window (usuario-mobile-consumo D-3)', () => {
+    function buildSelectDb(rows: unknown[]) {
+      const calls: Record<string, unknown[][]> = {};
+      const record = (method: string, args: unknown[]) => {
+        (calls[method] ??= []).push(args);
+      };
+      const chain: Record<string, jest.Mock> = {};
+      chain.select = jest.fn((build: (eb: unknown) => unknown[]) => {
+        const eb = { fn: { countAll: () => ({ as: (alias: string) => `countAll as ${alias}` }) } };
+        record('select', build(eb));
+        return chain;
+      });
+      chain.where = jest.fn((...args: unknown[]) => {
+        record('where', args);
+        return chain;
+      });
+      chain.groupBy = jest.fn((...args: unknown[]) => {
+        record('groupBy', args);
+        return chain;
+      });
+      chain.execute = jest.fn(async () => rows);
+      const selectFrom = jest.fn((...args: unknown[]) => {
+        record('selectFrom', args);
+        return chain;
+      });
+      const db = { selectFrom } as unknown as Kysely<DB>;
+      return { db, calls, chain };
+    }
+
+    const desde = new Date('2026-08-01T04:00:00.000Z');
+    const hasta = new Date('2026-08-08T04:00:00.000Z');
+
+    it('short-circuits to [] on an empty id array — never issues a query (never `in ()`)', async () => {
+      const { db, calls } = buildSelectDb([]);
+      const repo = new KyselyConsumptionLogRepository(db);
+
+      const result = await repo.contarTomasPorDia([], desde, hasta, 'America/Santiago');
+
+      expect(result).toEqual([]);
+      expect(calls['selectFrom']).toBeUndefined();
+    });
+
+    it('scopes with consumption_id IN (...ids) and the desde/hasta window on plain UTC instants', async () => {
+      const { db, calls } = buildSelectDb([]);
+      const repo = new KyselyConsumptionLogRepository(db);
+
+      await repo.contarTomasPorDia(['c-1', 'c-2'], desde, hasta, 'America/Santiago');
+
+      expect(calls['selectFrom']).toEqual([['consumption_logs']]);
+      expect(calls['where']).toEqual([
+        ['consumption_id', 'in', ['c-1', 'c-2']],
+        ['tomado_at', '>=', desde.toISOString()],
+        ['tomado_at', '<', hasta.toISOString()],
+      ]);
+    });
+
+    it('never wraps tomado_at in a timezone function inside a WHERE clause (would disable the index, D-3)', async () => {
+      const { db, calls } = buildSelectDb([]);
+      const repo = new KyselyConsumptionLogRepository(db);
+
+      await repo.contarTomasPorDia(['c-1'], desde, hasta, 'America/Santiago');
+
+      for (const [, , value] of calls['where']!) {
+        expect(typeof value === 'string' || typeof value === 'object').toBeTruthy();
+        expect(String(value)).not.toMatch(/at time zone/i);
+      }
+    });
+
+    it('groups by consumption_id and the timezone-bucketed date — at time zone only here, never in WHERE', async () => {
+      const { db, calls } = buildSelectDb([]);
+      const repo = new KyselyConsumptionLogRepository(db);
+
+      await repo.contarTomasPorDia(['c-1'], desde, hasta, 'America/Santiago');
+
+      const groupByArg = calls['groupBy']![0]![0] as unknown[];
+      expect(groupByArg[0]).toBe('consumption_id');
+      // The second grouping key is the raw `sql` template result — inspect
+      // its compiled operation node (RawBuilder has no readable toString()).
+      const rawBuilder = groupByArg[1] as { toOperationNode(): { sqlFragments: string[] } };
+      expect(rawBuilder.toOperationNode().sqlFragments.join('')).toMatch(/at time zone/i);
+    });
+
+    it('maps rows to ConteoDiarioLog, converting the count string -> number', async () => {
+      const { db } = buildSelectDb([
+        { consumption_id: 'c-1', fecha: '2026-08-05', tomadas: '3' },
+        { consumption_id: 'c-2', fecha: '2026-08-06', tomadas: '0' },
+      ]);
+      const repo = new KyselyConsumptionLogRepository(db);
+
+      const result = await repo.contarTomasPorDia(['c-1', 'c-2'], desde, hasta, 'America/Santiago');
+
+      expect(result).toEqual([
+        { consumptionId: 'c-1', fecha: '2026-08-05', tomadas: 3 },
+        { consumptionId: 'c-2', fecha: '2026-08-06', tomadas: 0 },
+      ]);
+    });
+
+    it('propagates tx (D6/repo-wide convention) — runs against the tx handle, not this.db', async () => {
+      const { db: unusedDb } = buildSelectDb([]);
+      const { db: txDb, chain: txChain } = buildSelectDb([]);
+      const repo = new KyselyConsumptionLogRepository(unusedDb);
+      const tx =
+        txDb as unknown as import('../../../../shared/database/transaction').TransactionContext;
+
+      await repo.contarTomasPorDia(['c-1'], desde, hasta, 'America/Santiago', tx);
+
+      expect(txChain.execute).toHaveBeenCalledTimes(1);
+    });
+  });
 });

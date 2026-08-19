@@ -101,10 +101,12 @@ describe('Consumo — POST /consumo/mis-consumos/:consumptionId/dosis (e2e)', ()
       intentarMarcarStockBajo: jest.fn(),
       limpiarMarcaStockBajo: jest.fn(),
       descontarStock: jest.fn(),
+      findByUserId: jest.fn(),
     };
     consumptionLogRepository = {
       append: jest.fn().mockResolvedValue(undefined),
       adherenciaUltimos7Dias: jest.fn(),
+      contarTomasPorDia: jest.fn(),
     };
     eventPublisher = { publish: jest.fn().mockResolvedValue(undefined) };
     const fakeTx = {} as TransactionContext;

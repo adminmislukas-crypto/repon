@@ -70,4 +70,20 @@ export class KyselyPetRepository implements PetRepository {
       .executeTakeFirst();
     return row ? mapPetRow(row) : null;
   }
+
+  /**
+   * usuario-mobile-consumo design.md D-3/D-4: `user_id = $1` inside the SQL
+   * itself, never a post-`filter()` in JS — the actor-scoping is structural.
+   * Reuses `mapPetRow`, the one place the `numeric`-as-`string` gotcha is
+   * handled, same as `findById` above.
+   */
+  async findByUserId(userId: string, tx?: TransactionContext): Promise<Pet[]> {
+    const rows = await this.executor(tx)
+      .selectFrom('pets')
+      .selectAll()
+      .where('user_id', '=', userId)
+      .orderBy('created_at', 'asc')
+      .execute();
+    return rows.map(mapPetRow);
+  }
 }

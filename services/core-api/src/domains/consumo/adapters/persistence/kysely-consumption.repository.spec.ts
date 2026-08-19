@@ -603,4 +603,62 @@ describe('KyselyConsumptionRepository', () => {
       expect(txChain.execute).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('findByUserId — powers both GET /consumo/mis-consumos and the id set CalcularAdherenciaSemanalUseCase derives before querying logs (usuario-mobile-consumo D-3/D-4)', () => {
+    function buildListDb(rows: unknown[]) {
+      const calls: Record<string, unknown[][]> = {};
+      const record = (method: string, args: unknown[]) => {
+        (calls[method] ??= []).push(args);
+      };
+      const chain: Record<string, jest.Mock> = {};
+      chain.selectAll = jest.fn((...args: unknown[]) => {
+        record('selectAll', args);
+        return chain;
+      });
+      chain.where = jest.fn((...args: unknown[]) => {
+        record('where', args);
+        return chain;
+      });
+      chain.orderBy = jest.fn((...args: unknown[]) => {
+        record('orderBy', args);
+        return chain;
+      });
+      chain.execute = jest.fn(async () => rows);
+      const selectFrom = jest.fn((...args: unknown[]) => {
+        record('selectFrom', args);
+        return chain;
+      });
+      const db = { selectFrom } as unknown as Kysely<DB>;
+      return { db, calls, chain };
+    }
+
+    it('scopes with user_id = $1 inside the SQL, ordered by created_at', async () => {
+      const { db, calls } = buildListDb([buildRow()]);
+      const repo = new KyselyConsumptionRepository(db);
+
+      await repo.findByUserId('user-a');
+
+      expect(calls['selectFrom']).toEqual([['user_consumption']]);
+      expect(calls['where']).toEqual([['user_id', '=', 'user-a']]);
+      expect(calls['orderBy']).toEqual([['created_at', 'asc']]);
+    });
+
+    it('maps every row through mapUserConsumptionRow, converting numeric strings -> numbers', async () => {
+      const { db } = buildListDb([buildRow(), buildRow({ id: 'consumption-2', stock_actual: '0.00' })]);
+      const repo = new KyselyConsumptionRepository(db);
+
+      const result = await repo.findByUserId('user-a');
+
+      expect(result).toHaveLength(2);
+      expect(typeof result[0]!.stockActual).toBe('number');
+      expect(result[1]!.stockActual).toBe(0);
+    });
+
+    it('returns an empty array for a user with no consumptions — never throws', async () => {
+      const { db } = buildListDb([]);
+      const repo = new KyselyConsumptionRepository(db);
+
+      await expect(repo.findByUserId('user-with-nothing')).resolves.toEqual([]);
+    });
+  });
 });

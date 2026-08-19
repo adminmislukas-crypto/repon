@@ -5,6 +5,8 @@ export function reponAuthReady(): boolean {
 }
 
 export { AuthWiringProbe } from './wiring-probe';
+export { ApiError, NetworkError, getJson, postJson, postNoContent } from './api-json';
+export type { AuthFetch } from './api-json';
 export type { AuthConfig } from './config';
 export type { PerfilSesion, Sesion } from './session.types';
 export { SesionApiError } from './session-client';

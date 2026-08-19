@@ -82,6 +82,7 @@ describe('Consumo — GET /consumo/mis-consumos/:consumptionId/dias-restantes (e
       intentarMarcarStockBajo: jest.fn(),
       limpiarMarcaStockBajo: jest.fn(),
       descontarStock: jest.fn(),
+      findByUserId: jest.fn(),
     };
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })

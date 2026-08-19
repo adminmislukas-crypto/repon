@@ -66,7 +66,11 @@ describe('Consumo — POST /consumo/mis-mascotas (e2e)', () => {
 
   beforeAll(async () => {
     actorPort = { findActorById: jest.fn() };
-    petRepository = { save: jest.fn().mockResolvedValue(undefined), findById: jest.fn() };
+    petRepository = {
+      save: jest.fn().mockResolvedValue(undefined),
+      findById: jest.fn(),
+      findByUserId: jest.fn(),
+    };
     consumptionRepository = {
       save: jest.fn(),
       findById: jest.fn(),
@@ -74,6 +78,7 @@ describe('Consumo — POST /consumo/mis-mascotas (e2e)', () => {
       intentarMarcarStockBajo: jest.fn(),
       limpiarMarcaStockBajo: jest.fn(),
       descontarStock: jest.fn(),
+      findByUserId: jest.fn(),
     };
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })

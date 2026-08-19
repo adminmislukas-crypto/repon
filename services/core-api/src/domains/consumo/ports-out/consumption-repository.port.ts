@@ -106,6 +106,18 @@ export interface ConsumptionRepository {
    * `stockRestante` without a second read.
    */
   descontarStock(consumptionId: string, cantidad: number, tx?: TransactionContext): Promise<number>;
+
+  /**
+   * usuario-mobile-consumo design.md D-3/D-4: powers `GET /consumo/mis-consumos`
+   * (`ListarConsumosUseCase`) AND `GET /consumo/mi-adherencia`
+   * (`CalcularAdherenciaSemanalUseCase` derives its id set from this before
+   * ever calling `ConsumptionLogRepository.contarTomasPorDia` — the adherence
+   * read never accepts a `consumptionId` from the client at all). `userId`
+   * is the actor's own id — the ONLY scoping mechanism (D-4). Ordered by
+   * `created_at` so list order is stable across refetches. An empty result
+   * is a valid, expected value — never throws.
+   */
+  findByUserId(userId: string, tx?: TransactionContext): Promise<UserConsumption[]>;
 }
 
 export const CONSUMPTION_REPOSITORY = Symbol('CONSUMPTION_REPOSITORY');

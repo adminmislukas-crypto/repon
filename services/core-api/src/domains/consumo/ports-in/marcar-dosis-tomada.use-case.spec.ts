@@ -35,11 +35,16 @@ function buildConsumptionRepository(): jest.Mocked<ConsumptionRepository> {
     intentarMarcarStockBajo: jest.fn(),
     limpiarMarcaStockBajo: jest.fn(),
     descontarStock: jest.fn(),
+    findByUserId: jest.fn(),
   };
 }
 
 function buildConsumptionLogRepository(): jest.Mocked<ConsumptionLogRepository> {
-  return { append: jest.fn().mockResolvedValue(undefined), adherenciaUltimos7Dias: jest.fn() };
+  return {
+    append: jest.fn().mockResolvedValue(undefined),
+    adherenciaUltimos7Dias: jest.fn(),
+    contarTomasPorDia: jest.fn(),
+  };
 }
 
 function buildEventPublisher(): jest.Mocked<EventPublisher> {

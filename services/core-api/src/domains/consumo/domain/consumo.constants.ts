@@ -14,3 +14,17 @@
  * la única fuente.
  */
 export const UMBRAL_STOCK_BAJO_DIAS = 7;
+
+/**
+ * usuario-mobile-consumo design.md D-2: fixed IANA zone for adherence day
+ * bucketing (`ventanaAdherencia`, `contarTomasPorDia`'s `at time zone`).
+ * Correct for a Chile-only launch — already visible in the data model
+ * (`refill_requests.comuna`) and in `usuario-mobile/SPEC.md` (Webpay). A
+ * user-level timezone is a purely additive follow-up: every consumer of
+ * this constant already takes `zonaHoraria` as a parameter rather than
+ * importing this constant directly into its own logic, so replacing the
+ * single global with a per-user lookup needs no signature change anywhere.
+ * Day bucketing without a fixed zone would silently shift every boundary
+ * dose into the wrong day.
+ */
+export const ZONA_HORARIA_ADHERENCIA = 'America/Santiago';

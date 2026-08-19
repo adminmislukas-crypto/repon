@@ -42,6 +42,33 @@ function buildSelectDb(rows: unknown[]) {
   return { db, selectFrom, chain, whereCalls };
 }
 
+function buildListDb(rows: unknown[]) {
+  const calls: Record<string, unknown[][]> = {};
+  const record = (method: string, args: unknown[]) => {
+    (calls[method] ??= []).push(args);
+  };
+  const chain: Record<string, jest.Mock> = {};
+  chain.selectAll = jest.fn((...args: unknown[]) => {
+    record('selectAll', args);
+    return chain;
+  });
+  chain.where = jest.fn((...args: unknown[]) => {
+    record('where', args);
+    return chain;
+  });
+  chain.orderBy = jest.fn((...args: unknown[]) => {
+    record('orderBy', args);
+    return chain;
+  });
+  chain.execute = jest.fn(async () => rows);
+  const selectFrom = jest.fn((...args: unknown[]) => {
+    record('selectFrom', args);
+    return chain;
+  });
+  const db = { selectFrom } as unknown as Kysely<DB>;
+  return { db, calls, chain };
+}
+
 function buildInsertDb() {
   const calls: Record<string, unknown[][]> = {};
   const record = (method: string, args: unknown[]) => {
@@ -170,6 +197,37 @@ describe('KyselyPetRepository', () => {
       const repo = new KyselyPetRepository(db);
 
       await expect(repo.findById('missing')).resolves.toBeNull();
+    });
+  });
+
+  describe('findByUserId — the actor-scoped list GET /consumo/mis-mascotas needs (usuario-mobile-consumo D-3/D-4)', () => {
+    it('scopes with user_id = $1 inside the SQL, ordered by created_at', async () => {
+      const { db, calls } = buildListDb([buildRow()]);
+      const repo = new KyselyPetRepository(db);
+
+      await repo.findByUserId('user-a');
+
+      expect(calls['selectFrom']).toEqual([['pets']]);
+      expect(calls['where']).toEqual([['user_id', '=', 'user-a']]);
+      expect(calls['orderBy']).toEqual([['created_at', 'asc']]);
+    });
+
+    it('maps every row through mapPetRow, converting peso_kg string -> number', async () => {
+      const { db } = buildListDb([buildRow(), buildRow({ id: 'pet-2', peso_kg: null })]);
+      const repo = new KyselyPetRepository(db);
+
+      const result = await repo.findByUserId('user-a');
+
+      expect(result).toHaveLength(2);
+      expect(result[0]!.pesoKg).toBe(25.5);
+      expect(result[1]!.pesoKg).toBeUndefined();
+    });
+
+    it('returns an empty array for a user with no pets — never throws', async () => {
+      const { db } = buildListDb([]);
+      const repo = new KyselyPetRepository(db);
+
+      await expect(repo.findByUserId('user-with-nothing')).resolves.toEqual([]);
     });
   });
 });

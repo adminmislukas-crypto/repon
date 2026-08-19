@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { Kysely } from 'kysely';
+import { sql, type Kysely } from 'kysely';
 import type { ConsumptionLog } from '@repon/types';
 import { DATABASE } from '../../../../shared/database/database.module';
 import type { DB } from '../../../../shared/database/schema';
@@ -7,7 +7,10 @@ import {
   toKyselyTransaction,
   type TransactionContext,
 } from '../../../../shared/database/transaction';
-import type { ConsumptionLogRepository } from '../../ports-out/consumption-log-repository.port';
+import type {
+  ConsumptionLogRepository,
+  ConteoDiarioLog,
+} from '../../ports-out/consumption-log-repository.port';
 
 /**
  * `ConsumptionLogRepository`'s Kysely-backed implementation (design.md
@@ -70,5 +73,47 @@ export class KyselyConsumptionLogRepository implements ConsumptionLogRepository 
       .where('tomado_at', '>=', sevenDaysAgo)
       .executeTakeFirst();
     return row ? Number(row.total) : 0;
+  }
+
+  /**
+   * usuario-mobile-consumo design.md D-3, exact shape — the one
+   * non-obvious query in this change. `at time zone` appears ONLY in
+   * `select`/`groupBy`, never in `where`: wrapping `tomado_at` in a function
+   * inside the predicate would disable
+   * `consumption_logs_consumption_id_tomado_at_idx`
+   * (`20260803120200_02_consumo.sql:78`) and turn this into a full scan —
+   * `desde`/`hasta` are pre-resolved UTC instants for exactly this reason.
+   * ONE grouped query for every id in `consumptionIds`, never one per item
+   * (the same N+1 D7 already rejects for `diasRestantes`). Short-circuits
+   * to `[]` on an empty id array — `where(..., 'in', [])` is valid SQL but
+   * always empty, so this also just avoids the round-trip.
+   */
+  async contarTomasPorDia(
+    consumptionIds: readonly string[],
+    desde: Date,
+    hasta: Date,
+    zonaHoraria: string,
+    tx?: TransactionContext,
+  ): Promise<ConteoDiarioLog[]> {
+    if (consumptionIds.length === 0) return [];
+    const rows = await this.executor(tx)
+      .selectFrom('consumption_logs')
+      .select((eb) => [
+        'consumption_id',
+        sql<string>`to_char((tomado_at at time zone ${zonaHoraria})::date, 'YYYY-MM-DD')`.as(
+          'fecha',
+        ),
+        eb.fn.countAll<string>().as('tomadas'),
+      ])
+      .where('consumption_id', 'in', [...consumptionIds])
+      .where('tomado_at', '>=', desde.toISOString())
+      .where('tomado_at', '<', hasta.toISOString())
+      .groupBy(['consumption_id', sql`(tomado_at at time zone ${zonaHoraria})::date`])
+      .execute();
+    return rows.map((row) => ({
+      consumptionId: row.consumption_id,
+      fecha: row.fecha,
+      tomadas: Number(row.tomadas),
+    }));
   }
 }

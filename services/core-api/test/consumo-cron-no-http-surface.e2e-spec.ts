@@ -1,5 +1,5 @@
 import { MODULE_METADATA, PATH_METADATA, METHOD_METADATA } from '@nestjs/common/constants';
-import type { INestApplication } from '@nestjs/common';
+import { RequestMethod, type INestApplication } from '@nestjs/common';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { Test } from '@nestjs/testing';
 import { AppModule } from '../src/app.module';
@@ -36,7 +36,7 @@ describe('Consumo — procesarConsumosVencidos / ConsumptionCheckJob have no HTT
     expect(providers).toContain(ProcesarConsumosVencidosUseCase);
   });
 
-  it("enumerates ConsumoController's ENTIRE real route table — exactly the 4 routes design.md's Superficie HTTP table names, none of them cron-related", () => {
+  it("enumerates ConsumoController's ENTIRE real route table — exactly the 7 routes design.md's Superficie HTTP table names (usuario-mobile-consumo D-1 added the 2 GET list routes + GET mi-adherencia), none of them cron-related", () => {
     const handlerNames = Object.getOwnPropertyNames(ConsumoController.prototype).filter(
       (name) => name !== 'constructor',
     );
@@ -53,13 +53,19 @@ describe('Consumo — procesarConsumosVencidos / ConsumptionCheckJob have no HTT
       }))
       .filter((route) => route.path !== undefined); // only Nest-decorated HTTP handlers
 
-    expect(routes).toHaveLength(4);
-    expect(routes.map((route) => route.path).sort()).toEqual(
+    expect(routes).toHaveLength(7);
+    const byMethodAndPath = routes
+      .map((route) => `${RequestMethod[route.method!]} ${route.path}`)
+      .sort();
+    expect(byMethodAndPath).toEqual(
       [
-        'mis-mascotas',
-        'mis-consumos',
-        'mis-consumos/:consumptionId/dias-restantes',
-        'mis-consumos/:consumptionId/dosis',
+        'GET mis-mascotas',
+        'POST mis-mascotas',
+        'GET mis-consumos',
+        'POST mis-consumos',
+        'GET mis-consumos/:consumptionId/dias-restantes',
+        'POST mis-consumos/:consumptionId/dosis',
+        'GET mi-adherencia',
       ].sort(),
     );
     for (const route of routes) {

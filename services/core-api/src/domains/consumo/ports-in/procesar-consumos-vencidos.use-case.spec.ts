@@ -47,6 +47,7 @@ function buildRepository(): jest.Mocked<ConsumptionRepository> {
     intentarMarcarStockBajo: jest.fn(),
     limpiarMarcaStockBajo: jest.fn(),
     descontarStock: jest.fn(),
+    findByUserId: jest.fn(),
   };
 }
 
