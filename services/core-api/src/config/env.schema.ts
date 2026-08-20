@@ -46,6 +46,17 @@ const baseEnvSchema = z.object({
   // so — unlike the vars above — it is not fail-fast, same class as
   // NODE_ENV/PORT below.
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
+  // mobile-auth-login: comma-separated allowlist for `app.enableCors()`
+  // (main.ts). Both mobile apps run as a browser web target in local dev
+  // (Expo `web.output: "static"`), on a different port than core-api — every
+  // `fetch()` from either app's origin to core-api is genuinely cross-origin,
+  // and the browser blocks it silently without a matching
+  // `Access-Control-Allow-Origin` response header (confirmed: the OPTIONS
+  // preflight 404s with none set, which `curl` never surfaces since CORS is
+  // a browser-only enforcement — this went undetected until a real browser
+  // login was tried). Defaults to both local Expo web ports so `/repon up`
+  // works out of the box; override in staging/prod to the real app origins.
+  CORS_ALLOWED_ORIGINS: z.string().min(1).default('http://localhost:8091,http://localhost:8092'),
 });
 
 const hs256EnvSchema = baseEnvSchema.extend({

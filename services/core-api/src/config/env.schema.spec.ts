@@ -78,6 +78,21 @@ describe('validateEnv', () => {
     expect(result.TRUST_PROXY_HOPS).toBe(2);
   });
 
+  it('defaults CORS_ALLOWED_ORIGINS to the two local mobile-web dev ports when absent', () => {
+    const result = validateEnv(validHs256Env);
+
+    expect(result.CORS_ALLOWED_ORIGINS).toBe('http://localhost:8091,http://localhost:8092');
+  });
+
+  it('accepts an explicit CORS_ALLOWED_ORIGINS', () => {
+    const result = validateEnv({
+      ...validHs256Env,
+      CORS_ALLOWED_ORIGINS: 'https://usuario.repon.cl,https://proveedor.repon.cl',
+    });
+
+    expect(result.CORS_ALLOWED_ORIGINS).toBe('https://usuario.repon.cl,https://proveedor.repon.cl');
+  });
+
   it('rejects hs256 mode without SUPABASE_JWT_SECRET', () => {
     const { SUPABASE_JWT_SECRET, ...rest } = validHs256Env;
 

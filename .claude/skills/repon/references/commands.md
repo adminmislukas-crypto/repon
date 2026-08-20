@@ -35,8 +35,14 @@ SUPABASE_SERVICE_ROLE_KEY=<SERVICE_ROLE_KEY>
 # core-api must authenticate as `authenticator` (member of service_role) —
 # see .env.example's own comment block for why. Port matches DB_URL's port.
 DATABASE_URL=postgresql://authenticator:postgres@127.0.0.1:54322/postgres
-AUTH_JWT_MODE=hs256
-SUPABASE_JWT_SECRET=<JWT_SECRET>
+# jwks, not hs256: current `supabase start` (CLI >= 2.x) signs GoTrue tokens
+# with an asymmetric JWT Signing Key (ES256), not the legacy static HS256
+# secret `JWT_SECRET` still prints for backward compat. hs256 mode rejects
+# those tokens outright (wrong algorithm) — every protected route 401s with
+# INVALID_TOKEN right after a successful login. See .env.example's comment
+# block for the full explanation.
+AUTH_JWT_MODE=jwks
+SUPABASE_JWKS_URL=<API_URL>/auth/v1/.well-known/jwks.json
 AUTH_JWT_ISSUER=<API_URL>/auth/v1
 AUTH_JWT_AUDIENCE=authenticated
 NODE_ENV=development

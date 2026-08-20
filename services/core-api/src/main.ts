@@ -29,6 +29,16 @@ async function bootstrap(): Promise<void> {
   const config = app.get(ConfigService);
   app.set('trust proxy', config.get<number>('TRUST_PROXY_HOPS', 0));
 
+  // mobile-auth-login: both mobile apps call core-api as a browser web
+  // target on a different port — without this, the browser's CORS preflight
+  // 404s (no route handles OPTIONS) and blocks every request before it ever
+  // reaches a controller, invisible to `curl`-based testing since CORS is
+  // enforced client-side only.
+  app.enableCors({
+    origin: config.get<string>('CORS_ALLOWED_ORIGINS', '').split(',').filter(Boolean),
+    credentials: true,
+  });
+
   // core-api-bootstrap spec, "Global validation pipe rejects malformed
   // DTOs": whitelist strips unknown properties, forbidNonWhitelisted turns
   // an unknown property into a 400 instead of silently dropping it.
